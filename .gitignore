@@ -269,3 +269,6 @@ dmypy.json
 # Cython
 cython_debug/
 
+# Cursor-related
+.cursor/
+
