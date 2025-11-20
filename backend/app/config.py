@@ -1,4 +1,4 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List, Dict
 
 
@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     API_PORT: int = 8000
     API_RELOAD: bool = True
     
-    # CORS (comma-separated string, will be split)
+    # CORS
     CORS_ORIGINS: str = "http://localhost:3000"
     
     # AI Provider API Keys
@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     
     # LangChain/LangGraph Settings
     DEFAULT_MODEL: str = "gemini"  # gemini or deepseek
+    GEMINI_MODEL: str = "gemini-2.5-flash"  
+    DEEPSEEK_MODEL: str = "deepseek-chat"  
     
     # Tool Settings (placeholders - implementation deferred)
     TAVILY_API_KEY: str = ""  # Placeholder for Tavily API key
@@ -32,9 +34,10 @@ class Settings(BaseSettings):
         # Future implementation: return list of enabled MCP server names
         return []
     
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=True
+    )
 
 
 settings = Settings()
