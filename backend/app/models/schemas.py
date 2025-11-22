@@ -226,13 +226,60 @@ class Citation(BaseModel):
 
 class ClarificationQuestions(BaseModel):
     """Model for clarification questions to user."""
-    questions: List[str]
-    context: Optional[str] = None
+    questions: List[str] = Field(
+        ...,
+        description="List of 1-3 clarifying questions"
+    )
+    context: Optional[str] = Field(
+        None,
+        description="Brief explanation of why these questions are being asked"
+    )
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "questions": [
+                    "What specific aspect of AI would you like to focus on?",
+                    "What time period should the research cover?"
+                ],
+                "context": "I need to understand the scope and constraints of your research."
+            }
+        }
+    )
 
 
 class ClarificationResponse(BaseModel):
     """Model for user's clarification answers."""
     answers: Dict[str, str]
+
+
+class ScopeCompletionCheck(BaseModel):
+    """Model for scope completion analysis output.
+    
+    Used by scope agent to determine if enough information has been gathered.
+    """
+    is_complete: bool = Field(
+        ...,
+        description="Whether we have enough information to proceed"
+    )
+    reason: str = Field(
+        ...,
+        description="Brief explanation of the decision"
+    )
+    missing_info: List[str] = Field(
+        default_factory=list,
+        description="List of missing information items"
+    )
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "is_complete": False,
+                "reason": "Need to clarify time period and depth requirements",
+                "missing_info": ["time_period", "research_depth"]
+            }
+        }
+    )
 
 
 class ReportFormat(str, Enum):

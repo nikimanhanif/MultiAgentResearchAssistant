@@ -3,8 +3,6 @@
 This module contains all prompt templates used by the Scope Agent for
 multi-turn clarification conversations and research brief generation.
 
-All prompts use LangChain's ChatPromptTemplate for consistent message formatting
-and follow best practices from the LangChain documentation.
 """
 
 from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
@@ -25,13 +23,7 @@ Your goal is to gather information about:
 
 If the scope seems sufficiently clear, return an empty list of questions.
 
-Return your response as a JSON object with this structure:
-{{
-    "questions": ["question 1", "question 2", ...],
-    "context": "Brief explanation of why you're asking these questions"
-}}
-
-Return ONLY the JSON object, no other text."""
+Return your response in JSON format with the clarification questions."""
     ),
     HumanMessagePromptTemplate.from_template(
         """User's Query: {user_query}
@@ -56,14 +48,7 @@ Analyze if we have enough information to:
 3. Understand any constraints or requirements
 4. Know what format the final deliverable should take
 
-Return your response as a JSON object:
-{{
-    "is_complete": true/false,
-    "reason": "Brief explanation of your decision",
-    "missing_info": ["list of missing information"] or []
-}}
-
-Return ONLY the JSON object, no other text."""
+Return a JSON response indicating if the scope is_complete and explain your reasoning."""
     ),
     HumanMessagePromptTemplate.from_template(
         """User's Original Query: {user_query}
@@ -84,30 +69,12 @@ SCOPE_BRIEF_GENERATION_TEMPLATE = ChatPromptTemplate.from_messages([
 
 Create a detailed research brief that will guide the research process. Include:
 - Clear research scope and objectives
-- Sub-topics to investigate
+- sub_topics to investigate
 - Any constraints (time, geography, depth, etc.)
 - Expected deliverables and format
 - Any other relevant context
 
-Return your response as a JSON object with this structure:
-{{
-    "scope": "Clear statement of the research scope",
-    "sub_topics": ["subtopic 1", "subtopic 2", ...],
-    "constraints": {{
-        "time_period": "...",
-        "geographic_focus": "...",
-        "depth": "...",
-        "other": "..."
-    }},
-    "deliverables": "Description of expected output",
-    "format": "summary/comparison/ranking/detailed/literature_review/gap_analysis/other",
-    "metadata": {{
-        "original_query": "...",
-        "clarification_turns": 0
-    }}
-}}
-
-Return ONLY the JSON object, no other text."""
+Return your response in JSON format with the research brief details."""
     ),
     HumanMessagePromptTemplate.from_template(
         """User's Original Query: {user_query}
