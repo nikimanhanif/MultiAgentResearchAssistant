@@ -15,6 +15,7 @@ Phase References:
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List, Dict
+from pathlib import Path
 
 
 class Settings(BaseSettings):
@@ -39,6 +40,13 @@ class Settings(BaseSettings):
     TAVILY_API_KEY: str = ""  # Phase 7.1 - Tavily web search
     CORE_API_KEY: str = ""    # Phase 7.3 - CORE academic database (via Scientific Paper Harvester)
     
+    # Evaluation Framework Settings 
+    LANGSMITH_API_KEY: str = ""  # LangSmith API key for trace observability
+    LANGSMITH_TRACING: str = "true"  # Enable LangSmith tracing (default: true)
+    LANGSMITH_PROJECT: str = "multi-agent-research-assistant-eval"  # LangSmith project name
+    LANGSMITH_ENDPOINT: str = "https://api.smith.langchain.com"  # LangSmith API endpoint
+    DEEPEVAL_TELEMETRY_OPT_OUT: str = "true"  # Opt out of DeepEval telemetry (default: true)
+    
     # NOTE: Phase 7.2 - MCP server configs moved to app/tools/mcp_tools.py (server_configs dict)
     # NOTE: Phase 6.2 - Research sources moved to app/utils/research_sources.py (CURATED_RESEARCH_SOURCES)
     
@@ -57,7 +65,8 @@ class Settings(BaseSettings):
         return []
     
     model_config = SettingsConfigDict(
-        env_file=".env",
+        # Use absolute path to .env file relative to this config file
+        env_file=str(Path(__file__).parent.parent / ".env"),
         case_sensitive=True
     )
 
