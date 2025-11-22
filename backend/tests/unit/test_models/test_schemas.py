@@ -8,8 +8,17 @@ from pydantic import ValidationError
 from app.models.schemas import (
     ChatRequest,
     ChatResponse,
+    Citation,
+    CoverageAnalysis,
     ErrorResponse,
+    GapType,
+    ReportFormat,
+    ResearchBrief,
+    ResearchGap,
     ResearchRequest,
+    SourceType,
+    SummarizedFindings,
+    SubAgentFindings,
 )
 
 
@@ -516,3 +525,299 @@ class TestModelSerialization:
         assert error.error == "Error message"
         assert error.detail is None
         assert isinstance(error.timestamp, datetime)
+
+
+# =============================================================================
+# Phase 1.2 Model Tests (Boilerplate - To be implemented)
+# =============================================================================
+
+
+class TestSourceType:
+    """Test cases for SourceType enum (Phase 1.2)."""
+
+    def test_source_type_peer_reviewed_returns_valid(self):
+        """Test SourceType.PEER_REVIEWED is valid."""
+        # TODO: Implement when used in Phase 7.5
+        pass
+
+    def test_source_type_all_values_are_valid(self):
+        """Test all SourceType enum values are valid."""
+        # TODO: Implement when used in Phase 7.5
+        pass
+
+
+class TestCitation:
+    """Test cases for Citation model with credibility scoring (Phase 1.2)."""
+
+    def test_citation_with_basic_fields_returns_valid(self):
+        """Test Citation with basic fields only."""
+        # TODO: Implement when used in Phase 7.5
+        pass
+
+    def test_citation_with_all_credibility_fields_returns_valid(self):
+        """Test Citation with all credibility scoring fields."""
+        # TODO: Implement when used in Phase 7.5
+        pass
+
+    def test_citation_credibility_score_bounds_validation(self):
+        """Test that credibility_score respects 0.0-1.0 bounds."""
+        # TODO: Implement when used in Phase 7.5
+        pass
+
+    def test_citation_year_bounds_validation(self):
+        """Test that year respects 1900-2100 bounds."""
+        # TODO: Implement when used in Phase 7.5
+        pass
+
+    def test_citation_citation_count_negative_raises_error(self):
+        """Test that negative citation_count raises ValidationError."""
+        # TODO: Implement when used in Phase 7.5
+        pass
+
+    def test_citation_source_type_invalid_value_raises_error(self):
+        """Test that invalid source_type value raises ValidationError."""
+        # TODO: Implement when used in Phase 7.5
+        pass
+
+    def test_citation_json_serialization(self):
+        """Test Citation can be serialized to JSON."""
+        # TODO: Implement when used in Phase 7.5
+        pass
+
+    def test_citation_json_deserialization(self):
+        """Test Citation can be deserialized from JSON."""
+        # TODO: Implement when used in Phase 7.5
+        pass
+
+
+class TestReportFormat:
+    """Test cases for ReportFormat enum (Phase 1.2)."""
+
+    def test_report_format_summary_returns_valid(self):
+        """Test ReportFormat.SUMMARY is valid."""
+        # TODO: Implement when used in Phase 4.2
+        pass
+
+    def test_report_format_all_values_are_valid(self):
+        """Test all ReportFormat enum values are valid."""
+        # TODO: Implement when used in Phase 4.2
+        pass
+
+    def test_report_format_invalid_value_raises_error(self):
+        """Test that invalid ReportFormat value raises ValidationError."""
+        # TODO: Implement when used in Phase 4.2
+        pass
+
+
+class TestResearchBrief:
+    """Test cases for ResearchBrief model (Phase 1.2 - updated)."""
+
+    def test_research_brief_with_all_fields_returns_valid(self):
+        """Test ResearchBrief with all fields provided."""
+        # TODO: Implement when used in Phase 4.2
+        pass
+
+    def test_research_brief_minimal_returns_valid(self):
+        """Test ResearchBrief with only required fields."""
+        # TODO: Implement when used in Phase 4.2
+        pass
+
+    def test_research_brief_with_report_format_returns_valid(self):
+        """Test ResearchBrief with ReportFormat enum."""
+        # TODO: Implement when used in Phase 4.2
+        pass
+
+    def test_research_brief_format_defaults_to_none(self):
+        """Test that format defaults to None."""
+        # TODO: Implement when used in Phase 4.2
+        pass
+
+    def test_research_brief_invalid_format_raises_error(self):
+        """Test that invalid format value raises ValidationError."""
+        # TODO: Implement when used in Phase 4.2
+        pass
+
+    def test_research_brief_json_serialization(self):
+        """Test ResearchBrief can be serialized to JSON."""
+        # TODO: Implement when used in Phase 4.2
+        pass
+
+    def test_research_brief_json_deserialization(self):
+        """Test ResearchBrief can be deserialized from JSON."""
+        # TODO: Implement when used in Phase 4.2
+        pass
+
+
+class TestGapType:
+    """Test cases for GapType enum (Phase 1.2)."""
+
+    def test_gap_type_coverage_returns_valid(self):
+        """Test GapType.COVERAGE is valid."""
+        # TODO: Implement when used in Phase 8.5
+        pass
+
+    def test_gap_type_all_values_are_valid(self):
+        """Test all GapType enum values are valid."""
+        # TODO: Implement when used in Phase 8.5
+        pass
+
+
+class TestResearchGap:
+    """Test cases for ResearchGap model (Phase 1.2)."""
+
+    def test_research_gap_with_all_fields_returns_valid(self):
+        """Test ResearchGap with all fields provided."""
+        # TODO: Implement when used in Phase 8.5
+        pass
+
+    def test_research_gap_minimal_returns_valid(self):
+        """Test ResearchGap with only required fields."""
+        # TODO: Implement when used in Phase 8.5
+        pass
+
+    def test_research_gap_severity_bounds_validation(self):
+        """Test that severity respects 0.0-1.0 bounds."""
+        # TODO: Implement when used in Phase 8.5
+        pass
+
+    def test_research_gap_affected_topics_defaults_to_empty_list(self):
+        """Test that affected_topics defaults to empty list."""
+        # TODO: Implement when used in Phase 8.5
+        pass
+
+    def test_research_gap_invalid_gap_type_raises_error(self):
+        """Test that invalid gap_type raises ValidationError."""
+        # TODO: Implement when used in Phase 8.5
+        pass
+
+    def test_research_gap_json_serialization(self):
+        """Test ResearchGap can be serialized to JSON."""
+        # TODO: Implement when used in Phase 8.5
+        pass
+
+    def test_research_gap_json_deserialization(self):
+        """Test ResearchGap can be deserialized from JSON."""
+        # TODO: Implement when used in Phase 8.5
+        pass
+
+
+class TestCoverageAnalysis:
+    """Test cases for CoverageAnalysis model (Phase 1.2)."""
+
+    def test_coverage_analysis_with_all_fields_returns_valid(self):
+        """Test CoverageAnalysis with all fields provided."""
+        # TODO: Implement when used in Phase 8.5
+        pass
+
+    def test_coverage_analysis_minimal_returns_valid(self):
+        """Test CoverageAnalysis with only required fields."""
+        # TODO: Implement when used in Phase 8.5
+        pass
+
+    def test_coverage_analysis_coverage_percentage_bounds_validation(self):
+        """Test that coverage_percentage respects 0.0-100.0 bounds."""
+        # TODO: Implement when used in Phase 8.5
+        pass
+
+    def test_coverage_analysis_average_credibility_bounds_validation(self):
+        """Test that average_credibility respects 0.0-1.0 bounds."""
+        # TODO: Implement when used in Phase 8.5
+        pass
+
+    def test_coverage_analysis_negative_topics_raises_error(self):
+        """Test that negative total_topics raises ValidationError."""
+        # TODO: Implement when used in Phase 8.5
+        pass
+
+    def test_coverage_analysis_covered_greater_than_total_raises_error(self):
+        """Test that covered_topics > total_topics raises ValidationError."""
+        # TODO: Implement when used in Phase 8.5
+        pass
+
+    def test_coverage_analysis_topic_coverage_defaults_to_empty_dict(self):
+        """Test that topic_coverage defaults to empty dict."""
+        # TODO: Implement when used in Phase 8.5
+        pass
+
+    def test_coverage_analysis_json_serialization(self):
+        """Test CoverageAnalysis can be serialized to JSON."""
+        # TODO: Implement when used in Phase 8.5
+        pass
+
+    def test_coverage_analysis_json_deserialization(self):
+        """Test CoverageAnalysis can be deserialized from JSON."""
+        # TODO: Implement when used in Phase 8.5
+        pass
+
+
+class TestSummarizedFindings:
+    """Test cases for SummarizedFindings model with gap analysis (Phase 1.2)."""
+
+    def test_summarized_findings_with_core_fields_returns_valid(self):
+        """Test SummarizedFindings with core fields only."""
+        # TODO: Implement when used in Phase 8.5
+        pass
+
+    def test_summarized_findings_with_all_fields_returns_valid(self):
+        """Test SummarizedFindings with all gap analysis fields."""
+        # TODO: Implement when used in Phase 8.5
+        pass
+
+    def test_summarized_findings_minimal_returns_valid(self):
+        """Test SummarizedFindings with only required fields."""
+        # TODO: Implement when used in Phase 8.5
+        pass
+
+    def test_summarized_findings_quality_score_bounds_validation(self):
+        """Test that quality_score respects 0.0-1.0 bounds."""
+        # TODO: Implement when used in Phase 8.5
+        pass
+
+    def test_summarized_findings_research_gaps_defaults_to_none(self):
+        """Test that research_gaps defaults to None."""
+        # TODO: Implement when used in Phase 8.5
+        pass
+
+    def test_summarized_findings_with_research_gaps_returns_valid(self):
+        """Test SummarizedFindings with research_gaps list."""
+        # TODO: Implement when used in Phase 8.5
+        pass
+
+    def test_summarized_findings_with_coverage_analysis_returns_valid(self):
+        """Test SummarizedFindings with coverage_analysis."""
+        # TODO: Implement when used in Phase 8.5
+        pass
+
+    def test_summarized_findings_json_serialization(self):
+        """Test SummarizedFindings can be serialized to JSON."""
+        # TODO: Implement when used in Phase 8.5
+        pass
+
+    def test_summarized_findings_json_deserialization(self):
+        """Test SummarizedFindings can be deserialized from JSON."""
+        # TODO: Implement when used in Phase 8.5
+        pass
+
+
+class TestSubAgentFindings:
+    """Test cases for SubAgentFindings model (Phase 1.2 - boilerplate)."""
+
+    def test_sub_agent_findings_with_all_fields_returns_valid(self):
+        """Test SubAgentFindings with all fields provided."""
+        # TODO: Implement when used in Phase 8.4
+        pass
+
+    def test_sub_agent_findings_minimal_returns_valid(self):
+        """Test SubAgentFindings with only required fields."""
+        # TODO: Implement when used in Phase 8.4
+        pass
+
+    def test_sub_agent_findings_json_serialization(self):
+        """Test SubAgentFindings can be serialized to JSON."""
+        # TODO: Implement when used in Phase 8.4
+        pass
+
+    def test_sub_agent_findings_json_deserialization(self):
+        """Test SubAgentFindings can be deserialized from JSON."""
+        # TODO: Implement when used in Phase 8.4
+        pass
