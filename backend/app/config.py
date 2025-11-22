@@ -1,0 +1,66 @@
+"""Application configuration using Pydantic settings.
+
+Configuration Architecture (Phase 2.5):
+- Environment variables loaded from .env file
+- Tool configurations moved to dedicated modules (Phase 7):
+  - MCP server configs → app/tools/mcp_tools.py
+  - Research sources → app/utils/research_sources.py
+- LangGraph persistence config added in Phase 6.3 (PostgresSaver)
+
+Phase References:
+- Phase 6.3: Add DATABASE_URL for conversation persistence
+- Phase 7.1: TAVILY_API_KEY used by tavily_tools.py
+- Phase 7.3: CORE_API_KEY for Scientific Paper Harvester MCP
+"""
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from typing import List, Dict
+
+
+class Settings(BaseSettings):
+    # API Settings
+    API_HOST: str = "0.0.0.0"
+    API_PORT: int = 8000
+    API_RELOAD: bool = True
+    
+    # CORS
+    CORS_ORIGINS: str = "http://localhost:3000"
+    
+    # AI Provider API Keys
+    GOOGLE_GEMINI_API_KEY: str = ""
+    DEEPSEEK_API_KEY: str = ""
+    
+    # LangChain/LangGraph Settings
+    DEFAULT_MODEL: str = "gemini"  # gemini or deepseek
+    GEMINI_MODEL: str = "gemini-2.5-flash"  
+    DEEPSEEK_MODEL: str = "deepseek-chat"
+    
+    # Tool Settings
+    TAVILY_API_KEY: str = ""  # Phase 7.1 - Tavily web search
+    CORE_API_KEY: str = ""    # Phase 7.3 - CORE academic database (via Scientific Paper Harvester)
+    
+    # NOTE: Phase 7.2 - MCP server configs moved to app/tools/mcp_tools.py (server_configs dict)
+    # NOTE: Phase 6.2 - Research sources moved to app/utils/research_sources.py (CURATED_RESEARCH_SOURCES)
+    
+    # Database Settings (Phase 6.3)
+    # TODO: Phase 6.3 - Add DATABASE_URL for PostgresSaver checkpointing
+    # DATABASE_URL: str = ""  # PostgreSQL connection string
+    
+    @property
+    def cors_origins_list(self) -> List[str]:
+        """Convert comma-separated CORS origins to list."""
+        return [origin.strip() for origin in self.CORS_ORIGINS.split(",")]
+    
+    def load_enabled_mcp_servers(self) -> List[str]:
+        """Load enabled MCP servers from config. Placeholder - implementation deferred."""
+        # Future implementation: return list of enabled MCP server names
+        return []
+    
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=True
+    )
+
+
+settings = Settings()
+

@@ -73,7 +73,6 @@ out/
 build/
 .vercel
 *.tsbuildinfo
-next-env.d.ts
 
 # Environment Variables
 .env
@@ -272,3 +271,10 @@ cython_debug/
 # Cursor-related
 .cursor/
 
+# Custom commit script summariser
+backend/git_summarizer/
+
+# Logs
+backend/DEVELOPMENT_PLAN.md
+backend/FEATURE_PROPOSALS.md
+backend/UV_HELP.md
