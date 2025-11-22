@@ -1,3 +1,18 @@
+"""Application configuration using Pydantic settings.
+
+Configuration Architecture (Phase 2.5):
+- Environment variables loaded from .env file
+- Tool configurations moved to dedicated modules (Phase 7):
+  - MCP server configs → app/tools/mcp_tools.py
+  - Research sources → app/utils/research_sources.py
+- LangGraph persistence config added in Phase 6.3 (PostgresSaver)
+
+Phase References:
+- Phase 6.3: Add DATABASE_URL for conversation persistence
+- Phase 7.1: TAVILY_API_KEY used by tavily_tools.py
+- Phase 7.3: CORE_API_KEY for Scientific Paper Harvester MCP
+"""
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List, Dict
 
@@ -18,11 +33,18 @@ class Settings(BaseSettings):
     # LangChain/LangGraph Settings
     DEFAULT_MODEL: str = "gemini"  # gemini or deepseek
     GEMINI_MODEL: str = "gemini-2.5-flash"  
-    DEEPSEEK_MODEL: str = "deepseek-chat"  
+    DEEPSEEK_MODEL: str = "deepseek-chat"
     
-    # Tool Settings (placeholders - implementation deferred)
-    TAVILY_API_KEY: str = ""  # Placeholder for Tavily API key
-    MCP_SERVERS: Dict[str, Dict] = {}  # Placeholder for MCP server configs
+    # Tool Settings
+    TAVILY_API_KEY: str = ""  # Phase 7.1 - Tavily web search
+    CORE_API_KEY: str = ""    # Phase 7.3 - CORE academic database (via Scientific Paper Harvester)
+    
+    # NOTE: Phase 7.2 - MCP server configs moved to app/tools/mcp_tools.py (server_configs dict)
+    # NOTE: Phase 6.2 - Research sources moved to app/utils/research_sources.py (CURATED_RESEARCH_SOURCES)
+    
+    # Database Settings (Phase 6.3)
+    # TODO: Phase 6.3 - Add DATABASE_URL for PostgresSaver checkpointing
+    # DATABASE_URL: str = ""  # PostgreSQL connection string
     
     @property
     def cors_origins_list(self) -> List[str]:
