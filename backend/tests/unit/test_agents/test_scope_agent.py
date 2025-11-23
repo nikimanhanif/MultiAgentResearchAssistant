@@ -29,12 +29,11 @@ class TestGetLlm:
     """Test cases for LLM initialization (_get_llm function)."""
 
     @patch("app.agents.scope_agent.settings")
-    def test_get_llm_with_gemini_returns_configured_instance(self, mock_settings):
-        """Test that _get_llm with Gemini model returns configured LLM instance."""
+    def test_get_llm_returns_configured_deepseek_instance(self, mock_settings):
+        """Test that _get_llm returns configured DeepSeek LLM instance."""
         # Arrange
-        mock_settings.DEFAULT_MODEL = "gemini"
-        mock_settings.GOOGLE_GEMINI_API_KEY = "test_gemini_key"
-        mock_settings.GEMINI_MODEL = "gemini-2.5-flash"
+        mock_settings.DEEPSEEK_API_KEY = "test_deepseek_key"
+        mock_settings.DEEPSEEK_MODEL = "deepseek-chat"
         
         # Act
         llm = _get_llm(temperature=0.7)
@@ -42,31 +41,14 @@ class TestGetLlm:
         # Assert
         assert llm is not None
         assert llm.temperature == 0.7
-        assert hasattr(llm, 'model')
-
-    @patch("app.agents.scope_agent.settings")
-    def test_get_llm_with_deepseek_returns_configured_instance(self, mock_settings):
-        """Test that _get_llm with DeepSeek model returns configured LLM instance."""
-        # Arrange
-        mock_settings.DEFAULT_MODEL = "deepseek"
-        mock_settings.DEEPSEEK_API_KEY = "test_deepseek_key"
-        mock_settings.DEEPSEEK_MODEL = "deepseek-chat"
-        
-        # Act
-        llm = _get_llm(temperature=0.5)
-        
-        # Assert
-        assert llm is not None
-        assert llm.temperature == 0.5
-        assert hasattr(llm, 'model_name')
+        assert hasattr(llm, 'model_name')  # ChatDeepSeek uses model_name, not model
 
     @patch("app.agents.scope_agent.settings")
     def test_get_llm_with_custom_temperature_returns_correct_value(self, mock_settings):
         """Test that _get_llm respects custom temperature parameter."""
         # Arrange
-        mock_settings.DEFAULT_MODEL = "gemini"
-        mock_settings.GOOGLE_GEMINI_API_KEY = "test_key"
-        mock_settings.GEMINI_MODEL = "gemini-2.5-flash"
+        mock_settings.DEEPSEEK_API_KEY = "test_key"
+        mock_settings.DEEPSEEK_MODEL = "deepseek-chat"
         custom_temp = 0.3
         
         # Act
@@ -76,35 +58,13 @@ class TestGetLlm:
         assert llm.temperature == custom_temp
 
     @patch("app.agents.scope_agent.settings")
-    def test_get_llm_with_missing_gemini_key_raises_value_error(self, mock_settings):
-        """Test that _get_llm raises ValueError when Gemini API key is missing."""
-        # Arrange
-        mock_settings.DEFAULT_MODEL = "gemini"
-        mock_settings.GOOGLE_GEMINI_API_KEY = ""
-        
-        # Act & Assert
-        with pytest.raises(ValueError, match="GOOGLE_GEMINI_API_KEY not configured"):
-            _get_llm()
-
-    @patch("app.agents.scope_agent.settings")
     def test_get_llm_with_missing_deepseek_key_raises_value_error(self, mock_settings):
         """Test that _get_llm raises ValueError when DeepSeek API key is missing."""
         # Arrange
-        mock_settings.DEFAULT_MODEL = "deepseek"
         mock_settings.DEEPSEEK_API_KEY = ""
         
         # Act & Assert
         with pytest.raises(ValueError, match="DEEPSEEK_API_KEY not configured"):
-            _get_llm()
-
-    @patch("app.agents.scope_agent.settings")
-    def test_get_llm_with_invalid_model_raises_value_error(self, mock_settings):
-        """Test that _get_llm raises ValueError for unsupported model name."""
-        # Arrange
-        mock_settings.DEFAULT_MODEL = "unsupported_model"
-        
-        # Act & Assert
-        with pytest.raises(ValueError, match="Invalid model"):
             _get_llm()
 
 

@@ -1,52 +1,50 @@
-"""DeepEval configuration for using Google Gemini models.
+"""DeepEval configuration for OpenAI gpt-5-nano evaluation model.
 
-This module configures DeepEval to use Google Gemini 2.5 Flash using DeepEval's
-built-in GeminiModel class, leveraging the existing Gemini configuration from the project.
-
+This module configures DeepEval to use OpenAI's gpt-5-nano for evaluation metrics,
+following DeepEval's native OpenAI integration documentation.
 """
 
 from typing import Optional
-from deepeval.models import GeminiModel, DeepSeekModel
+from deepeval.models import GPTModel
 
 from app.config import settings
 
 
-def get_gemini_evaluation_model(
+def get_evaluation_model(
     temperature: float = 0.0,
     model_name: str | None = None
-) -> GeminiModel:
-    """Get a configured Gemini model for DeepEval evaluation metrics.
+) -> GPTModel:
+    """Get OpenAI gpt-5-nano for DeepEval evaluation metrics.
     
-    Uses DeepEval's built-in GeminiModel class with your existing project configuration.
-    Following official DeepEval documentation for GeminiModel configuration.
+    Uses OpenAI's gpt-5-nano model for all evaluation metrics.
     
     Args:
-        temperature: Temperature for generation (default: 0.0 for deterministic)
-        model_name: Optional model name override (defaults to settings.GEMINI_MODEL)
+        temperature: Temperature for evaluation (default: 0.0 for deterministic)
+        model_name: Optional model override (defaults to settings.OPENAI_EVAL_MODEL)
         
     Returns:
-        GeminiModel: Configured Gemini model for evaluation
+        GPTModel: Configured OpenAI model for evaluation
         
     Raises:
-        ValueError: If GOOGLE_GEMINI_API_KEY is not configured
-        
+        ValueError: If OPENAI_API_KEY is not configured
     """
-    if not settings.GOOGLE_GEMINI_API_KEY:
+    if not settings.OPENAI_API_KEY:
         raise ValueError(
-            "GOOGLE_GEMINI_API_KEY not configured. "
-            "Please set it in your .env file to use Gemini for evaluation."
+            "OPENAI_API_KEY not configured. "
+            "Please set it in your .env file for evaluation."
         )
     
-    # Use DeepEval's built-in GeminiModel (following official docs)
-    return GeminiModel(
-        model_name=model_name or settings.GEMINI_MODEL,
-        api_key=settings.GOOGLE_GEMINI_API_KEY,
-        temperature=temperature
+    return GPTModel(
+        model=model_name or settings.OPENAI_EVAL_MODEL,
+        _openai_api_key=settings.OPENAI_API_KEY,
+        temperature=temperature,
+        cost_per_input_token=0.00000005,
+        cost_per_output_token=0.0000004
     )
 
 
 def validate_evaluation_config() -> bool:
-    """Validate that the evaluation configuration is correct.
+    """Validate evaluation configuration.
     
     Returns:
         bool: True if configuration is valid
@@ -54,28 +52,24 @@ def validate_evaluation_config() -> bool:
     Raises:
         ValueError: If configuration is invalid
     """
-    if not settings.GOOGLE_GEMINI_API_KEY:
+    if not settings.OPENAI_API_KEY:
         raise ValueError(
-            "GOOGLE_GEMINI_API_KEY not configured. "
-            "Add it to your .env file to use Gemini for evaluation."
+            "OPENAI_API_KEY not configured. "
+            "Add it to your .env file for evaluation."
         )
     
-    if not settings.GEMINI_MODEL:
+    if not settings.OPENAI_EVAL_MODEL:
         raise ValueError(
-            "GEMINI_MODEL not configured. "
-            "Check app/config.py for model configuration."
+            "OPENAI_EVAL_MODEL not configured in app/config.py"
         )
     
-    # Try to create the model to verify it works
+    # Test model initialization
     try:
-        model = get_gemini_evaluation_model()
-        # Test a simple generation
+        model = get_evaluation_model()
+        # Simple test generation
         response = model.generate("Say hello")
         if response:
             return True
         raise ValueError("Model returned empty response")
     except Exception as e:
-        raise ValueError(
-            f"Failed to load Gemini model for evaluation: {e}"
-        )
-
+        raise ValueError(f"Failed to initialize evaluation model: {e}")

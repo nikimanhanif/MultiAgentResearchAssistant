@@ -1,4 +1,6 @@
-"""Baseline evaluation tests for Scope Agent.
+"""Baseline boilerplate evaluation tests using hardcoded examples for Scope Agent.
+
+NOTE: These tests will need to be reimplemented when full pipeline is implemented.
 
 This module establishes baseline quality metrics for the Scope Agent using:
 - AnswerRelevance: Clarification questions must be relevant to user queries (> 0.7)
@@ -26,14 +28,14 @@ class TestScopeAgentClarificationQuestions:
     - Help narrow down ambiguous queries
     """
     
-    def test_clarification_question_relevance_vague_query(self, gemini_evaluation_model):
+    def test_clarification_question_relevance_vague_query(self, evaluation_model):
         """Test that clarification questions are relevant for vague queries.
         
         Input: Vague query ("AI research")
         Expected: Relevant clarifying questions about AI domain, application, etc.
         """
         metric = AnswerRelevancyMetric(
-            model=gemini_evaluation_model,
+            model=evaluation_model,
             threshold=0.7
         )
         
@@ -53,14 +55,14 @@ class TestScopeAgentClarificationQuestions:
             "The question should be directly relevant to the vague query 'AI research'."
         )
     
-    def test_clarification_question_relevance_domain_specific(self, gemini_evaluation_model):
+    def test_clarification_question_relevance_domain_specific(self, evaluation_model):
         """Test clarification questions for domain-specific queries.
         
         Input: Domain-specific query ("AI in healthcare")
         Expected: Questions about specific healthcare applications, time period, etc.
         """
         metric = AnswerRelevancyMetric(
-            model=gemini_evaluation_model,
+            model=evaluation_model,
             threshold=0.7
         )
         
@@ -80,14 +82,14 @@ class TestScopeAgentClarificationQuestions:
             f"Reason: {metric.reason}"
         )
     
-    def test_clarification_question_relevance_time_period(self, gemini_evaluation_model):
+    def test_clarification_question_relevance_time_period(self, evaluation_model):
         """Test clarification questions about time period constraints.
         
         Input: Query with unclear time scope
         Expected: Question about desired time period for research
         """
         metric = AnswerRelevancyMetric(
-            model=gemini_evaluation_model,
+            model=evaluation_model,
             threshold=0.7
         )
         
@@ -106,14 +108,14 @@ class TestScopeAgentClarificationQuestions:
             f"Reason: {metric.reason}"
         )
     
-    def test_clarification_question_relevance_output_format(self, gemini_evaluation_model):
+    def test_clarification_question_relevance_output_format(self, evaluation_model):
         """Test clarification questions about desired output format.
         
         Input: Query without specified output format
         Expected: Question about desired report format
         """
         metric = AnswerRelevancyMetric(
-            model=gemini_evaluation_model,
+            model=evaluation_model,
             threshold=0.7
         )
         
@@ -132,13 +134,13 @@ class TestScopeAgentClarificationQuestions:
             f"Reason: {metric.reason}"
         )
     
-    def test_multiple_clarification_questions_batch(self, gemini_evaluation_model):
+    def test_multiple_clarification_questions_batch(self, evaluation_model):
         """Test multiple clarification questions in batch evaluation.
         
         Validates that all clarification questions meet relevance threshold.
         """
         metric = AnswerRelevancyMetric(
-            model=gemini_evaluation_model,
+            model=evaluation_model,
             threshold=0.7
         )
         
@@ -180,13 +182,13 @@ class TestScopeAgentBriefGeneration:
     - Accurate representation of conversation
     """
     
-    def test_brief_faithfulness_to_user_inputs(self, gemini_evaluation_model):
+    def test_brief_faithfulness_to_user_inputs(self, evaluation_model):
         """Test that research briefs are faithful to user inputs.
         
         Ensures the Scope Agent doesn't hallucinate information not provided by the user.
         """
         metric = FaithfulnessMetric(
-            model=gemini_evaluation_model,
+            model=evaluation_model,
             threshold=0.9
         )
         
@@ -230,7 +232,7 @@ class TestScopeAgentBriefGeneration:
             "The brief should only contain information from user inputs, no hallucinations."
         )
     
-    def test_brief_completeness_structure(self, gemini_evaluation_model):
+    def test_brief_completeness_structure(self, evaluation_model):
         """Test that research briefs contain all required sections.
         
         Required sections:
@@ -242,7 +244,7 @@ class TestScopeAgentBriefGeneration:
         """
         metric = GEval(
             name="Research Brief Completeness",
-            model=gemini_evaluation_model,
+            model=evaluation_model,
             criteria=(
                 "Does the research brief contain all required sections: "
                 "Scope, Sub-topics, Constraints, Format type, and Depth level? "
@@ -281,7 +283,7 @@ class TestScopeAgentBriefGeneration:
             "The brief must contain all required sections."
         )
     
-    def test_brief_sub_topics_specificity(self, gemini_evaluation_model):
+    def test_brief_sub_topics_specificity(self, evaluation_model):
         """Test that sub-topics are specific and non-overlapping.
         
         Sub-topics should be:
@@ -291,7 +293,7 @@ class TestScopeAgentBriefGeneration:
         """
         metric = GEval(
             name="Sub-topics Specificity",
-            model=gemini_evaluation_model,
+            model=evaluation_model,
             criteria=(
                 "Are the sub-topics specific, distinct, and non-overlapping? "
                 "Each sub-topic should represent a clear, separate research area."
@@ -320,7 +322,7 @@ class TestScopeAgentBriefGeneration:
             f"Reason: {metric.reason}"
         )
     
-    def test_brief_constraints_validity(self, gemini_evaluation_model):
+    def test_brief_constraints_validity(self, evaluation_model):
         """Test that constraints are valid and well-structured.
         
         Constraints should include:
@@ -331,7 +333,7 @@ class TestScopeAgentBriefGeneration:
         """
         metric = GEval(
             name="Constraints Validity",
-            model=gemini_evaluation_model,
+            model=evaluation_model,
             criteria=(
                 "Are the constraints valid and properly structured? "
                 "Do they include time range, source types, and credibility thresholds?"
@@ -370,7 +372,7 @@ class TestScopeAgentCompletionDetection:
     - More clarification is needed (return False)
     """
     
-    def test_completion_detection_sufficient_scope(self, gemini_evaluation_model):
+    def test_completion_detection_sufficient_scope(self, evaluation_model):
         """Test that completion is detected when scope is sufficient.
         
         Sufficient scope includes:
@@ -381,7 +383,7 @@ class TestScopeAgentCompletionDetection:
         """
         metric = GEval(
             name="Completion Detection - Sufficient Scope",
-            model=gemini_evaluation_model,
+            model=evaluation_model,
             criteria=(
                 "Is the scope sufficiently clarified to proceed with research? "
                 "Does it include domain, sub-topics, time period, and format?"
@@ -422,7 +424,7 @@ class TestScopeAgentCompletionDetection:
             f"Reason: {metric.reason}"
         )
     
-    def test_completion_detection_insufficient_scope(self, gemini_evaluation_model):
+    def test_completion_detection_insufficient_scope(self, evaluation_model):
         """Test that completion is NOT detected when scope is insufficient.
         
         Insufficient scope lacks:
@@ -433,7 +435,7 @@ class TestScopeAgentCompletionDetection:
         """
         metric = GEval(
             name="Completion Detection - Insufficient Scope",
-            model=gemini_evaluation_model,
+            model=evaluation_model,
             criteria=(
                 "Is the scope correctly identified as insufficient? "
                 "Does it lack necessary details like domain, sub-topics, or format?"
@@ -480,7 +482,7 @@ class TestScopeAgentIntegration:
     3. Generate faithful and complete research briefs
     """
     
-    def test_complete_scope_agent_workflow(self, gemini_evaluation_model):
+    def test_complete_scope_agent_workflow(self, evaluation_model):
         """Test the complete Scope Agent workflow with all quality metrics.
         
         Workflow:
@@ -492,20 +494,20 @@ class TestScopeAgentIntegration:
         """
         # Metric 1: Clarification question relevance
         relevance_metric = AnswerRelevancyMetric(
-            model=gemini_evaluation_model,
+            model=evaluation_model,
             threshold=0.7
         )
         
         # Metric 2: Brief faithfulness
         faithfulness_metric = FaithfulnessMetric(
-            model=gemini_evaluation_model,
+            model=evaluation_model,
             threshold=0.9
         )
         
         # Metric 3: Brief completeness
         completeness_metric = GEval(
             name="Brief Completeness",
-            model=gemini_evaluation_model,
+            model=evaluation_model,
             criteria=(
                 "Does the research brief contain all required sections "
                 "and is it properly structured?"

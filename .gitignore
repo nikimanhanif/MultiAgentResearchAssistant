@@ -278,3 +278,6 @@ backend/git_summarizer/
 backend/DEVELOPMENT_PLAN.md
 backend/FEATURE_PROPOSALS.md
 backend/UV_HELP.md
+
+backend/tests/evaluation/.deepeval/
+backend/.deepeval/

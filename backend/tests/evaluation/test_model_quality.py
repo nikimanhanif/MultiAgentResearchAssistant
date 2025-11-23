@@ -32,14 +32,14 @@ class TestAnswerRelevance:
     """
     
     def test_answer_relevance_basic(
-        self, sample_llm_test_case: LLMTestCase, gemini_evaluation_model
+        self, sample_llm_test_case: LLMTestCase, evaluation_model
     ):
         """Test that basic LLM responses are relevant to the input query.
         
         Uses the AnswerRelevancyMetric with Gemini to ensure the output addresses the input.
         """
         metric = AnswerRelevancyMetric(
-            model=gemini_evaluation_model,
+            model=evaluation_model,
             threshold=0.7
         )
         
@@ -52,7 +52,7 @@ class TestAnswerRelevance:
             f"Reason: {metric.reason}"
         )
     
-    def test_answer_relevance_clarification_question(self, gemini_evaluation_model):
+    def test_answer_relevance_clarification_question(self, evaluation_model):
         """Test that clarification questions are relevant to vague user queries.
         
         This tests the Scope Agent's ability to ask relevant clarifying questions.
@@ -66,7 +66,7 @@ class TestAnswerRelevance:
         )
         
         metric = AnswerRelevancyMetric(
-            model=gemini_evaluation_model,
+            model=evaluation_model,
             threshold=0.7
         )
         metric.measure(test_case)
@@ -77,14 +77,14 @@ class TestAnswerRelevance:
         )
     
     def test_answer_relevance_with_context(
-        self, sample_llm_test_case_with_context: LLMTestCase, gemini_evaluation_model
+        self, sample_llm_test_case_with_context: LLMTestCase, evaluation_model
     ):
         """Test answer relevance when retrieval context is provided.
         
         Ensures the model uses retrieved context to provide relevant answers.
         """
         metric = AnswerRelevancyMetric(
-            model=gemini_evaluation_model,
+            model=evaluation_model,
             threshold=0.7
         )
         metric.measure(sample_llm_test_case_with_context)
@@ -106,14 +106,14 @@ class TestFaithfulness:
     """
     
     def test_faithfulness_with_context(
-        self, sample_llm_test_case_with_context: LLMTestCase, gemini_evaluation_model
+        self, sample_llm_test_case_with_context: LLMTestCase, evaluation_model
     ):
         """Test that outputs are faithful to the retrieval context.
         
         Ensures the model doesn't hallucinate information not in the context.
         """
         metric = FaithfulnessMetric(
-            model=gemini_evaluation_model,
+            model=evaluation_model,
             threshold=0.9
         )
         metric.measure(sample_llm_test_case_with_context)
@@ -124,7 +124,7 @@ class TestFaithfulness:
             "This indicates potential hallucination."
         )
     
-    def test_faithfulness_research_brief_generation(self, gemini_evaluation_model):
+    def test_faithfulness_research_brief_generation(self, evaluation_model):
         """Test that research briefs are faithful to user inputs.
         
         Ensures the Scope Agent doesn't add information not provided by the user.
@@ -154,7 +154,7 @@ class TestFaithfulness:
         )
         
         metric = FaithfulnessMetric(
-            model=gemini_evaluation_model,
+            model=evaluation_model,
             threshold=0.9
         )
         metric.measure(test_case)
@@ -164,7 +164,7 @@ class TestFaithfulness:
             f"Reason: {metric.reason}"
         )
     
-    def test_faithfulness_report_generation(self, gemini_evaluation_model):
+    def test_faithfulness_report_generation(self, evaluation_model):
         """Test that reports are faithful to research findings.
         
         Ensures the Report Agent doesn't hallucinate beyond provided findings.
@@ -185,7 +185,7 @@ class TestFaithfulness:
         )
         
         metric = FaithfulnessMetric(
-            model=gemini_evaluation_model,
+            model=evaluation_model,
             threshold=0.9
         )
         metric.measure(test_case)
@@ -206,14 +206,14 @@ class TestContextRecall:
     """
     
     def test_context_recall_basic(
-        self, sample_llm_test_case_with_context: LLMTestCase, gemini_evaluation_model
+        self, sample_llm_test_case_with_context: LLMTestCase, evaluation_model
     ):
         """Test that retrieval context contains relevant information.
         
         Ensures the Research Agent retrieves pertinent information.
         """
         metric = ContextualRecallMetric(
-            model=gemini_evaluation_model,
+            model=evaluation_model,
             threshold=0.7
         )
         metric.measure(sample_llm_test_case_with_context)
@@ -224,7 +224,7 @@ class TestContextRecall:
             "This indicates insufficient retrieval coverage."
         )
     
-    def test_context_recall_research_findings(self, gemini_evaluation_model):
+    def test_context_recall_research_findings(self, evaluation_model):
         """Test that research findings cover the research brief requirements.
         
         Ensures the Research Agent retrieves information for all sub-topics.
@@ -257,7 +257,7 @@ class TestContextRecall:
         )
         
         metric = ContextualRecallMetric(
-            model=gemini_evaluation_model,
+            model=evaluation_model,
             threshold=0.7
         )
         metric.measure(test_case)
@@ -274,7 +274,7 @@ class TestModelQualityIntegration:
     These tests evaluate multiple quality dimensions simultaneously using Gemini.
     """
     
-    def test_complete_pipeline_quality(self, gemini_evaluation_model):
+    def test_complete_pipeline_quality(self, evaluation_model):
         """Test quality metrics across a complete research pipeline.
         
         Evaluates AnswerRelevance, Faithfulness, and ContextRecall together.
@@ -300,15 +300,15 @@ class TestModelQualityIntegration:
         
         # Create metrics with Gemini
         answer_relevance = AnswerRelevancyMetric(
-            model=gemini_evaluation_model,
+            model=evaluation_model,
             threshold=0.7
         )
         faithfulness = FaithfulnessMetric(
-            model=gemini_evaluation_model,
+            model=evaluation_model,
             threshold=0.9
         )
         context_recall = ContextualRecallMetric(
-            model=gemini_evaluation_model,
+            model=evaluation_model,
             threshold=0.7
         )
         
@@ -329,7 +329,7 @@ class TestModelQualityIntegration:
             f"Context recall failed: {context_recall.reason}"
         )
     
-    def test_batch_evaluation(self, gemini_evaluation_model):
+    def test_batch_evaluation(self, evaluation_model):
         """Test batch evaluation of multiple test cases.
         
         Demonstrates how to evaluate multiple scenarios efficiently.
@@ -357,7 +357,7 @@ class TestModelQualityIntegration:
         
         # Evaluate all test cases with AnswerRelevancyMetric using Gemini
         metric = AnswerRelevancyMetric(
-            model=gemini_evaluation_model,
+            model=evaluation_model,
             threshold=0.7
         )
         evaluate(test_cases=test_cases, metrics=[metric])
@@ -371,7 +371,7 @@ class TestModelQualityIntegration:
 # Standalone Metric Measurement Examples
 def test_standalone_answer_relevance_measurement(
     sample_llm_test_case: LLMTestCase,
-    gemini_evaluation_model,
+    evaluation_model,
 ):
     """Example of using metrics standalone for debugging.
     
@@ -379,7 +379,7 @@ def test_standalone_answer_relevance_measurement(
     running the full evaluate() function.
     """
     metric = AnswerRelevancyMetric(
-        model=gemini_evaluation_model,
+        model=evaluation_model,
         threshold=0.7
     )
     
@@ -396,11 +396,11 @@ def test_standalone_answer_relevance_measurement(
 
 def test_standalone_faithfulness_measurement(
     sample_llm_test_case_with_context: LLMTestCase,
-    gemini_evaluation_model,
+    evaluation_model,
 ):
     """Example of standalone faithfulness measurement for debugging."""
     metric = FaithfulnessMetric(
-        model=gemini_evaluation_model,
+        model=evaluation_model,
         threshold=0.9
     )
     

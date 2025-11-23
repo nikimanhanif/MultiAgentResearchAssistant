@@ -41,7 +41,7 @@ def configure_langsmith():
 
 @pytest.fixture(scope="session", autouse=True)
 def configure_deepeval():
-    """Configure DeepEval settings for evaluation tests.
+    """Configure DeepEval for OpenAI gpt-5-nano evaluation.
     
     Note: This configuration uses REAL LLM calls for evaluation metrics.
     Do NOT mock the evaluation LLM - it needs to make real API calls to judge quality.
@@ -50,66 +50,57 @@ def configure_deepeval():
     if "DEEPEVAL_TELEMETRY_OPT_OUT" not in os.environ:
         os.environ["DEEPEVAL_TELEMETRY_OPT_OUT"] = "true"
     
-    # Validate Gemini configuration is available
+    # Validate OpenAI configuration is available
     from app.config import settings
     
-    if not settings.GOOGLE_GEMINI_API_KEY:
+    if not settings.OPENAI_API_KEY:
         import warnings
         warnings.warn(
-            "GOOGLE_GEMINI_API_KEY not configured. "
+            "OPENAI_API_KEY not configured. "
             "Evaluation metrics will fail without an API key. "
-            "Add GOOGLE_GEMINI_API_KEY to your .env file."
+            "Add OPENAI_API_KEY to your .env file."
         )
     
     yield
 
 
-# Gemini Model Fixture for Evaluation
+# OpenAI Model Fixture for Evaluation
 @pytest.fixture
-def gemini_evaluation_model():
-    """Get a Gemini model configured for DeepEval evaluation metrics.
+def evaluation_model():
+    """Get OpenAI gpt-5-nano for DeepEval evaluation metrics.
     
     This model is used by evaluation metrics (AnswerRelevancyMetric, GEval, etc.)
     to judge the quality of outputs. It makes REAL API calls.
     
-    Uses DeepEval's built-in GeminiModel class for seamless integration.
+    Uses DeepEval's built-in GPTModel class for OpenAI gpt-5-nano.
     
     Returns:
-        GeminiModel: Configured Gemini 2.5 Flash model for evaluation
+        GPTModel: Configured OpenAI gpt-5-nano model for evaluation
         
     Note:
         Do NOT use this for mocking! Evaluation metrics need real LLM calls.
     """
-    from deepeval.models import GeminiModel
+    from tests.evaluation.deepeval_config import get_evaluation_model
     from app.config import settings
     
     # Verify API key is available
-    if not settings.GOOGLE_GEMINI_API_KEY:
-        pytest.skip("GOOGLE_GEMINI_API_KEY not configured")
+    if not settings.OPENAI_API_KEY:
+        pytest.skip("OPENAI_API_KEY not configured")
     
-    return GeminiModel(
-        model_name=settings.GEMINI_MODEL,  # "gemini-2.5-flash"
-        api_key=settings.GOOGLE_GEMINI_API_KEY,
-        temperature=0  # Deterministic evaluation
-    )
+    return get_evaluation_model()
 
 
 @pytest.fixture
-def gemini_evaluation_model_with_temperature():
-    """Get a Gemini model with custom temperature for evaluation.
+def evaluation_model_with_temperature():
+    """Get OpenAI gpt-5-nano model with custom temperature for evaluation.
     
     Returns:
-        callable: Function that takes temperature and returns GeminiModel
+        callable: Function that takes temperature and returns GPTModel
     """
-    from deepeval.models import GeminiModel
-    from app.config import settings
+    from tests.evaluation.deepeval_config import get_evaluation_model
     
     def _get_model(temperature: float = 0.0):
-        return GeminiModel(
-            model_name=settings.GEMINI_MODEL,
-            api_key=settings.GOOGLE_GEMINI_API_KEY,
-            temperature=temperature
-        )
+        return get_evaluation_model(temperature=temperature)
     
     return _get_model
 

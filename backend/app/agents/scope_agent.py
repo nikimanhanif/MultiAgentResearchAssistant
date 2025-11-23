@@ -9,7 +9,6 @@ from typing import Optional, List, Dict, Any, Union
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_deepseek import ChatDeepSeek
 
 from app.models.schemas import (
@@ -28,36 +27,26 @@ from app.config import settings
 
 # Helper Functions
 
-def _get_llm(temperature: float = 0.7) -> Union[ChatGoogleGenerativeAI, ChatDeepSeek]:
-    """Get configured LLM based on settings.
+def _get_llm(temperature: float = 0.7) -> ChatDeepSeek:
+    """Get configured DeepSeek LLM.
     
     Args:
         temperature: Temperature for LLM generation (0.0-1.0)
         
     Returns:
-        Configured LLM instance (Gemini or DeepSeek)
+        Configured ChatDeepSeek instance
         
     Raises:
-        ValueError: If no API key is configured or invalid model specified
+        ValueError: If DEEPSEEK_API_KEY not configured
     """
-    if settings.DEFAULT_MODEL == "gemini":
-        if not settings.GOOGLE_GEMINI_API_KEY:
-            raise ValueError("GOOGLE_GEMINI_API_KEY not configured")
-        return ChatGoogleGenerativeAI(
-            model=settings.GEMINI_MODEL,
-            google_api_key=settings.GOOGLE_GEMINI_API_KEY,
-            temperature=temperature,
-        )
-    elif settings.DEFAULT_MODEL == "deepseek":
-        if not settings.DEEPSEEK_API_KEY:
-            raise ValueError("DEEPSEEK_API_KEY not configured")
-        return ChatDeepSeek(
-            model=settings.DEEPSEEK_MODEL,
-            api_key=settings.DEEPSEEK_API_KEY,
-            temperature=temperature,
-        )
-    else:
-        raise ValueError(f"Invalid model: {settings.DEFAULT_MODEL}")
+    if not settings.DEEPSEEK_API_KEY:
+        raise ValueError("DEEPSEEK_API_KEY not configured")
+    
+    return ChatDeepSeek(
+        model=settings.DEEPSEEK_MODEL,
+        api_key=settings.DEEPSEEK_API_KEY,
+        temperature=temperature,
+    )
 
 
 def _format_conversation_history(history: Optional[List[Dict[str, str]]]) -> str:

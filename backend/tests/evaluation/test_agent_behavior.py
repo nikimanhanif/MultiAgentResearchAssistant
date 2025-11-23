@@ -22,7 +22,7 @@ class TestFormatCompliance:
     Threshold: > 0.8 (80% compliance required)
     """
     
-    def test_research_brief_format_compliance(self, gemini_evaluation_model):
+    def test_research_brief_format_compliance(self, evaluation_model):
         """Test that research briefs follow the required format structure.
         
         Required format:
@@ -35,7 +35,7 @@ class TestFormatCompliance:
         # Define the format compliance metric
         format_metric = GEval(
             name="Research Brief Format Compliance",
-            model=gemini_evaluation_model,
+            model=evaluation_model,
             criteria=(
                 "Does the research brief contain all required sections: "
                 "Scope, Sub-topics, Constraints, Format type, and Depth level? "
@@ -74,7 +74,7 @@ class TestFormatCompliance:
             f"Reason: {format_metric.reason}"
         )
     
-    def test_gap_analysis_format_compliance(self, gemini_evaluation_model):
+    def test_gap_analysis_format_compliance(self, evaluation_model):
         """Test that gap analysis reports follow the required format.
         
         Required format:
@@ -86,7 +86,7 @@ class TestFormatCompliance:
         """
         format_metric = GEval(
             name="Gap Analysis Format Compliance",
-            model=gemini_evaluation_model,
+            model=evaluation_model,
             criteria=(
                 "Does the gap analysis report strictly follow the required structure: "
                 "Executive Summary, Coverage Analysis, Gap Identification, "
@@ -131,7 +131,7 @@ class TestFormatCompliance:
             f"Reason: {format_metric.reason}"
         )
     
-    def test_literature_review_format_compliance(self, gemini_evaluation_model):
+    def test_literature_review_format_compliance(self, evaluation_model):
         """Test that literature reviews follow the required format.
         
         Required format:
@@ -143,7 +143,7 @@ class TestFormatCompliance:
         """
         format_metric = GEval(
             name="Literature Review Format Compliance",
-            model=gemini_evaluation_model,
+            model=evaluation_model,
             criteria=(
                 "Does the literature review follow the required structure: "
                 "Introduction, Thematic Sections, Research Gaps, Conclusion, "
@@ -190,7 +190,7 @@ class TestToolSelectionAccuracy:
     Tool selection accuracy ensures agents choose appropriate tools for queries.
     """
     
-    def test_academic_query_tool_selection(self, gemini_evaluation_model):
+    def test_academic_query_tool_selection(self, evaluation_model):
         """Test that academic queries use academic tools (not general web search).
         
         Academic queries should prefer:
@@ -203,7 +203,7 @@ class TestToolSelectionAccuracy:
         """
         tool_selection_metric = GEval(
             name="Academic Tool Selection",
-            model=gemini_evaluation_model,
+            model=evaluation_model,
             criteria=(
                 "Did the agent select academic tools (Scientific Paper Harvester, "
                 "arXiv, PubMed, OpenAlex) for an academic research query? "
@@ -233,7 +233,7 @@ class TestToolSelectionAccuracy:
             f"Reason: {tool_selection_metric.reason}"
         )
     
-    def test_general_query_tool_selection(self, gemini_evaluation_model):
+    def test_general_query_tool_selection(self, evaluation_model):
         """Test that general queries use appropriate web search tools.
         
         General queries should use:
@@ -245,7 +245,7 @@ class TestToolSelectionAccuracy:
         """
         tool_selection_metric = GEval(
             name="General Query Tool Selection",
-            model=gemini_evaluation_model,
+            model=evaluation_model,
             criteria=(
                 "Did the agent select appropriate tools for a general web search query? "
                 "General queries can use Tavily or other web search tools."
@@ -273,7 +273,7 @@ class TestToolSelectionAccuracy:
             f"Reason: {tool_selection_metric.reason}"
         )
     
-    def test_mixed_query_tool_selection(self, gemini_evaluation_model):
+    def test_mixed_query_tool_selection(self, evaluation_model):
         """Test that mixed queries use both academic and general tools appropriately.
         
         Mixed queries (academic + industry context) should use:
@@ -282,7 +282,7 @@ class TestToolSelectionAccuracy:
         """
         tool_selection_metric = GEval(
             name="Mixed Query Tool Selection",
-            model=gemini_evaluation_model,
+            model=evaluation_model,
             criteria=(
                 "Did the agent select both academic tools (for research) and "
                 "web search tools (for industry context) for a mixed query? "
@@ -319,7 +319,7 @@ class TestReasoningValidity:
     Reasoning validity evaluates the quality of agent reasoning and decision-making.
     """
     
-    def test_clarification_reasoning(self, gemini_evaluation_model):
+    def test_clarification_reasoning(self, evaluation_model):
         """Test that clarification question reasoning is valid and helpful.
         
         Valid reasoning should:
@@ -329,7 +329,7 @@ class TestReasoningValidity:
         """
         reasoning_metric = GEval(
             name="Clarification Reasoning Validity",
-            model=gemini_evaluation_model,
+            model=evaluation_model,
             criteria=(
                 "Is the agent's reasoning for asking clarification questions valid? "
                 "Does it identify specific ambiguities and ask actionable questions?"
@@ -362,7 +362,7 @@ class TestReasoningValidity:
             f"Reason: {reasoning_metric.reason}"
         )
     
-    def test_research_strategy_reasoning(self, gemini_evaluation_model):
+    def test_research_strategy_reasoning(self, evaluation_model):
         """Test that research strategy selection reasoning is valid.
         
         Valid reasoning should:
@@ -372,7 +372,7 @@ class TestReasoningValidity:
         """
         reasoning_metric = GEval(
             name="Research Strategy Reasoning Validity",
-            model=gemini_evaluation_model,
+            model=evaluation_model,
             criteria=(
                 "Is the agent's reasoning for selecting a research strategy valid? "
                 "Does it analyze query complexity and justify the strategy choice?"
@@ -409,7 +409,7 @@ class TestReasoningValidity:
             f"Reason: {reasoning_metric.reason}"
         )
     
-    def test_gap_detection_reasoning(self, gemini_evaluation_model):
+    def test_gap_detection_reasoning(self, evaluation_model):
         """Test that gap detection reasoning is valid and actionable.
         
         Valid reasoning should:
@@ -419,7 +419,7 @@ class TestReasoningValidity:
         """
         reasoning_metric = GEval(
             name="Gap Detection Reasoning Validity",
-            model=gemini_evaluation_model,
+            model=evaluation_model,
             criteria=(
                 "Is the agent's reasoning for identifying research gaps valid? "
                 "Does it identify specific gaps and provide actionable recommendations?"
@@ -465,7 +465,7 @@ class TestReasoningValidity:
 class TestAgentBehaviorIntegration:
     """Integration tests combining multiple G-Eval behavioral metrics."""
     
-    def test_complete_agent_behavior_evaluation(self, gemini_evaluation_model):
+    def test_complete_agent_behavior_evaluation(self, evaluation_model):
         """Test multiple behavioral dimensions simultaneously.
         
         Evaluates format compliance, tool selection, and reasoning together.
@@ -473,7 +473,7 @@ class TestAgentBehaviorIntegration:
         # Define metrics
         format_metric = GEval(
             name="Format Compliance",
-            model=gemini_evaluation_model,
+            model=evaluation_model,
             criteria="Does the output follow the required format structure?",
             evaluation_params=[
                 LLMTestCaseParams.INPUT,
@@ -484,7 +484,7 @@ class TestAgentBehaviorIntegration:
         
         tool_metric = GEval(
             name="Tool Selection",
-            model=gemini_evaluation_model,
+            model=evaluation_model,
             criteria="Did the agent select appropriate tools for the query?",
             evaluation_params=[
                 LLMTestCaseParams.INPUT,
@@ -495,7 +495,7 @@ class TestAgentBehaviorIntegration:
         
         reasoning_metric = GEval(
             name="Reasoning Validity",
-            model=gemini_evaluation_model,
+            model=evaluation_model,
             criteria="Is the agent's reasoning valid and well-justified?",
             evaluation_params=[
                 LLMTestCaseParams.INPUT,

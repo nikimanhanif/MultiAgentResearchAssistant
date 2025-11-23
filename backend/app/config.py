@@ -27,14 +27,16 @@ class Settings(BaseSettings):
     # CORS
     CORS_ORIGINS: str = "http://localhost:3000"
     
-    # AI Provider API Keys
-    GOOGLE_GEMINI_API_KEY: str = ""
+    # Research Pipeline LLM (DeepSeek)
     DEEPSEEK_API_KEY: str = ""
-    
-    # LangChain/LangGraph Settings
-    DEFAULT_MODEL: str = "gemini"  # gemini or deepseek
-    GEMINI_MODEL: str = "gemini-2.5-flash"  
     DEEPSEEK_MODEL: str = "deepseek-chat"
+    
+    # Evaluation Framework LLM (OpenAI)
+    OPENAI_API_KEY: str = ""
+    OPENAI_EVAL_MODEL: str = "gpt-5-nano"
+    
+    # Deprecated API Keys (kept for backwards compatibility, not used in current system)
+    GOOGLE_GEMINI_API_KEY: str = ""  # DEPRECATED: Gemini no longer used (DeepSeek-only for research)
     
     # Tool Settings
     TAVILY_API_KEY: str = ""  # Phase 7.1 - Tavily web search
@@ -50,9 +52,8 @@ class Settings(BaseSettings):
     # NOTE: Phase 7.2 - MCP server configs moved to app/tools/mcp_tools.py (server_configs dict)
     # NOTE: Phase 6.2 - Research sources moved to app/utils/research_sources.py (CURATED_RESEARCH_SOURCES)
     
-    # Database Settings (Phase 6.3)
-    # TODO: Phase 6.3 - Add DATABASE_URL for PostgresSaver checkpointing
-    # DATABASE_URL: str = ""  # PostgreSQL connection string
+    # Database Settings (Phase 6.3 - for conversation persistence with PostgresSaver)
+    DATABASE_URL: str = ""  # PostgreSQL connection string for LangGraph checkpointing
     
     @property
     def cors_origins_list(self) -> List[str]:
