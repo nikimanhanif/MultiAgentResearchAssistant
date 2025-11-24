@@ -222,7 +222,7 @@ class TestScopeBriefGenerationTemplate:
         )
         system_msg = formatted[0].content
         # Should mention various format types
-        assert any(fmt in system_msg.lower() for fmt in ["summary", "comparison", "ranking", "detailed"])
+        assert any(fmt in system_msg.lower() for fmt in ["summary", "comparison", "ranking", "literature", "gap"])
 
     def test_template_human_message_includes_query_and_history(self):
         """Test that human message includes both query and history."""

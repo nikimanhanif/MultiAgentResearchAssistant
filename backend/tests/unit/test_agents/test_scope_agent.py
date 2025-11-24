@@ -351,7 +351,7 @@ class TestGenerateResearchBrief:
                 "depth": "detailed technical analysis"
             },
             deliverables="Comprehensive technical report with citations",
-            format=ReportFormat.DETAILED,
+            format=ReportFormat.SUMMARY,
             metadata={}
         )
         mock_chain.ainvoke.return_value = expected_brief
@@ -372,7 +372,7 @@ class TestGenerateResearchBrief:
         assert len(result.sub_topics) == 3
         assert "Qubit" in result.sub_topics[0]
         assert result.constraints["time_period"] == "2020-2024"
-        assert result.format == ReportFormat.DETAILED
+        assert result.format == ReportFormat.SUMMARY
         assert result.metadata["clarification_turns"] == 1
         assert result.metadata["original_query"] == "Quantum computing"
 

@@ -286,6 +286,16 @@ class ReportFormat(str, Enum):
     """Report format types for different use cases.
     
     Created in Phase 1.2, used in Phase 4.2 for report formatting.
+    
+    Formats map to specific use cases:
+    - SUMMARY: General-purpose quick overview
+    - COMPARISON: Use Case 2 - Comparative analysis
+    - RANKING: Top-N ranked lists with criteria
+    - FACT_VALIDATION: Use Case 3 - Fact validation and credibility assessment
+    - LITERATURE_REVIEW: Use Case 1 - Structured academic literature review
+    - GAP_ANALYSIS: Use Case 4 - Research gap identification
+    - OTHER: Fallback format when no specific format is requested or format cannot be determined.
+            Uses generic markdown structure with standard sections (Introduction, Findings, Conclusion, References).
     """
     SUMMARY = "summary"  # Simple summary with key findings
     COMPARISON = "comparison"  # Side-by-side comparison with metrics (Use Case 2)
@@ -293,9 +303,7 @@ class ReportFormat(str, Enum):
     FACT_VALIDATION = "fact_validation"  # Claims with validation results (Use Case 3)
     LITERATURE_REVIEW = "literature_review"  # Structured academic review (Use Case 1)
     GAP_ANALYSIS = "gap_analysis"  # Research gap identification (Use Case 4)
-    DETAILED = "detailed"  # Comprehensive detailed report
-    ACADEMIC_PAPER = "academic_paper"  # Structured academic paper format (Priority 2)
-    OTHER = "other"  # Custom or unspecified format
+    OTHER = "other"  # Fallback format - generic markdown structure when format is unspecified
 
 
 class ResearchBrief(BaseModel):

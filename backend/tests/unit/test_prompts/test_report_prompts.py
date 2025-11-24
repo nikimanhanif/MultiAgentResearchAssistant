@@ -64,7 +64,7 @@ class TestReportGenerationTemplate:
         """Test that human message contains all input data."""
         test_brief = "Research machine learning applications"
         test_findings = "Finding: ML is widely used"
-        test_format = "detailed"
+        test_format = "summary"
         
         formatted = REPORT_GENERATION_TEMPLATE.format_messages(
             research_brief=test_brief,
@@ -94,7 +94,7 @@ class TestReportGenerationTemplate:
         formatted = REPORT_GENERATION_TEMPLATE.format_messages(
             research_brief=long_brief,
             summarized_findings=long_findings,
-            format_type="detailed"
+            format_type="summary"
         )
         assert len(formatted) == 2
 
