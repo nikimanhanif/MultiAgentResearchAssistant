@@ -13,9 +13,8 @@ from langchain_core.messages import AIMessage, HumanMessage
 
 from app.models.schemas import (
     ResearchBrief,
-    SummarizedFindings,
     Citation,
-    SubAgentFindings,
+    Finding,
 )
 
 

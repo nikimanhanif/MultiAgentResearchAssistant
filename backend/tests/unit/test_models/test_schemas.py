@@ -11,15 +11,16 @@ from app.models.schemas import (
     Citation,
     CoverageAnalysis,
     ErrorResponse,
+    Finding,
     GapType,
     ReportFormat,
     ResearchBrief,
     ResearchGap,
     ResearchRequest,
+    ResearchTask,
     SourceType,
-    SummarizedFindings,
-    SubAgentFindings,
 )
+
 
 
 class TestChatRequest:

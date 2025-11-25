@@ -1,28 +1,27 @@
 """LangGraph state definition for research workflow.
 
 This module defines the state structure for the research agent's LangGraph workflow.
-The graph coordinates sub-agents in parallel execution with token optimization.
+The graph uses the Supervisor Loop pattern with task queue and parallel execution.
 
-Implemented in Phase 3.5.3 (State & Graph Infrastructure)
-Full integration: Phase 8.6
+Updated in Phase 3.7 for Supervisor Loop architecture.
+Full implementation: Phase 8
 
-State Fields:
+State Fields (Supervisor Loop):
 - research_brief: ResearchBrief (from scope agent)
-- strategy: Optional[ResearchStrategy] (FLAT/FLAT_REFINEMENT/HIERARCHICAL - Phase 8.1)
-- tasks: List[SubAgentTask] (tasks assigned by supervisor)
-- findings: Annotated[List[SubAgentFindings], operator.add] (reducer for parallel updates)
-- summarized_findings: Optional[SummarizedFindings] (final aggregated output - Phase 8.4)
-- gaps: Optional[Dict[str, Any]] (algorithmic gap detection results - Phase 8.5)
-- extraction_budget: Dict[str, int] (token optimization - {"used": 0, "max": 5})
+- findings: Annotated[List[Finding], operator.add] (findings with embedded citations)
+- task_history: Annotated[List[ResearchTask], operator.add] (immutable task log)
+- completed_tasks: Annotated[List[str], operator.add] (completed task IDs)
+- budget: Dict[str, int] (iterations, max_iterations, max_sub_agents)
+- gaps: Optional[Dict[str, Any]] (LLM-based gap analysis output)
 - is_complete: bool (whether research is sufficient)
 - error: Optional[str] (error message if any)
 - messages: Annotated[List[Dict[str, Any]], operator.add] (message history with reducer)
 
 Key Features:
-- Reducer Pattern: findings and messages use operator.add for concurrent updates
-- Token Optimization: extraction_budget prevents token explosion from full-text papers
-- Gap Analysis: gaps field enables conditional re-research routing
-- Hierarchical Support: strategy determines single-level vs. multi-level spawning
+- Reducer Pattern: findings, task_history, completed_tasks, and messages use operator.add
+- Task Queue: Supervisor generates tasks, sub-agents execute in parallel
+- Budget Limits: max_iterations=20, max_sub_agents=30 (~160K tokens total)
+- LLM-Based Gap Analysis: Supervisor uses LLM prompts, not algorithmic detection
 - Error Handling: error field tracks failures for recovery
 """
 
@@ -31,30 +30,30 @@ import operator
 
 from app.models.schemas import (
     ResearchBrief,
-    SubAgentTask,
-    SubAgentFindings,
-    SummarizedFindings,
+    Finding,
+    ResearchTask,
 )
 
 
 class ResearchState(TypedDict, total=False):
-    """State schema for research workflow graph.
+    """State schema for research workflow graph (Supervisor Loop).
     
     Uses TypedDict with reducer annotations for parallel agent updates.
     The 'total=False' allows optional fields.
     
     Reducers:
     - findings: operator.add - Appends findings from parallel sub-agents
-    - messages: operator.add - Appends messages from nodes for conversation history
+    - task_history: operator.add - Appends tasks (immutable log)
+    - completed_tasks: operator.add - Appends completed task IDs
+    - messages: operator.add - Appends messages from nodes
     
     Fields:
         research_brief: Research scope and objectives from scope agent
-        strategy: Research strategy (FLAT/FLAT_REFINEMENT/HIERARCHICAL)
-        tasks: List of tasks assigned to sub-agents
         findings: Sub-agent findings (uses reducer for parallel updates)
-        summarized_findings: Final aggregated findings after compression
-        gaps: Detected research gaps for conditional re-research
-        extraction_budget: Token budget tracking for paper extraction
+        task_history: Immutable log of all research tasks
+        completed_tasks: Track completed task IDs
+        budget: Budget tracking (iterations, max_iterations, max_sub_agents)
+        gaps: LLM-based gap analysis output (not algorithmic)
         is_complete: Whether research has been completed
         error: Error message if workflow encounters failures
         messages: Message history for conversation context (uses reducer)
@@ -62,19 +61,18 @@ class ResearchState(TypedDict, total=False):
     # Core research fields
     research_brief: ResearchBrief
     
-    # Strategy and task management (Phase 8.1, 8.2)
-    strategy: Optional[str]  # Will use ResearchStrategy model in Phase 8.1
-    tasks: List[SubAgentTask]
-    
     # Findings with reducer for parallel updates (Phase 8.3, 8.4)
-    findings: Annotated[List[SubAgentFindings], operator.add]
-    summarized_findings: Optional[SummarizedFindings]
+    findings: Annotated[List[Finding], operator.add]
     
-    # Gap analysis fields (Phase 8.5)
+    # Task queue for Supervisor Loop (Phase 8.2, 8.3)
+    task_history: Annotated[List[ResearchTask], operator.add]
+    completed_tasks: Annotated[List[str], operator.add]
+    
+    # Budget tracking (Phase 8)
+    budget: Dict[str, int]
+    
+    # Gap analysis fields (LLM-based, not algorithmic)
     gaps: Optional[Dict[str, Any]]
-    
-    # Token optimization (Phase 8.3, 8.4)
-    extraction_budget: Dict[str, int]
     
     # Workflow control
     is_complete: bool
@@ -91,16 +89,19 @@ def create_initial_state(research_brief: ResearchBrief) -> ResearchState:
         research_brief: Research brief from scope agent
         
     Returns:
-        Initial ResearchState with default values
+        Initial ResearchState with default values for Supervisor Loop
     """
     return ResearchState(
         research_brief=research_brief,
-        strategy=None,
-        tasks=[],
         findings=[],
-        summarized_findings=None,
+        task_history=[],
+        completed_tasks=[],
+        budget={
+            "iterations": 0,
+            "max_iterations": 20,
+            "max_sub_agents": 30
+        },
         gaps=None,
-        extraction_budget={"used": 0, "max": 5},
         is_complete=False,
         error=None,
         messages=[]

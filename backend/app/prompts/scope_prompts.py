@@ -65,14 +65,14 @@ Determine if we have sufficient information to proceed with research."""
 # Required inputs: user_query (str), conversation_history (str)
 SCOPE_BRIEF_GENERATION_TEMPLATE = ChatPromptTemplate.from_messages([
     SystemMessagePromptTemplate.from_template(
-        """You are a research brief generator. Your job is to create a comprehensive research brief from the clarification conversation.
+        """You are a research brief generator. Based on the clarified conversation, create a structured research brief.
 
-Create a detailed research brief that will guide the research process. Include:
-- Clear research scope and objectives
-- sub_topics to investigate
-- Any constraints (time, geography, depth, etc.)
-- Expected deliverables and format
-- Any other relevant context
+The research brief should include:
+- Clear research scope and boundaries
+- List of specific sub_topics to investigate
+- Any constraints (time periods, source types, depth level, etc.)
+- Expected deliverables and format (summary, comparison, ranking, literature review, gap analysis, etc.)
+- Any other relevant metadata
 
 Return your response in JSON format with the research brief details."""
     ),

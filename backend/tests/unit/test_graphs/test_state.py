@@ -8,7 +8,7 @@ import pytest
 from typing import Dict, Any
 
 from app.graphs.state import ResearchState, create_initial_state
-from app.models.schemas import ResearchBrief, SubAgentTask, SubAgentFindings, Citation
+from app.models.schemas import ResearchBrief, Finding, ResearchTask, Citation
 
 
 class TestResearchState:
@@ -52,23 +52,21 @@ class TestResearchState:
         # Arrange
         state: ResearchState = {
             "findings": [
-                SubAgentFindings(
+                Finding(
+                    claim="First claim",
+                    citation=Citation(source="Source 1", url="http://example.com"),
                     topic="Topic 1",
-                    summary="Summary 1",
-                    key_facts=["fact1"],
-                    citations=[],
-                    sources=[]
+                    credibility_score=0.9
                 )
             ]
         }
         
         # Act - Simulate reducer behavior (append)
-        new_finding = SubAgentFindings(
+        new_finding = Finding(
+            claim="Second claim",
+            citation=Citation(source="Source 2", url="http://example2.com"),
             topic="Topic 2",
-            summary="Summary 2",
-            key_facts=["fact2"],
-            citations=[],
-            sources=[]
+            credibility_score=0.8
         )
         state["findings"] = state["findings"] + [new_finding]
         
@@ -142,19 +140,18 @@ class TestCreateInitialState:
             sub_topics=["topic1", "topic2"],
             constraints={"time_period": "2020-2024"},
             deliverables="Test deliverables"
-        )
+       )
         
         # Act
         state = create_initial_state(brief)
         
         # Assert
         assert state["research_brief"] == brief
-        assert state["strategy"] is None
-        assert state["tasks"] == []
+        assert state["task_history"] == []
+        assert state["completed_tasks"] == []
         assert state["findings"] == []
-        assert state["summarized_findings"] is None
         assert state["gaps"] is None
-        assert state["extraction_budget"] == {"used": 0, "max": 5}
+        assert state["budget"] == {"iterations": 0, "max_iterations": 20, "max_sub_agents": 30}
         assert state["is_complete"] is False
         assert state["error"] is None
         assert state["messages"] == []
@@ -182,8 +179,8 @@ class TestCreateInitialState:
         assert state["research_brief"].format == "summary"
         assert state["research_brief"].metadata["author"] == "Test"
 
-    def test_create_initial_state_sets_default_extraction_budget(self):
-        """Test that create_initial_state sets correct default extraction budget."""
+    def test_create_initial_state_sets_default_budget(self):
+        """Test that create_initial_state sets correct default budget."""
         # Arrange
         brief = ResearchBrief(
             scope="Test",
@@ -196,8 +193,9 @@ class TestCreateInitialState:
         state = create_initial_state(brief)
         
         # Assert
-        assert state["extraction_budget"]["used"] == 0
-        assert state["extraction_budget"]["max"] == 5
+        assert state["budget"]["iterations"] == 0
+        assert state["budget"]["max_iterations"] == 20
+        assert state["budget"]["max_sub_agents"] == 30
 
     def test_create_initial_state_initializes_empty_collections(self):
         """Test that create_initial_state initializes empty collections."""
@@ -213,8 +211,10 @@ class TestCreateInitialState:
         state = create_initial_state(brief)
         
         # Assert
-        assert isinstance(state["tasks"], list)
-        assert len(state["tasks"]) == 0
+        assert isinstance(state["task_history"], list)
+        assert len(state["task_history"]) == 0
+        assert isinstance(state["completed_tasks"], list)
+        assert len(state["completed_tasks"]) == 0
         assert isinstance(state["findings"], list)
         assert len(state["findings"]) == 0
         assert isinstance(state["messages"], list)

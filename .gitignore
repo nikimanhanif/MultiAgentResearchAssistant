@@ -271,6 +271,7 @@ cython_debug/
 # Cursor-related
 .cursor/
 .github/
+.agent/
 
 # Custom commit script summariser
 backend/git_summarizer/

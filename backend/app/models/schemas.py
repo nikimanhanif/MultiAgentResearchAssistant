@@ -161,15 +161,17 @@ class SourceType(str, Enum):
 
 
 class Citation(BaseModel):
-    """Citation model for sources with credibility scoring.
-    
-    Extended in Phase 1.2 to support credibility assessment (Phase 7.5).
+    """
+    Citation model for sources with credibility scoring.
     """
     # Basic citation information
     source: str = Field(..., description="Source name or identifier")
     url: Optional[str] = Field(None, description="URL to the source")
     title: Optional[str] = Field(None, description="Title of the source")
-    author: Optional[str] = Field(None, description="Author(s) of the source")
+    authors: Optional[List[str]] = Field(
+        None,
+        description="List of authors (None if no authors available)"
+    )
     year: Optional[int] = Field(None, description="Publication year", ge=1900, le=2100)
     
     # Credibility scoring fields (Phase 7.5)
@@ -331,22 +333,64 @@ class ResearchBrief(BaseModel):
     )
 
 
-class SubAgentTask(BaseModel):
-    """Task assignment for sub-agents."""
-    topic: str
-    scope: str
-    tools: List[str]
-    priority: Optional[int] = None
+class Finding(BaseModel):
+    """Single research finding with embedded citation.
+    
+    Replaces SubAgentFindings for Supervisor Loop architecture (Phase 3.7+).
+    Each finding represents a single factual claim with its source.
+    """
+    claim: str = Field(..., description="The factual claim or finding")
+    citation: Citation = Field(..., description="Embedded citation with all metadata")
+    topic: str = Field(..., description="Sub-topic this finding addresses", min_length=1)
+    credibility_score: float = Field(
+        ...,
+        description="Credibility score inherited from citation (0.0-1.0)",
+        ge=0.0,
+        le=1.0
+    )
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "claim": "Large language models can be fine-tuned for domain-specific tasks",
+                "citation": {
+                    "source": "Nature Machine Intelligence",
+                    "url": "https://nature.com/articles/s42256-023-00123-4",
+                    "title": "Domain Adaptation in Large Language Models",
+                    "authors": ["Smith, J.", "Doe, A."],
+                    "year": 2023,
+                    "credibility_score": 0.95,
+                    "source_type": "peer_reviewed"
+                },
+                "topic": "fine-tuning",
+                "credibility_score": 0.95
+            }
+        }
+    )
 
 
-class SubAgentFindings(BaseModel):
-    """Structured output from sub-agents."""
-    topic: str
-    summary: str
-    key_facts: List[str]
-    citations: List[Citation]
-    sources: List[str]
-    raw_data: Optional[Dict[str, Any]] = None
+class ResearchTask(BaseModel):
+    """Task assignment for sub-agents in Supervisor Loop task queue."""
+    task_id: str = Field(..., description="Unique task identifier", min_length=1)
+    topic: str = Field(..., description="Sub-topic to research", min_length=1)
+    query: str = Field(..., description="Search query for this task", min_length=1)
+    priority: int = Field(..., description="Task priority (1=highest)", ge=1)
+    requested_by: Optional[str] = Field(
+        None,
+        description="Sub-agent ID if this task was delegated by another sub-agent"
+    )
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "task_id": "task_001",
+                "topic": "fine-tuning methods",
+                "query": "LLM fine-tuning techniques for domain adaptation",
+                "priority": 1,
+                "requested_by": None
+            }
+        }
+    )
 
 
 class GapType(str, Enum):
@@ -413,50 +457,3 @@ class CoverageAnalysis(BaseModel):
         None,
         description="Time period coverage analysis"
     )
-
-
-class SummarizedFindings(BaseModel):
-    """Final summarized findings from research agent.
-    
-    Extended in Phase 1.2 to support gap analysis (Phase 8.5) and 
-    enhanced report formats (Phase 4.2).
-    """
-    # Core findings
-    summary: str = Field(..., description="Overall summary of findings")
-    key_findings: List[str] = Field(
-        ...,
-        description="List of key findings across all topics"
-    )
-    sub_topic_findings: List[SubAgentFindings] = Field(
-        ...,
-        description="Detailed findings per sub-topic"
-    )
-    sources: List[Citation] = Field(
-        ...,
-        description="All sources with credibility scores"
-    )
-    research_metadata: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Metadata about the research process"
-    )
-    
-    # Gap analysis fields (Phase 8.5)
-    research_gaps: Optional[List[ResearchGap]] = Field(
-        None,
-        description="Identified research gaps"
-    )
-    coverage_analysis: Optional[CoverageAnalysis] = Field(
-        None,
-        description="Analysis of research coverage"
-    )
-    recommendations: Optional[List[str]] = Field(
-        None,
-        description="Recommendations for future research or improvements"
-    )
-    quality_score: Optional[float] = Field(
-        None,
-        description="Overall quality score of findings (0.0-1.0)",
-        ge=0.0,
-        le=1.0
-    )
-
