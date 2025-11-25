@@ -14,7 +14,6 @@ from app.agents.scope_agent import (
     generate_clarification_questions,
     generate_research_brief,
     check_scope_completion,
-    _get_llm,
     _format_conversation_history,
 )
 from app.models.schemas import (
@@ -23,49 +22,6 @@ from app.models.schemas import (
     ScopeCompletionCheck,
     ReportFormat,
 )
-
-
-class TestGetLlm:
-    """Test cases for LLM initialization (_get_llm function)."""
-
-    @patch("app.agents.scope_agent.settings")
-    def test_get_llm_returns_configured_deepseek_instance(self, mock_settings):
-        """Test that _get_llm returns configured DeepSeek LLM instance."""
-        # Arrange
-        mock_settings.DEEPSEEK_API_KEY = "test_deepseek_key"
-        mock_settings.DEEPSEEK_MODEL = "deepseek-chat"
-        
-        # Act
-        llm = _get_llm(temperature=0.7)
-        
-        # Assert
-        assert llm is not None
-        assert llm.temperature == 0.7
-        assert hasattr(llm, 'model_name')  # ChatDeepSeek uses model_name, not model
-
-    @patch("app.agents.scope_agent.settings")
-    def test_get_llm_with_custom_temperature_returns_correct_value(self, mock_settings):
-        """Test that _get_llm respects custom temperature parameter."""
-        # Arrange
-        mock_settings.DEEPSEEK_API_KEY = "test_key"
-        mock_settings.DEEPSEEK_MODEL = "deepseek-chat"
-        custom_temp = 0.3
-        
-        # Act
-        llm = _get_llm(temperature=custom_temp)
-        
-        # Assert
-        assert llm.temperature == custom_temp
-
-    @patch("app.agents.scope_agent.settings")
-    def test_get_llm_with_missing_deepseek_key_raises_value_error(self, mock_settings):
-        """Test that _get_llm raises ValueError when DeepSeek API key is missing."""
-        # Arrange
-        mock_settings.DEEPSEEK_API_KEY = ""
-        
-        # Act & Assert
-        with pytest.raises(ValueError, match="DEEPSEEK_API_KEY not configured"):
-            _get_llm()
 
 
 class TestFormatConversationHistory:

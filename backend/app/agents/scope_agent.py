@@ -9,7 +9,6 @@ from typing import Optional, List, Dict, Any, Union
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
-from langchain_deepseek import ChatDeepSeek
 
 from app.models.schemas import (
     ClarificationQuestions,
@@ -22,31 +21,10 @@ from app.prompts.scope_prompts import (
     SCOPE_COMPLETION_DETECTION_TEMPLATE,
     SCOPE_BRIEF_GENERATION_TEMPLATE,
 )
-from app.config import settings
+from app.config import get_deepseek_chat
 
 
 # Helper Functions
-
-def _get_llm(temperature: float = 0.7) -> ChatDeepSeek:
-    """Get configured DeepSeek LLM.
-    
-    Args:
-        temperature: Temperature for LLM generation (0.0-1.0)
-        
-    Returns:
-        Configured ChatDeepSeek instance
-        
-    Raises:
-        ValueError: If DEEPSEEK_API_KEY not configured
-    """
-    if not settings.DEEPSEEK_API_KEY:
-        raise ValueError("DEEPSEEK_API_KEY not configured")
-    
-    return ChatDeepSeek(
-        model=settings.DEEPSEEK_MODEL,
-        api_key=settings.DEEPSEEK_API_KEY,
-        temperature=temperature,
-    )
 
 
 def _format_conversation_history(history: Optional[List[Dict[str, str]]]) -> str:
@@ -107,7 +85,7 @@ def _build_question_generation_chain() -> Any:
         Runnable chain: prompt | LLM | parser
     """
     parser = PydanticOutputParser(pydantic_object=ClarificationQuestions)
-    llm = _get_llm(temperature=0.7)
+    llm = get_deepseek_chat(temperature=0.7)
     
     # Add format instructions to the prompt
     prompt = SCOPE_QUESTION_GENERATION_TEMPLATE.partial(
@@ -125,7 +103,7 @@ def _build_completion_detection_chain() -> Any:
         Runnable chain: prompt | LLM | parser
     """
     parser = PydanticOutputParser(pydantic_object=ScopeCompletionCheck)
-    llm = _get_llm(temperature=0.3)  # Lower temperature for consistent decisions
+    llm = get_deepseek_chat(temperature=0.3)  # Lower temperature for consistent decisions
     
     # Add format instructions to the prompt
     prompt = SCOPE_COMPLETION_DETECTION_TEMPLATE.partial(
@@ -143,7 +121,7 @@ def _build_brief_generation_chain() -> Any:
         Runnable chain: prompt | LLM | parser | metadata updater
     """
     parser = PydanticOutputParser(pydantic_object=ResearchBrief)
-    llm = _get_llm(temperature=0.5)
+    llm = get_deepseek_chat(temperature=0.5)
     
     # Add format instructions to the prompt
     prompt = SCOPE_BRIEF_GENERATION_TEMPLATE.partial(

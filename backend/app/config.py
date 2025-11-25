@@ -29,7 +29,8 @@ class Settings(BaseSettings):
     
     # Research Pipeline LLM (DeepSeek)
     DEEPSEEK_API_KEY: str = ""
-    DEEPSEEK_MODEL: str = "deepseek-chat"
+    DEEPSEEK_MODEL: str = "deepseek-chat"  # For scoping agent and sub-agents
+    DEEPSEEK_REASONER_MODEL: str = "deepseek-reasoner"  # For supervisor and report agents
     
     # Evaluation Framework LLM (OpenAI)
     OPENAI_API_KEY: str = ""
@@ -73,4 +74,76 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+# LLM Factory Functions
+
+def get_deepseek_chat(
+    temperature: float = 0.7,
+    model: str | None = None
+) -> "ChatDeepSeek":
+    """Get configured DeepSeek chat model instance.
+    
+    This model is optimized for:
+    - Scoping Agent: Multi-turn clarification conversations
+    - Sub-Agents: Focused research tasks with tool usage
+    
+    Args:
+        temperature: Temperature for LLM generation (0.0-1.0)
+        model: Optional model override (defaults to settings.DEEPSEEK_MODEL)
+        
+    Returns:
+        Configured ChatDeepSeek instance for chat tasks
+        
+    Raises:
+        ValueError: If DEEPSEEK_API_KEY not configured
+    """
+    from langchain_deepseek import ChatDeepSeek
+    
+    if not settings.DEEPSEEK_API_KEY:
+        raise ValueError("DEEPSEEK_API_KEY not configured")
+    
+    return ChatDeepSeek(
+        model=model or settings.DEEPSEEK_MODEL,
+        api_key=settings.DEEPSEEK_API_KEY,
+        temperature=temperature,
+    )
+
+
+def get_deepseek_reasoner(
+    temperature: float = 0.5,
+    model: str | None = None
+) -> "ChatDeepSeek":
+    """Get configured DeepSeek reasoner model instance.
+    
+    This model is optimized for:
+    - Supervisor Agent: Gap analysis, task generation, findings aggregation
+    - Report Agent: Comprehensive report generation with structured reasoning
+    
+    Features:
+    - Larger output token limit (32K default, 64K max vs 4K/8K for chat)
+    - Better for complex reasoning and long-form generation
+    - Same context window (128K) as chat model
+    
+    Args:
+        temperature: Temperature for LLM generation (0.0-1.0)
+                    Lower default (0.5) for more consistent reasoning
+        model: Optional model override (defaults to settings.DEEPSEEK_REASONER_MODEL)
+        
+    Returns:
+        Configured ChatDeepSeek instance for reasoning tasks
+        
+    Raises:
+        ValueError: If DEEPSEEK_API_KEY not configured
+    """
+    from langchain_deepseek import ChatDeepSeek
+    
+    if not settings.DEEPSEEK_API_KEY:
+        raise ValueError("DEEPSEEK_API_KEY not configured")
+    
+    return ChatDeepSeek(
+        model=model or settings.DEEPSEEK_REASONER_MODEL,
+        api_key=settings.DEEPSEEK_API_KEY,
+        temperature=temperature,
+    )
 
