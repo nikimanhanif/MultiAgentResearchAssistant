@@ -1,59 +1,178 @@
 """Prompt templates for Report Agent.
 
-This module will contain all prompt templates used by the Report Agent for
+This module contains all prompt templates used by the Report Agent for
 generating various types of research reports (summary, comparison, ranking,
 literature review, gap analysis, etc.).
 
 All prompts use LangChain's ChatPromptTemplate for consistent message formatting
 and follow best practices from the LangChain documentation.
 
-Note: Full implementation pending Phase 4. This file provides the structure
-and placeholder prompts for future implementation.
+Phase 4.1: Core report generation with List[Finding] input support
 """
 
-from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
+from typing import List
+from langchain_core.prompts import ChatPromptTemplate
+from app.models.schemas import Finding, ResearchBrief, ReportFormat
 
 
-# Base Report Generation Prompt (Phase 4.1)
-# Required inputs: research_brief (str), summarized_findings (str), format_type (str)
-REPORT_GENERATION_TEMPLATE = ChatPromptTemplate.from_messages([
-    SystemMessagePromptTemplate.from_template(
-        """You are a research report generator. Your job is to create a comprehensive, well-structured markdown report from research findings.
+def format_findings_for_prompt(findings: List[Finding]) -> str:
+    """Format findings list into numbered context for prompt.
+    
+    Args:
+        findings: List of Finding objects with embedded citations
+        
+    Returns:
+        Formatted string with numbered findings and citation details
+    """
+    if not findings:
+        return "No findings available."
+    
+    formatted_lines = []
+    for idx, finding in enumerate(findings):
+        citation = finding.citation
+        
+        # Format authors
+        authors_str = "Unknown Author"
+        if citation.authors:
+            authors_str = ", ".join(citation.authors)
+        
+        # Format credibility warning
+        credibility_warning = ""
+        if finding.credibility_score < 0.5:
+            credibility_warning = f" ⚠️ LOW CREDIBILITY ({finding.credibility_score:.2f})"
+        
+        # Build finding entry
+        finding_entry = f"""[{idx}] {finding.claim}
+   Topic: {finding.topic}
+   Source: {citation.title or citation.source}
+   Authors: {authors_str}
+   URL: {citation.url or 'N/A'}
+   Credibility Score: {finding.credibility_score:.2f}{credibility_warning}
+   Source Type: {citation.source_type or 'unknown'}"""
+        
+        if citation.year:
+            finding_entry += f"\n   Year: {citation.year}"
+        if citation.doi:
+            finding_entry += f"\n   DOI: {citation.doi}"
+        
+        formatted_lines.append(finding_entry)
+    
+    return "\n\n".join(formatted_lines)
 
-General Guidelines:
+
+def get_report_generation_prompt() -> ChatPromptTemplate:
+    """Create report generation prompt template for Phase 4.1.
+    
+    This prompt takes structured Finding objects and generates a markdown report
+    following the research brief specifications.
+    
+    Input variables:
+    - brief_scope: Main research scope/question (str)
+    - brief_subtopics: List of sub-topics as string (str)
+    - brief_constraints: Constraints as string (str)
+    - brief_format: Report format type (str)
+    - findings_context: Formatted findings with citations (str)
+    - format_instructions: Format-specific instructions (str)
+    
+    Returns:
+        ChatPromptTemplate configured for report generation
+    """
+    return ChatPromptTemplate.from_messages([
+        ("system", """You are an expert research report writer specializing in academic and professional reports.
+
+Your task is to generate a comprehensive, well-structured markdown report from the provided research findings.
+
+## CRITICAL CITATION RULES:
+
+1. **In-text Citations**: 
+   - Use ONLY the finding index numbers [0], [1], [2], etc. provided in the findings list
+   - Every claim MUST reference its source using the correct finding index
+   - Multiple claims from the same source should repeat the citation
+   - Example: "Machine learning models can be fine-tuned [0]. This approach is common [0]."
+
+2. **Bibliography/References Section**:
+   - Include ALL findings at the end in a "References" or "Bibliography" section
+   - Format each reference with full citation details:
+     * Authors (if available)
+     * Title
+     * Source/Publication
+     * Year (if available)
+     * DOI (if available)
+     * URL
+     * **Credibility Indicator**: (Score: X.XX)
+   - Add ⚠️ WARNING for sources with credibility score < 0.5
+   - Example format:
+     ```
+     [0] Smith, J., Doe, A. (2023). "Title of Paper". Nature. DOI: 10.1038/example
+         https://nature.com/article (Credibility: 0.95 - High)
+     
+     [1] Unknown Author. "Blog Post Title". Personal Blog. https://example.com
+         ⚠️ (Credibility: 0.35 - Low Quality Source)
+     ```
+
+3. **Credibility Warnings**:
+   - For any source with credibility < 0.5, include a warning in the bibliography
+   - Consider mentioning low credibility in-text when critical claims rely on weak sources
+
+## REPORT STRUCTURE:
+
+1. **Title**: Clear, descriptive title based on research scope
+2. **Introduction**: Context and objectives (2-3 paragraphs)
+3. **Main Content**: Organized by sub-topics with proper headings
+4. **Findings/Analysis**: Present research findings with citations
+5. **Conclusion**: Synthesis and key takeaways
+6. **References/Bibliography**: Complete citation list with credibility indicators
+
+## MARKDOWN FORMATTING:
+
+- Use proper heading hierarchy (# ## ###)
+- Use **bold** for emphasis, *italic* for technical terms
+- Use bullet points and numbered lists for clarity
+- Use tables for comparisons (if format requires)
+- Use code blocks for technical content (if relevant)
+- Ensure all markdown is valid and renders correctly
+
+## QUALITY STANDARDS:
+
 - Write in clear, professional academic language
-- Structure content logically with proper headings
-- Include all relevant citations
-- Format in markdown with proper syntax
-- Follow the specified report format
+- Maintain logical flow and coherence
+- Synthesize information, don't just list findings
+- Provide analysis and insight where appropriate
+- Follow the specified report format exactly
+- Ensure all claims are supported by citations
 
-Report Components:
-1. Introduction/Context
-2. Main findings organized by sub-topic
-3. Analysis and synthesis
-4. Conclusions
-5. References/Bibliography
+DO NOT hallucinate or invent information beyond what's in the findings list.
+DO NOT create fake citations or references.
+ONLY use the finding indices [0], [1], [2]... provided in the findings context."""),
+        
+        ("human", """# Research Brief
 
-Citation Requirements:
-- Include in-text citations for all claims
-- Format: [1], [2], etc.
-- Full bibliography at the end
-- Include credibility indicators where relevant
+**Scope**: {brief_scope}
 
-Generate a complete report following the specified format."""
-    ),
-    HumanMessagePromptTemplate.from_template(
-        """Research Brief:
-{research_brief}
+**Sub-topics to Cover**:
+{brief_subtopics}
 
-Summarized Findings:
-{summarized_findings}
+**Constraints**:
+{brief_constraints}
 
-Report Format: {format_type}
+**Report Format**: {brief_format}
 
-Generate a comprehensive markdown report."""
-    ),
-])
+---
+
+# Findings Context
+
+{findings_context}
+
+---
+
+# Format-Specific Instructions
+
+{format_instructions}
+
+---
+
+Please generate a complete markdown report following the above requirements.""")
+    ])
 
 
 # Summary Report Format Instructions (Phase 4.2)

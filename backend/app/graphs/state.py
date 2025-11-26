@@ -11,6 +11,7 @@ State Fields (Supervisor Loop):
 - findings: Annotated[List[Finding], operator.add] (findings with embedded citations)
 - task_history: Annotated[List[ResearchTask], operator.add] (immutable task log)
 - completed_tasks: Annotated[List[str], operator.add] (completed task IDs)
+- failed_tasks: Annotated[List[str], operator.add] (failed task IDs)
 - budget: Dict[str, int] (iterations, max_iterations, max_sub_agents)
 - gaps: Optional[Dict[str, Any]] (LLM-based gap analysis output)
 - is_complete: bool (whether research is sufficient)
@@ -45,6 +46,7 @@ class ResearchState(TypedDict, total=False):
     - findings: operator.add - Appends findings from parallel sub-agents
     - task_history: operator.add - Appends tasks (immutable log)
     - completed_tasks: operator.add - Appends completed task IDs
+    - failed_tasks: operator.add - Appends failed task IDs
     - messages: operator.add - Appends messages from nodes
     
     Fields:
@@ -52,6 +54,7 @@ class ResearchState(TypedDict, total=False):
         findings: Sub-agent findings (uses reducer for parallel updates)
         task_history: Immutable log of all research tasks
         completed_tasks: Track completed task IDs
+        failed_tasks: Track failed task IDs
         budget: Budget tracking (iterations, max_iterations, max_sub_agents)
         gaps: LLM-based gap analysis output (not algorithmic)
         is_complete: Whether research has been completed
@@ -67,6 +70,7 @@ class ResearchState(TypedDict, total=False):
     # Task queue for Supervisor Loop (Phase 8.2, 8.3)
     task_history: Annotated[List[ResearchTask], operator.add]
     completed_tasks: Annotated[List[str], operator.add]
+    failed_tasks: Annotated[List[str], operator.add]
     
     # Budget tracking (Phase 8)
     budget: Dict[str, int]
@@ -96,10 +100,11 @@ def create_initial_state(research_brief: ResearchBrief) -> ResearchState:
         findings=[],
         task_history=[],
         completed_tasks=[],
+        failed_tasks=[],
         budget={
             "iterations": 0,
             "max_iterations": 20,
-            "max_sub_agents": 30
+            "max_sub_agents": 20
         },
         gaps=None,
         is_complete=False,
