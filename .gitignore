@@ -283,3 +283,15 @@ backend/UV_HELP.md
 
 backend/tests/evaluation/.deepeval/
 backend/.deepeval/
+
+backend/sqlite_example
+
+# LangGraph persistence files
+checkpoints.db
+checkpoints.db-journal
+checkpoints.db-wal
+checkpoints.db-shm
+conversations.db
+conversations.db-journal
+conversations.db-wal
+conversations.db-shm

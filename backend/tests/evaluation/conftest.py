@@ -160,25 +160,6 @@ def sample_citation() -> Citation:
     )
 
 
-@pytest.fixture
-def sample_findings(sample_citation: Citation) -> SummarizedFindings:
-    """Sample summarized findings for testing."""
-    return SummarizedFindings(
-        key_findings=[
-            "Deep learning models achieve 95% accuracy in detecting lung cancer from CT scans",
-            "NLP models can extract clinical information from unstructured notes with 88% precision",
-            "Predictive models show promise in early disease detection",
-        ],
-        citations=[sample_citation],
-        coverage_analysis={
-            "well_covered": ["medical imaging", "deep learning"],
-            "under_researched": ["real-time diagnostics", "edge deployment"],
-        },
-        research_gaps=[
-            "Limited research on deployment in resource-constrained settings",
-            "Lack of standardized evaluation metrics across studies",
-        ],
-    )
 
 
 # DeepEval Test Case Fixtures
