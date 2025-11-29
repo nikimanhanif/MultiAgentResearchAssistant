@@ -14,6 +14,34 @@ and placeholder prompts for future implementation.
 from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
 
 
+# Credibility Scoring Heuristics (Phase 7.5)
+# Used by Research Agent to evaluate source quality
+CREDIBILITY_HEURISTICS = """
+CREDIBILITY SCORING HEURISTICS:
+
+1. VENUE (Base Score):
+   - High (0.9): Peer-reviewed journals/conferences (Nature, Science, CVPR, NeurIPS).
+   - Medium-High (0.8): Reputable preprints (arXiv, bioRxiv) from known institutions.
+   - Medium (0.7): Standard preprints, government reports, major tech blogs (Google AI, OpenAI).
+   - Low (<0.6): Unknown venues, personal blogs, forums.
+
+2. IMPACT (Citation Boost):
+   - > 1000 citations: +0.2
+   - > 100 citations: +0.1
+   - < 10 citations: No boost
+
+3. RECENCY (Relevance Adjustment):
+   - < 2 years old: +0.05
+   - > 10 years old: -0.1 (unless foundational/seminal work)
+
+4. TONE (Penalty):
+   - Sensationalist/Clickbait/Biased language: -0.3
+   - No clear date/author: -0.2
+
+MAX SCORE: 1.0
+MIN SCORE: 0.0
+"""
+
 # Strategy Selection Prompt (Phase 8.1)
 # Required inputs: research_brief (str), sub_topic_count (int)
 RESEARCH_STRATEGY_SELECTION_TEMPLATE = ChatPromptTemplate.from_messages([
