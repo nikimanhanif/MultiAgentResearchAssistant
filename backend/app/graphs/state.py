@@ -60,6 +60,8 @@ class ResearchState(TypedDict, total=False):
         is_complete: Whether research has been completed
         error: Error message if workflow encounters failures
         messages: Message history for conversation context (uses reducer)
+        report_content: Generated report for review 
+        reviewer_feedback: Optional feedback from user for refinement
     """
     # Core research fields
     research_brief: ResearchBrief
@@ -84,6 +86,10 @@ class ResearchState(TypedDict, total=False):
     
     # Message history with reducer (for conversation context)
     messages: Annotated[List[Dict[str, Any]], operator.add]
+    
+    # HITL Reviewer fields
+    report_content: str
+    reviewer_feedback: Optional[str]
 
 
 def create_initial_state(research_brief: ResearchBrief) -> ResearchState:
@@ -109,5 +115,7 @@ def create_initial_state(research_brief: ResearchBrief) -> ResearchState:
         gaps=None,
         is_complete=False,
         error=None,
-        messages=[]
+        messages=[],
+        report_content="",
+        reviewer_feedback=None
     )

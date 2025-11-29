@@ -159,6 +159,12 @@ ONLY use the finding indices [0], [1], [2]... provided in the findings context."
 
 ---
 
+# Reviewer Feedback (Optional)
+
+{reviewer_feedback}
+
+---
+
 # Findings Context
 
 {findings_context}
@@ -171,7 +177,7 @@ ONLY use the finding indices [0], [1], [2]... provided in the findings context."
 
 ---
 
-Please generate a complete markdown report following the above requirements.""")
+Please generate a complete markdown report following the above requirements. If reviewer_feedback is provided, adjust the report to address the specific feedback while maintaining the original requirements.""")
     ])
 
 

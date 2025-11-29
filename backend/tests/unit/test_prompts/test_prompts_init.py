@@ -133,9 +133,9 @@ class TestReportPromptsSubmodule:
         assert report_prompts is not None
 
     def test_report_generation_template_exists(self):
-        """Test that REPORT_GENERATION_TEMPLATE exists."""
-        from app.prompts.report_prompts import REPORT_GENERATION_TEMPLATE
-        assert REPORT_GENERATION_TEMPLATE is not None
+        """Test that report generation prompt function exists."""
+        from app.prompts.report_prompts import get_report_generation_prompt
+        assert callable(get_report_generation_prompt)
 
     def test_all_format_instruction_functions_exist(self):
         """Test that all format instruction functions are defined."""

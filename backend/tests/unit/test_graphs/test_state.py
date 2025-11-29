@@ -1,4 +1,4 @@
-"""Unit tests for LangGraph state definition (Phase 3.5.3).
+"""Unit tests for LangGraph state definition.
 
 This module contains tests for the ResearchState TypedDict and state initialization
 functions, verifying proper structure and reducer patterns.
@@ -151,7 +151,7 @@ class TestCreateInitialState:
         assert state["completed_tasks"] == []
         assert state["findings"] == []
         assert state["gaps"] is None
-        assert state["budget"] == {"iterations": 0, "max_iterations": 20, "max_sub_agents": 30}
+        assert state["budget"] == {"iterations": 0, "max_iterations": 20, "max_sub_agents": 20}
         assert state["is_complete"] is False
         assert state["error"] is None
         assert state["messages"] == []
@@ -195,7 +195,7 @@ class TestCreateInitialState:
         # Assert
         assert state["budget"]["iterations"] == 0
         assert state["budget"]["max_iterations"] == 20
-        assert state["budget"]["max_sub_agents"] == 30
+        assert state["budget"]["max_sub_agents"] == 20
 
     def test_create_initial_state_initializes_empty_collections(self):
         """Test that create_initial_state initializes empty collections."""

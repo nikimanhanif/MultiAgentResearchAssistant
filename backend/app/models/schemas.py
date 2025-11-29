@@ -457,3 +457,36 @@ class CoverageAnalysis(BaseModel):
         None,
         description="Time period coverage analysis"
     )
+
+
+class ReviewAction(BaseModel):
+    """Model for user review actions on generated reports (Phase 6.2).
+    
+    Used in HITL reviewer node to capture user feedback and routing decisions.
+    """
+    action: str = Field(
+        ...,
+        description="Action to take: approve, refine, or re_research",
+        pattern="^(approve|refine|re_research)$"
+    )
+    feedback: Optional[str] = Field(
+        None,
+        description="Feedback for refinement or new research query"
+    )
+    
+    @field_validator("action", mode="before")
+    @classmethod
+    def validate_action(cls, v: str) -> str:
+        """Validate action is one of the allowed values."""
+        if v not in ["approve", "refine", "re_research"]:
+            raise ValueError("Action must be one of: approve, refine, re_research")
+        return v
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "action": "refine",
+                "feedback": "Please add more details about recent developments"
+            }
+        }
+    )
