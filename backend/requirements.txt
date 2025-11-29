@@ -22,7 +22,9 @@ anyio==4.11.0
     #   anthropic
     #   google-genai
     #   httpx
+    #   mcp
     #   openai
+    #   sse-starlette
     #   starlette
     #   watchfiles
 attrs==25.4.0
@@ -110,10 +112,13 @@ httpx==0.28.1
     #   google-genai
     #   langgraph-sdk
     #   langsmith
+    #   mcp
     #   ollama
     #   openai
 httpx-sse==0.4.3
-    # via langchain-community
+    # via
+    #   langchain-community
+    #   mcp
 idna==3.11
     # via
     #   anyio
@@ -150,6 +155,7 @@ langchain-core==1.0.7
     #   langchain-community
     #   langchain-deepseek
     #   langchain-google-genai
+    #   langchain-mcp-adapters
     #   langchain-openai
     #   langchain-tavily
     #   langchain-text-splitters
@@ -159,6 +165,8 @@ langchain-core==1.0.7
 langchain-deepseek==1.0.1
     # via backend (pyproject.toml)
 langchain-google-genai==2.1.12
+    # via backend (pyproject.toml)
+langchain-mcp-adapters==0.0.3
     # via backend (pyproject.toml)
 langchain-openai==1.0.3
     # via langchain-deepseek
@@ -192,6 +200,8 @@ markupsafe==3.0.3
     # via jinja2
 marshmallow==3.26.1
     # via dataclasses-json
+mcp==1.6.0
+    # via langchain-mcp-adapters
 mdurl==0.1.2
     # via markdown-it-py
 multidict==6.7.0
@@ -295,6 +305,7 @@ pydantic==2.12.4
     #   langchain-google-genai
     #   langgraph
     #   langsmith
+    #   mcp
     #   ollama
     #   openai
     #   pydantic-settings
@@ -305,6 +316,7 @@ pydantic-settings==2.12.0
     #   backend (pyproject.toml)
     #   deepeval
     #   langchain-community
+    #   mcp
 pyfiglet==1.0.4
     # via deepeval
 pygments==2.19.2
@@ -390,8 +402,12 @@ sqlalchemy==2.0.44
     #   langchain-community
 sqlite-vec==0.1.6
     # via langgraph-checkpoint-sqlite
+sse-starlette==3.0.3
+    # via mcp
 starlette==0.50.0
-    # via fastapi
+    # via
+    #   fastapi
+    #   mcp
 tabulate==0.9.0
     # via deepeval
 tenacity==9.1.2
@@ -442,7 +458,9 @@ urllib3==2.5.0
     #   requests
     #   sentry-sdk
 uvicorn==0.24.0
-    # via backend (pyproject.toml)
+    # via
+    #   backend (pyproject.toml)
+    #   mcp
 uvloop==0.22.1
     # via uvicorn
 watchfiles==1.1.1

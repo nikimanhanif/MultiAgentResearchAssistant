@@ -2,12 +2,88 @@
 
 This module manages MCP server connections using langchain-mcp-adapters.
 Provides automatic tool discovery from enabled MCP servers.
-
-Implementation: Phase 7.2
 """
 
-# TODO: Phase 7.2 - Define server_configs dict with MCP server configurations
-# TODO: Phase 7.2 - Implement get_mcp_client() using MultiServerMCPClient
-# TODO: Phase 7.2 - Implement async load_mcp_tools() for automatic tool discovery
-# TODO: Phase 7.3 - Add Scientific Paper Harvester configuration
+import logging
+import os
+from typing import List, Dict
 
+from langchain_core.tools import BaseTool
+from langchain_mcp_adapters.client import MultiServerMCPClient
+
+from app.config import settings
+
+logger = logging.getLogger(__name__)
+
+server_configs: Dict[str, Dict] = {
+    "scientific-papers": {
+        "transport": "stdio",
+        "command": "npx",
+        "args": ["-y", "@futurelab-studio/latest-science-mcp@latest"],
+        "env": {"CORE_API_KEY": os.getenv("CORE_API_KEY", settings.CORE_API_KEY)}
+    }
+}
+
+
+def get_mcp_client(enabled_servers: List[str]) -> MultiServerMCPClient:
+    """Get configured MCP client for enabled servers.
+    
+    Args:
+        enabled_servers: List of server names to enable (must exist in server_configs)
+        
+    Returns:
+        MultiServerMCPClient instance with filtered server configurations
+        
+    Raises:
+        ValueError: If any enabled server name is not in server_configs
+    """
+    if not enabled_servers:
+        logger.warning("No MCP servers enabled, returning client with empty config")
+        return MultiServerMCPClient({})
+    
+    invalid_servers = [s for s in enabled_servers if s not in server_configs]
+    if invalid_servers:
+        error_msg = f"Invalid server names: {invalid_servers}. Available: {list(server_configs.keys())}"
+        logger.error(error_msg)
+        raise ValueError(error_msg)
+    
+    filtered_configs = {
+        name: config 
+        for name, config in server_configs.items() 
+        if name in enabled_servers
+    }
+    
+    logger.info(f"Initializing MCP client with servers: {list(filtered_configs.keys())}")
+    return MultiServerMCPClient(filtered_configs)
+
+
+async def load_mcp_tools(enabled_servers: List[str]) -> List[BaseTool]:
+    """Load tools from enabled MCP servers with automatic discovery.
+    
+    Args:
+        enabled_servers: List of server names to load tools from
+        
+    Returns:
+        List of BaseTool instances from all enabled servers
+        
+    Raises:
+        ValueError: If any enabled server name is invalid
+    """
+    if not enabled_servers:
+        logger.info("No MCP servers enabled, returning empty tool list")
+        return []
+    
+    try:
+        client = get_mcp_client(enabled_servers)
+        tools = await client.get_tools()
+        logger.info(f"Successfully loaded {len(tools)} tools from {len(enabled_servers)} MCP server(s)")
+        return tools
+        
+    except ValueError:
+        raise
+        
+    except Exception as e:
+        error_msg = f"Failed to load MCP tools from servers {enabled_servers}: {str(e)}"
+        logger.error(error_msg)
+        logger.warning("Returning empty tool list due to MCP server connection failure")
+        return []
