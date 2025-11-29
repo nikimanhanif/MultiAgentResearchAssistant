@@ -182,46 +182,51 @@ def aggregate_findings(state: ResearchState) -> List[Finding]:
     for finding in filtered:
         citation = finding.citation
         
-        # Check DOI first (most reliable)
+        # Check if duplicate based on any criteria
+        is_duplicate = False
+        existing_match = None
+        
+        # 1. Check DOI
         if citation.doi:
             if citation.doi in seen_dois:
-                # Keep higher credibility
-                if finding.credibility_score > seen_dois[citation.doi].credibility_score:
-                    deduplicated.remove(seen_dois[citation.doi])
-                    deduplicated.append(finding)
-                    seen_dois[citation.doi] = finding
-                continue
-            seen_dois[citation.doi] = finding
-            deduplicated.append(finding)
-            continue
+                is_duplicate = True
+                existing_match = seen_dois[citation.doi]
+            else:
+                seen_dois[citation.doi] = finding
         
-        # Check URL
-        if citation.url:
+        # 2. Check URL (if not already found as duplicate)
+        if not is_duplicate and citation.url:
             if citation.url in seen_urls:
-                if finding.credibility_score > seen_urls[citation.url].credibility_score:
-                    deduplicated.remove(seen_urls[citation.url])
-                    deduplicated.append(finding)
-                    seen_urls[citation.url] = finding
-                continue
-            seen_urls[citation.url] = finding
-            deduplicated.append(finding)
-            continue
-        
-        # Check title + first author
-        if citation.title and citation.authors:
+                is_duplicate = True
+                existing_match = seen_urls[citation.url]
+            else:
+                seen_urls[citation.url] = finding
+                
+        # 3. Check Title + Author (if not already found as duplicate)
+        if not is_duplicate and citation.title and citation.authors:
             key = (citation.title, citation.authors[0] if citation.authors else "")
             if key in seen_titles:
-                if finding.credibility_score > seen_titles[key].credibility_score:
-                    deduplicated.remove(seen_titles[key])
-                    deduplicated.append(finding)
+                is_duplicate = True
+                existing_match = seen_titles[key]
+            else:
+                seen_titles[key] = finding
+                
+        # Handle duplicate or new entry
+        if is_duplicate and existing_match:
+            # If new finding has higher credibility, replace the existing one
+            if finding.credibility_score > existing_match.credibility_score:
+                if existing_match in deduplicated:
+                    deduplicated.remove(existing_match)
+                deduplicated.append(finding)
+                
+                # Update indices to point to new finding
+                if citation.doi: seen_dois[citation.doi] = finding
+                if citation.url: seen_urls[citation.url] = finding
+                if citation.title and citation.authors:
+                    key = (citation.title, citation.authors[0] if citation.authors else "")
                     seen_titles[key] = finding
-                continue
-            seen_titles[key] = finding
+        else:
             deduplicated.append(finding)
-            continue
-        
-        # No deduplication possible, add it
-        deduplicated.append(finding)
     
     logger.info(f"Deduplicated {len(filtered)} -> {len(deduplicated)} findings")
     

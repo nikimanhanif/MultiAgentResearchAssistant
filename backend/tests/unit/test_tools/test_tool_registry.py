@@ -30,6 +30,18 @@ class TestSafeToolExecute:
         assert wrapped_tool._run.__name__ == "safe_run"
         assert wrapped_tool._arun.__name__ == "safe_arun"
 
+    def test_handles_valid_results(self):
+        """Test that valid results are returned as-is."""
+        tool = StructuredTool.from_function(
+            func=lambda x: "Valid result",
+            name="valid_tool",
+            description="Returns valid string"
+        )
+        wrapped_tool = _safe_tool_execute(tool)
+        
+        result = wrapped_tool.invoke("input")
+        assert result == "Valid result"
+
     def test_handles_empty_results(self):
         """Test that empty results are replaced with helpful message."""
         tool = StructuredTool.from_function(
@@ -48,6 +60,30 @@ class TestSafeToolExecute:
             func=lambda x: None,
             name="none_tool",
             description="Returns None"
+        )
+        wrapped_tool = _safe_tool_execute(tool)
+        
+        result = wrapped_tool.invoke("input")
+        assert "No results found" in result
+
+    def test_handles_empty_list_results(self):
+        """Test that empty list results are replaced with helpful message."""
+        tool = StructuredTool.from_function(
+            func=lambda x: [],
+            name="empty_list_tool",
+            description="Returns empty list"
+        )
+        wrapped_tool = _safe_tool_execute(tool)
+        
+        result = wrapped_tool.invoke("input")
+        assert "No results found" in result
+
+    def test_handles_empty_dict_results(self):
+        """Test that empty dict results are replaced with helpful message."""
+        tool = StructuredTool.from_function(
+            func=lambda x: {},
+            name="empty_dict_tool",
+            description="Returns empty dict"
         )
         wrapped_tool = _safe_tool_execute(tool)
         
@@ -86,6 +122,21 @@ class TestSafeToolExecute:
         result = wrapped_tool._run("input")
         assert "Tool execution failed: API failed" in result
 
+    def test_handles_generic_exception(self):
+        """Test that generic Exception is caught and formatted."""
+        def raise_generic_exception(x):
+            raise ValueError("Generic error")
+            
+        tool = StructuredTool.from_function(
+            func=raise_generic_exception,
+            name="generic_exception_tool",
+            description="Raises generic Exception"
+        )
+        wrapped_tool = _safe_tool_execute(tool)
+        
+        result = wrapped_tool._run("input")
+        assert "Unexpected error: Generic error" in result
+
     @pytest.mark.asyncio
     async def test_async_safe_run(self):
         """Test async execution safety wrapper."""
@@ -101,6 +152,22 @@ class TestSafeToolExecute:
         
         result = await wrapped_tool.ainvoke("input")
         assert "No results found" in result
+
+    @pytest.mark.asyncio
+    async def test_async_safe_run_exception(self):
+        """Test async execution exception handling."""
+        async def async_fail(x):
+            raise ValueError("Async error")
+            
+        tool = StructuredTool.from_function(
+            coroutine=async_fail,
+            name="async_fail_tool",
+            description="Async failing tool"
+        )
+        wrapped_tool = _safe_tool_execute(tool)
+        
+        result = await wrapped_tool.ainvoke("input")
+        assert "Unexpected error: Async error" in result
 
 
 class TestGetResearchTools:

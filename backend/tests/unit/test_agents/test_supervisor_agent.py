@@ -382,6 +382,50 @@ class TestAggregateFindings:
         assert result[0].credibility_score == 0.7
     
     
+    def test_aggregate_findings_deduplicates_by_title_author_fallback(self):
+        """Test that findings with same title/author but different URLs are deduplicated."""
+        findings = [
+            Finding(
+                claim="Claim 1",
+                citation=Citation(
+                    source="Source 1",
+                    title="Same Title",
+                    authors=["Author A"],
+                    url="http://url1.com"
+                ),
+                topic="t1",
+                credibility_score=0.8
+            ),
+            Finding(
+                claim="Claim 2",
+                citation=Citation(
+                    source="Source 2",
+                    title="Same Title",
+                    authors=["Author A"],
+                    url="http://url2.com"  # Different URL
+                ),
+                topic="t1",
+                credibility_score=0.9
+            )
+        ]
+        
+        state: ResearchState = {
+            "research_brief": ResearchBrief(
+                scope="Test",
+                sub_topics=["t1"],
+                constraints={},
+                deliverables="Test"
+            ),
+            "findings": findings
+        }
+        
+        # Note: The implementation checks URL first. If URLs differ, it continues to next check.
+        # So title+author check SHOULD catch this.
+        result = aggregate_findings(state)
+        
+        assert len(result) == 1
+        assert result[0].credibility_score == 0.9
+
     def test_aggregate_findings_sorts_by_credibility(self):
         """Test that findings are sorted by credibility score descending."""
         findings = [

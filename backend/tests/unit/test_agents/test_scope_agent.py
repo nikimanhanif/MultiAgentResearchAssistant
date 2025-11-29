@@ -14,7 +14,12 @@ from app.agents.scope_agent import (
     generate_clarification_questions,
     generate_research_brief,
     check_scope_completion,
+    check_scope_completion,
     _format_conversation_history,
+    _update_brief_metadata,
+    _build_question_generation_chain,
+    _build_completion_detection_chain,
+    _build_brief_generation_chain,
 )
 from app.models.schemas import (
     ClarificationQuestions,
@@ -98,6 +103,107 @@ class TestFormatConversationHistory:
         
         # Assert
         assert "USER:" in result
+
+
+class TestUpdateBriefMetadata:
+    """Test cases for brief metadata updates (_update_brief_metadata function)."""
+
+    def test_update_brief_metadata_counts_turns_correctly(self):
+        """Test that _update_brief_metadata counts assistant turns correctly."""
+        # Arrange
+        parsed = {"scope": "Test"}
+        query = "Original query"
+        history = [
+            {"role": "user", "content": "Q1"},
+            {"role": "assistant", "content": "A1"},
+            {"role": "user", "content": "Q2"},
+            {"role": "assistant", "content": "A2"}
+        ]
+        
+        # Act
+        result = _update_brief_metadata(parsed, query, history)
+        
+        # Assert
+        assert result["metadata"]["clarification_turns"] == 2
+        assert result["metadata"]["original_query"] == query
+
+    def test_update_brief_metadata_handles_empty_history(self):
+        """Test that _update_brief_metadata handles empty/None history."""
+        # Arrange
+        parsed = {"scope": "Test"}
+        query = "Original query"
+        
+        # Act
+        result_none = _update_brief_metadata(parsed.copy(), query, None)
+        result_empty = _update_brief_metadata(parsed.copy(), query, [])
+        
+        # Assert
+        assert "metadata" not in result_none
+        assert "metadata" not in result_empty
+
+    def test_update_brief_metadata_preserves_existing_metadata(self):
+        """Test that _update_brief_metadata preserves existing metadata fields."""
+        # Arrange
+        parsed = {
+            "scope": "Test",
+            "metadata": {"existing_field": "value"}
+        }
+        query = "Original query"
+        history = [{"role": "assistant", "content": "A1"}]
+        
+        # Act
+        result = _update_brief_metadata(parsed, query, history)
+        
+        # Assert
+        assert result["metadata"]["existing_field"] == "value"
+        assert result["metadata"]["clarification_turns"] == 1
+
+
+class TestChainBuilders:
+    """Test cases for chain building functions."""
+
+    @patch("app.agents.scope_agent.get_deepseek_chat")
+    def test_build_question_generation_chain_returns_runnable(self, mock_get_llm):
+        """Test that _build_question_generation_chain returns a runnable chain."""
+        # Arrange
+        mock_llm = MagicMock()
+        mock_get_llm.return_value = mock_llm
+        
+        # Act
+        chain = _build_question_generation_chain()
+        
+        # Assert
+        assert chain is not None
+        # Verify it's a runnable sequence (prompt | llm | parser)
+        assert hasattr(chain, "invoke") or hasattr(chain, "ainvoke")
+
+    @patch("app.agents.scope_agent.get_deepseek_chat")
+    def test_build_completion_detection_chain_returns_runnable(self, mock_get_llm):
+        """Test that _build_completion_detection_chain returns a runnable chain."""
+        # Arrange
+        mock_llm = MagicMock()
+        mock_get_llm.return_value = mock_llm
+        
+        # Act
+        chain = _build_completion_detection_chain()
+        
+        # Assert
+        assert chain is not None
+        assert hasattr(chain, "invoke") or hasattr(chain, "ainvoke")
+
+    @patch("app.agents.scope_agent.get_deepseek_chat")
+    def test_build_brief_generation_chain_returns_runnable(self, mock_get_llm):
+        """Test that _build_brief_generation_chain returns a runnable chain."""
+        # Arrange
+        mock_llm = MagicMock()
+        mock_get_llm.return_value = mock_llm
+        
+        # Act
+        chain = _build_brief_generation_chain()
+        
+        # Assert
+        assert chain is not None
+        assert hasattr(chain, "invoke") or hasattr(chain, "ainvoke")
 
 
 class TestGenerateClarificationQuestions:
@@ -284,6 +390,22 @@ class TestCheckScopeCompletion:
         assert result.is_complete is True
 
 
+    @pytest.mark.asyncio
+    @patch("app.agents.scope_agent._build_completion_detection_chain")
+    async def test_check_scope_completion_chain_error_raises_exception(
+        self, mock_build_chain
+    ):
+        """Test that check_scope_completion raises exception on chain errors."""
+        # Arrange
+        mock_chain = AsyncMock()
+        mock_chain.ainvoke.side_effect = Exception("Chain execution failed")
+        mock_build_chain.return_value = mock_chain
+        
+        # Act & Assert
+        with pytest.raises(Exception, match="Failed to check scope completion"):
+            await check_scope_completion("Test query")
+
+
 class TestGenerateResearchBrief:
     """Test cases for research brief generation with PydanticOutputParser."""
 
@@ -392,6 +514,50 @@ class TestGenerateResearchBrief:
         
         # Assert
         assert result.metadata["clarification_turns"] == 2
+
+
+    @pytest.mark.asyncio
+    @patch("app.agents.scope_agent._build_brief_generation_chain")
+    async def test_generate_research_brief_chain_error_raises_exception(
+        self, mock_build_chain
+    ):
+        """Test that generate_research_brief raises exception on chain errors."""
+        # Arrange
+        mock_chain = AsyncMock()
+        mock_chain.ainvoke.side_effect = Exception("Chain execution failed")
+        mock_build_chain.return_value = mock_chain
+        
+        # Act & Assert
+        with pytest.raises(Exception, match="Failed to generate research brief"):
+            await generate_research_brief("Test query")
+
+    @pytest.mark.asyncio
+    @patch("app.agents.scope_agent._build_brief_generation_chain")
+    async def test_generate_research_brief_handles_missing_metadata(
+        self, mock_build_chain
+    ):
+        """Test that generate_research_brief initializes metadata if None."""
+        # Arrange
+        mock_chain = AsyncMock()
+        expected_brief = ResearchBrief(
+            scope="Test",
+            sub_topics=["t1"],
+            constraints={},
+            deliverables="d1",
+            format=ReportFormat.SUMMARY,
+            metadata=None  # Explicitly None
+        )
+        mock_chain.ainvoke.return_value = expected_brief
+        mock_build_chain.return_value = mock_chain
+        
+        history = [{"role": "assistant", "content": "Q1"}]
+        
+        # Act
+        result = await generate_research_brief("Query", history)
+        
+        # Assert
+        assert result.metadata is not None
+        assert result.metadata["clarification_turns"] == 1
 
 
 class TestClarifyScope:
