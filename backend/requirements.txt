@@ -6,8 +6,11 @@ aiohttp==3.13.2
     # via
     #   deepeval
     #   langchain-community
+    #   langchain-tavily
 aiosignal==1.4.0
     # via aiohttp
+aiosqlite==0.21.0
+    # via langgraph-checkpoint-sqlite
 annotated-doc==0.0.4
     # via fastapi
 annotated-types==0.7.0
@@ -132,7 +135,9 @@ jsonpatch==1.33
 jsonpointer==3.0.0
     # via jsonpatch
 langchain==1.0.8
-    # via backend (pyproject.toml)
+    # via
+    #   backend (pyproject.toml)
+    #   langchain-tavily
 langchain-classic==1.0.0
     # via langchain-community
 langchain-community==0.4.1
@@ -146,6 +151,7 @@ langchain-core==1.0.7
     #   langchain-deepseek
     #   langchain-google-genai
     #   langchain-openai
+    #   langchain-tavily
     #   langchain-text-splitters
     #   langgraph
     #   langgraph-checkpoint
@@ -156,6 +162,8 @@ langchain-google-genai==2.1.12
     # via backend (pyproject.toml)
 langchain-openai==1.0.3
     # via langchain-deepseek
+langchain-tavily==0.2.13
+    # via backend (pyproject.toml)
 langchain-text-splitters==1.0.0
     # via langchain-classic
 langgraph==1.0.3
@@ -165,7 +173,10 @@ langgraph==1.0.3
 langgraph-checkpoint==3.0.1
     # via
     #   langgraph
+    #   langgraph-checkpoint-sqlite
     #   langgraph-prebuilt
+langgraph-checkpoint-sqlite==3.0.0
+    # via backend (pyproject.toml)
 langgraph-prebuilt==1.0.4
     # via langgraph
 langgraph-sdk==0.2.9
@@ -343,6 +354,7 @@ requests==2.32.5
     #   google-genai
     #   langchain-classic
     #   langchain-community
+    #   langchain-tavily
     #   langsmith
     #   posthog
     #   requests-toolbelt
@@ -376,6 +388,8 @@ sqlalchemy==2.0.44
     # via
     #   langchain-classic
     #   langchain-community
+sqlite-vec==0.1.6
+    # via langgraph-checkpoint-sqlite
 starlette==0.50.0
     # via fastapi
 tabulate==0.9.0
@@ -396,7 +410,10 @@ typer==0.20.0
     # via deepeval
 typing-extensions==4.15.0
     # via
+    #   aiosignal
+    #   aiosqlite
     #   anthropic
+    #   anyio
     #   fastapi
     #   google-genai
     #   grpcio
@@ -410,6 +427,7 @@ typing-extensions==4.15.0
     #   pydantic
     #   pydantic-core
     #   sqlalchemy
+    #   starlette
     #   typer
     #   typing-inspect
     #   typing-inspection
