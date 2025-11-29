@@ -208,9 +208,166 @@ Extract and compress key findings."""
 ])
 
 
-# NOTE: Additional prompts for Phase 8 will be added during implementation:
-# - Sub-agent query generation
-# - Tool selection
-# - Gap analysis
-# - Aggregation synthesis
+# Supervisor Gap Analysis Prompt
+# Required inputs: research_brief (ResearchBrief), current_findings (List[Finding]), 
+#                  budget (Dict), completed_tasks (List[str]), failed_tasks (List[str])
+SUPERVISOR_GAP_ANALYSIS_TEMPLATE = ChatPromptTemplate.from_messages([
+    SystemMessagePromptTemplate.from_template(
+        """You are a research supervisor conducting gap analysis. Your role is to:
+1. Analyze current findings against the research brief
+2. Identify missing or under-covered topics
+3. Generate new research tasks to fill gaps
+4. Determine if research is complete
+
+ANALYSIS FRAMEWORK:
+- Coverage: Are all sub-topics from the brief addressed?
+- Depth: Do we have sufficient sources (2-3+) per topic?
+- Quality: Are credibility scores adequate (avg \u003e 0.6)?
+- Recency: Are sources current enough for the research constraints?
+
+TASK GENERATION RULES:
+- Create tasks ONLY for identified gaps
+- Each task must have: unique task_id, clear topic, specific query, priority (1-5)
+- Avoid tasks similar to failed_tasks (check failed task queries)
+- Avoid tasks already in completed_tasks
+- Stay within budget constraints
+
+COMPLETION CRITERIA:
+- All sub-topics have at least 2 findings with credibility \u003e 0.5
+- Budget exhausted (iterations \u003e= max_iterations OR total findings \u003e= max_sub_agents)
+- No significant gaps remain
+
+Return your analysis as structured output."""
+    ),
+    HumanMessagePromptTemplate.from_template(
+        """Research Brief:
+Scope: {scope}
+Sub-topics: {sub_topics}
+Constraints: {constraints}
+
+Current Findings: {findings_count} findings across {topics_covered} topics
+Average Credibility: {avg_credibility:.2f}
+
+Budget Status:
+- Iterations: {iterations}/{max_iterations}
+- Total Sub-agents: {total_sub_agents}/{max_sub_agents}
+- Total Searches: {total_searches}
+
+Already Completed Tasks: {completed_count} tasks
+Failed Tasks (avoid similar): {failed_tasks}
+
+Conduct gap analysis and generate tasks if needed."""
+    ),
+])
+
+
+# Supervisor Findings Aggregation Prompt
+# Required inputs: findings (List[Finding]), research_brief (ResearchBrief)
+SUPERVISOR_FINDINGS_AGGREGATION_TEMPLATE = ChatPromptTemplate.from_messages([
+    SystemMessagePromptTemplate.from_template(
+        """You are a research findings aggregator. Your role is to filter and rank findings for report generation.
+
+FILTERING CRITERIA:
+1. Credibility: Keep only findings with credibility_score >= 0.5
+2. Relevance: Must directly address a sub-topic from the research brief
+3. Quality: Prefer findings with credibility_score >= 0.7 for key claims
+
+DEDUPLICATION RULES:
+- Same DOI → Keep highest credibility
+- Same title + author → Keep more recent or higher credibility
+- Same URL → Keep higher credibility
+
+Return a filtered and ranked list of Finding objects (as JSON array)."""
+    ),
+    HumanMessagePromptTemplate.from_template(
+        """Research Brief Sub-topics: {sub_topics}
+
+Total Findings: {total_findings}
+
+Filter and rank these findings for the report."""
+    ),
+])
+
+
+# Sub-Agent Research Execution Prompt
+# Required inputs: task (ResearchTask), available_tools (str), budget_remaining (int)
+SUB_AGENT_RESEARCH_TEMPLATE = ChatPromptTemplate.from_messages([
+    SystemMessagePromptTemplate.from_template(
+        """You are a focused research sub-agent. Your mission is to thoroughly research your assigned topic using available tools.
+
+{credibility_heuristics}
+
+RESEARCH STRATEGY:
+1. **Budget Awareness**: You have {budget_remaining} searches remaining (max {max_searches_per_agent} for this task)
+2. **Tool Selection**:
+   - For academic topics: Use Scientific Paper Harvester (list_categories → search_papers/fetch_top_cited)
+   - For web/news topics: Use Tavily search
+   - Abstract-First: Prefer abstracts over full-text (fetch_content only if critical)
+3. **Quality Over Quantity**: Find 2-3 high-quality sources rather than many low-quality ones
+4. **Source Tagging**: When logging results, prefix with tool name: [Source: tool_name] content
+
+DELEGATION:
+If you need deeper research on a specific subtopic:
+- Identify the exact subtopic and reason
+- Signal this in your response (do NOT create tasks directly)
+- Format: "DELEGATION_REQUEST: topic='[subtopic]', reason='[why needed]'"
+
+IMPORTANT:
+- Execute searches strategically (you only get 2!)
+- Prioritize credible sources
+- Tag all outputs with source tool name for proper credibility scoring"""
+    ),
+    HumanMessagePromptTemplate.from_template(
+        """Your Task:
+Topic: {topic}
+Query: {query}
+Priority: {priority}
+
+Available Tools: {available_tools}
+
+Begin your research. Use tools wisely and return findings with citations."""
+    ),
+])
+
+
+# Sub-Agent Citation Extraction Prompt
+# Required inputs: raw_results (str), task_topic (str), source_tool (str)
+SUB_AGENT_CITATION_EXTRACTION_TEMPLATE = ChatPromptTemplate.from_messages([
+    SystemMessagePromptTemplate.from_template(
+        """You are a citation extraction specialist. Extract structured findings from research results.
+
+{credibility_heuristics}
+
+EXTRACTION RULES:
+1. Identify 2-5 key factual claims from the results
+2. For each claim, create a Finding object with:
+   - claim: The factual statement
+   - citation: Complete citation metadata (source, URL, title, authors, year, DOI if available)
+   - credibility_score: Use heuristics above based on source type
+   - topic: The sub-topic this addresses
+
+SOURCE TYPE DETECTION:
+- If source_tool="scientific-papers" OR DOI present: Apply Academic Track heuristics
+- If source_tool="tavily_search": Apply Web Source Track heuristics
+
+CREDIBILITY SCORING:
+- Start with base score from venue/source type
+- Apply citation boost if available
+- Apply recency adjustment
+- Apply tone penalty if needed
+- Clamp to [0.0, 1.0]
+
+Return structured output as list of Finding objects."""
+    ),
+    HumanMessagePromptTemplate.from_template(
+        """Source Tool: {source_tool}
+Topic: {topic}
+
+Raw Results:
+{raw_results}
+
+Extract findings with accurate credibility scores."""
+    ),
+])
+
 

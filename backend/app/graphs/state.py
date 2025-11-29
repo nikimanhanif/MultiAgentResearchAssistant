@@ -55,7 +55,7 @@ class ResearchState(TypedDict, total=False):
         task_history: Immutable log of all research tasks
         completed_tasks: Track completed task IDs
         failed_tasks: Track failed task IDs
-        budget: Budget tracking (iterations, max_iterations, max_sub_agents)
+        budget: Budget tracking (iterations, max_iterations, max_sub_agents, max_searches_per_agent, total_searches)
         gaps: LLM-based gap analysis output (not algorithmic)
         is_complete: Whether research has been completed
         error: Error message if workflow encounters failures
@@ -92,6 +92,20 @@ class ResearchState(TypedDict, total=False):
     reviewer_feedback: Optional[str]
 
 
+class SubAgentState(ResearchState):
+    """State schema for individual sub-agent execution (Phase 8.3).
+    
+    Extends ResearchState with task-specific field for Send API.
+    This enables parallel execution of multiple sub-agents with
+    different tasks while sharing the same base state context.
+    
+    Fields:
+        task: The specific ResearchTask assigned to this sub-agent
+        (inherits all ResearchState fields)
+    """
+    task: ResearchTask
+
+
 def create_initial_state(research_brief: ResearchBrief) -> ResearchState:
     """Create initial research state from research brief.
     
@@ -110,7 +124,9 @@ def create_initial_state(research_brief: ResearchBrief) -> ResearchState:
         budget={
             "iterations": 0,
             "max_iterations": 20,
-            "max_sub_agents": 20
+            "max_sub_agents": 20,
+            "max_searches_per_agent": 2,
+            "total_searches": 0
         },
         gaps=None,
         is_complete=False,

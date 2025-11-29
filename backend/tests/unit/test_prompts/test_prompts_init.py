@@ -48,12 +48,27 @@ class TestPromptsModuleExports:
         from app.prompts import __all__
         
         expected_exports = [
+            # Scope prompts
             "SCOPE_QUESTION_GENERATION_TEMPLATE",
             "SCOPE_COMPLETION_DETECTION_TEMPLATE",
             "SCOPE_BRIEF_GENERATION_TEMPLATE",
+            # Report prompts
+            "get_report_generation_prompt",
+            # Research prompts (Phase 8)
+            "CREDIBILITY_HEURISTICS",
+            "RESEARCH_STRATEGY_SELECTION_TEMPLATE",
+            "RESEARCH_TASK_DECOMPOSITION_TEMPLATE",
+            "RESEARCH_ERROR_RE_DELEGATION_TEMPLATE",
+            "RESEARCH_FINDINGS_COMPRESSION_TEMPLATE",
+            "SUPERVISOR_GAP_ANALYSIS_TEMPLATE",
+            "SUPERVISOR_FINDINGS_AGGREGATION_TEMPLATE",
+            "SUB_AGENT_RESEARCH_TEMPLATE",
+            "SUB_AGENT_CITATION_EXTRACTION_TEMPLATE",
         ]
         
         assert len(__all__) == len(expected_exports)
+        for export in expected_exports:
+            assert export in __all__
 
 
 class TestScopePromptsSubmodule:

@@ -151,7 +151,13 @@ class TestCreateInitialState:
         assert state["completed_tasks"] == []
         assert state["findings"] == []
         assert state["gaps"] is None
-        assert state["budget"] == {"iterations": 0, "max_iterations": 20, "max_sub_agents": 20}
+        assert state["budget"] == {
+            "iterations": 0,
+            "max_iterations": 20,
+            "max_sub_agents": 20,
+            "max_searches_per_agent": 2,
+            "total_searches": 0
+        }
         assert state["is_complete"] is False
         assert state["error"] is None
         assert state["messages"] == []
