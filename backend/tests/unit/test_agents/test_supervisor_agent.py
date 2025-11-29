@@ -236,8 +236,24 @@ class TestSupervisorNode:
         assert result["is_complete"] is True
         assert result["gaps"]["has_gaps"] is False
     
-    def test_supervisor_node_increments_iterations(self):
+    @patch("app.agents.supervisor_agent.SUPERVISOR_GAP_ANALYSIS_TEMPLATE")
+    @patch("app.agents.supervisor_agent.get_deepseek_reasoner")
+    def test_supervisor_node_increments_iterations(self, mock_get_llm, mock_template):
         """Test that supervisor correctly increments iteration counter."""
+        # Mock LLM and chain to avoid real API calls
+        mock_llm = MagicMock()
+        mock_get_llm.return_value = mock_llm
+        gap_output = GapAnalysisOutput(
+            has_gaps=False,
+            is_complete=False,
+            gaps_identified=[],
+            new_tasks=[],
+            reasoning="Test reasoning"
+        )
+        mock_chain = MagicMock()
+        mock_chain.invoke.return_value = gap_output
+        mock_template.__or__.return_value = mock_chain
+
         state: ResearchState = {
             "research_brief": ResearchBrief(
                 scope="Test",

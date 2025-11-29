@@ -245,7 +245,8 @@ Scope: {scope}
 Sub-topics: {sub_topics}
 Constraints: {constraints}
 
-Current Findings: {findings_count} findings across {topics_covered} topics
+Current Findings: {findings_count} findings.
+Covered Topics: {topics_covered}
 Average Credibility: {avg_credibility:.2f}
 
 Budget Status:

@@ -88,7 +88,8 @@ def supervisor_node(state: ResearchState) -> Dict[str, Any]:
     for finding in findings:
         findings_by_topic[finding.topic].append(finding)
     
-    topics_covered = len(findings_by_topic)
+    topics_covered_str = ", ".join(sorted(findings_by_topic.keys())) if findings_by_topic else "None"
+    
     avg_credibility = (
         sum(f.credibility_score for f in findings) / len(findings)
         if findings else 0.0
@@ -100,7 +101,7 @@ def supervisor_node(state: ResearchState) -> Dict[str, Any]:
         "sub_topics": ", ".join(brief.sub_topics),
         "constraints": str(brief.constraints),
         "findings_count": len(findings),
-        "topics_covered": topics_covered,
+        "topics_covered": topics_covered_str,
         "avg_credibility": avg_credibility,
         "iterations": current_iteration,
         "max_iterations": budget["max_iterations"],
