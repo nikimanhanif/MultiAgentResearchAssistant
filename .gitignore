@@ -276,6 +276,9 @@ cython_debug/
 # Custom commit script summariser
 backend/git_summarizer/
 
+# Test scripts
+backend/test_scripts/
+
 # Logs
 backend/DEVELOPMENT_PLAN.md
 backend/FEATURE_PROPOSALS.md

@@ -11,12 +11,13 @@ The reviewer supports three actions:
 
 from typing import Literal
 from langgraph.types import interrupt, Command
+from langgraph.graph import END
 
 from app.graphs.state import ResearchState
 from app.models.schemas import ResearchTask
 
 
-def reviewer_node(state: ResearchState) -> Command[Literal["END", "report_agent", "supervisor_agent"]]:
+def reviewer_node(state: ResearchState) -> Command[Literal["__end__", "report_agent", "supervisor"]]:
     """Node that pauses execution to let the user review the report.
     
     Uses LangGraph's interrupt mechanism to pause the graph and wait for
@@ -35,7 +36,7 @@ def reviewer_node(state: ResearchState) -> Command[Literal["END", "report_agent"
         3. Route based on action:
            - approve: END (complete workflow)
            - refine: report_agent (regenerate with feedback)
-           - re_research: supervisor_agent (create new research tasks)
+           - re_research: supervisor (create new research tasks)
     """
     user_input = interrupt(value={
         "type": "review_request",
@@ -46,7 +47,7 @@ def reviewer_node(state: ResearchState) -> Command[Literal["END", "report_agent"
     feedback = user_input.get("feedback")
     
     if action == "approve":
-        return Command(goto="END")
+        return Command(goto=END)
     
     elif action == "refine":
         return Command(
@@ -57,7 +58,7 @@ def reviewer_node(state: ResearchState) -> Command[Literal["END", "report_agent"
     elif action == "re_research":
         new_task = create_new_task(feedback)
         return Command(
-            goto="supervisor_agent",
+            goto="supervisor",
             update={
                 "task_history": [new_task],
                 "reviewer_feedback": None,
@@ -65,7 +66,7 @@ def reviewer_node(state: ResearchState) -> Command[Literal["END", "report_agent"
             }
         )
     
-    return Command(goto="END")
+    return Command(goto=END)
 
 
 def create_new_task(feedback: str) -> ResearchTask:

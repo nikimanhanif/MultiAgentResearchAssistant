@@ -9,6 +9,7 @@ Tests cover:
 import pytest
 from unittest.mock import Mock, patch
 from langgraph.types import Command
+from langgraph.graph import END
 
 from app.agents.reviewer_agent import reviewer_node, create_new_task
 from app.graphs.state import ResearchState
@@ -45,7 +46,7 @@ class TestReviewerNode:
             result = reviewer_node(state)
             
             assert isinstance(result, Command)
-            assert result.goto == "END"
+            assert result.goto == END
             mock_interrupt.assert_called_once()
             
             call_kwargs = mock_interrupt.call_args.kwargs
@@ -124,7 +125,7 @@ class TestReviewerNode:
             result = reviewer_node(state)
             
             assert isinstance(result, Command)
-            assert result.goto == "supervisor_agent"
+            assert result.goto == "supervisor"
             assert result.update["reviewer_feedback"] is None
             assert result.update["is_complete"] is False
             assert len(result.update["task_history"]) == 1
@@ -163,7 +164,7 @@ class TestReviewerNode:
             result = reviewer_node(state)
             
             assert isinstance(result, Command)
-            assert result.goto == "END"
+            assert result.goto == END
 
 
 class TestCreateNewTask:

@@ -7,16 +7,16 @@ from typing import List
 from langgraph.types import Send
 from langgraph.graph import START, END
 
-from app.graphs.research_graph import route_tasks, build_research_graph
+from app.graphs.research_graph import route_from_supervisor, route_from_scope, build_research_graph
 from app.graphs.state import ResearchState, create_initial_state
 from app.models.schemas import ResearchBrief, ResearchTask, Finding, Citation, SourceType
 
 
-class TestRouteTasks:
-    """Tests for route_tasks conditional edge function."""
+class TestRouteFromSupervisor:
+    """Tests for route_from_supervisor conditional edge function."""
     
-    def test_route_tasks_complete_flag_routes_to_end(self):
-        """Test that is_complete flag routes to END."""
+    def test_route_from_supervisor_complete_flag_routes_to_report(self):
+        """Test that is_complete flag routes to report_agent."""
         state = ResearchState(
             research_brief=ResearchBrief(
                 scope="test", sub_topics=[], constraints={}, format=None, deliverables="test report"
@@ -34,8 +34,8 @@ class TestRouteTasks:
             reviewer_feedback=None
         )
         
-        result = route_tasks(state)
-        assert result == END
+        result = route_from_supervisor(state)
+        assert result == "report_agent"
     
     def test_route_tasks_max_iterations_routes_to_end(self):
         """Test that exceeding max_iterations routes to END."""
@@ -56,11 +56,11 @@ class TestRouteTasks:
             reviewer_feedback=None
         )
         
-        result = route_tasks(state)
-        assert result == END
+        result = route_from_supervisor(state)
+        assert result == "report_agent"
     
-    def test_route_tasks_max_sub_agents_routes_to_end(self):
-        """Test that exceeding max_sub_agents routes to END."""
+    def test_route_from_supervisor_max_sub_agents_routes_to_report(self):
+        """Test that exceeding max_sub_agents routes to report_agent."""
         # Create 20 findings to hit the limit
         findings = [
             Finding(
@@ -89,11 +89,11 @@ class TestRouteTasks:
             reviewer_feedback=None
         )
         
-        result = route_tasks(state)
-        assert result == END
+        result = route_from_supervisor(state)
+        assert result == "report_agent"
     
-    def test_route_tasks_no_pending_tasks_routes_to_end(self):
-        """Test that no pending tasks routes to END."""
+    def test_route_from_supervisor_no_pending_tasks_routes_to_report(self):
+        """Test that no pending tasks routes to report_agent."""
         state = ResearchState(
             research_brief=ResearchBrief(
                 scope="test", sub_topics=[], constraints={}, format=None, deliverables="test report"
@@ -111,10 +111,10 @@ class TestRouteTasks:
             reviewer_feedback=None
         )
         
-        result = route_tasks(state)
-        assert result == END
+        result = route_from_supervisor(state)
+        assert result == "report_agent"
     
-    def test_route_tasks_pending_tasks_creates_send_objects(self):
+    def test_route_from_supervisor_pending_tasks_creates_send_objects(self):
         """Test that pending tasks create Send objects for parallel execution."""
         task1 = ResearchTask(task_id="task1", topic="topic1", query="query1", priority=1)
         task2 = ResearchTask(task_id="task2", topic="topic2", query="query2", priority=1)
@@ -136,14 +136,14 @@ class TestRouteTasks:
             reviewer_feedback=None
         )
         
-        result = route_tasks(state)
+        result = route_from_supervisor(state)
         
         # Should return list of Send objects
         assert isinstance(result, list)
         assert len(result) == 2
         assert all(isinstance(send, Send) for send in result)
     
-    def test_route_tasks_filters_completed_tasks(self):
+    def test_route_from_supervisor_filters_completed_tasks(self):
         """Test that completed tasks are filtered out."""
         task1 = ResearchTask(task_id="task1", topic="topic1", query="query1", priority=1)
         task2 = ResearchTask(task_id="task2", topic="topic2", query="query2", priority=1)
@@ -165,13 +165,13 @@ class TestRouteTasks:
             reviewer_feedback=None
         )
         
-        result = route_tasks(state)
+        result = route_from_supervisor(state)
         
         # Should only create Send for task2
         assert isinstance(result, list)
         assert len(result) == 1
     
-    def test_route_tasks_filters_failed_tasks(self):
+    def test_route_from_supervisor_filters_failed_tasks(self):
         """Test that failed tasks are filtered out."""
         task1 = ResearchTask(task_id="task1", topic="topic1", query="query1", priority=1)
         task2 = ResearchTask(task_id="task2", topic="topic2", query="query2", priority=1)
@@ -193,7 +193,7 @@ class TestRouteTasks:
             reviewer_feedback=None
         )
         
-        result = route_tasks(state)
+        result = route_from_supervisor(state)
         
         # Should only create Send for task2
         assert isinstance(result, list)
@@ -205,7 +205,14 @@ class TestBuildResearchGraph:
     
     def test_build_research_graph_creates_compiled_graph(self):
         """Test that build_research_graph creates a compiled graph."""
-        graph = build_research_graph()
+        from unittest.mock import patch, MagicMock
+        
+        # Mock get_checkpointer to return a dummy checkpointer
+        with patch("app.graphs.research_graph.get_checkpointer") as mock_get_cp:
+            mock_cp = MagicMock()
+            mock_get_cp.return_value = mock_cp
+            
+            graph = build_research_graph()
         
         assert graph is not None
         # Graph should be compiled (has .invoke, .ainvoke methods)
@@ -214,10 +221,20 @@ class TestBuildResearchGraph:
     
     def test_research_graph_has_required_nodes(self):
         """Test that graph has supervisor and sub_agent nodes."""
-        graph = build_research_graph()
+        from unittest.mock import patch, MagicMock
+        
+        # Mock get_checkpointer
+        with patch("app.graphs.research_graph.get_checkpointer") as mock_get_cp:
+            mock_cp = MagicMock()
+            mock_get_cp.return_value = mock_cp
+            
+            graph = build_research_graph()
         
         # Check nodes exist in graph structure
         # LangGraph compiled graphs expose node names via .nodes
         node_names = list(graph.nodes.keys())
+        assert "scope" in node_names
         assert "supervisor" in node_names
         assert "sub_agent" in node_names
+        assert "report_agent" in node_names
+        assert "reviewer" in node_names

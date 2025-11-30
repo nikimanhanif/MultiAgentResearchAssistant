@@ -82,7 +82,7 @@ class ResearchState(TypedDict, total=False):
     
     # Workflow control
     is_complete: bool
-    error: Optional[str]
+    error: Annotated[List[str], operator.add]  # Changed to list with reducer for parallel agents
     
     # Message history with reducer (for conversation context)
     messages: Annotated[List[Dict[str, Any]], operator.add]
@@ -130,7 +130,7 @@ def create_initial_state(research_brief: ResearchBrief) -> ResearchState:
         },
         gaps=None,
         is_complete=False,
-        error=None,
+        error=[],  # Changed to empty list
         messages=[],
         report_content="",
         reviewer_feedback=None

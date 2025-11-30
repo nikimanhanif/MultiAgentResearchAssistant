@@ -228,7 +228,7 @@ class Citation(BaseModel):
 
 class ClarificationQuestions(BaseModel):
     """Model for clarification questions to user."""
-    questions: List[str] = Field(
+    clarification_questions: List[str] = Field(
         ...,
         description="List of 1-3 clarifying questions"
     )
@@ -240,7 +240,7 @@ class ClarificationQuestions(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "questions": [
+                "clarification_questions": [
                     "What specific aspect of AI would you like to focus on?",
                     "What time period should the research cover?"
                 ],
@@ -264,7 +264,7 @@ class ScopeCompletionCheck(BaseModel):
         ...,
         description="Whether we have enough information to proceed"
     )
-    reason: str = Field(
+    reasoning: str = Field(
         ...,
         description="Brief explanation of the decision"
     )
@@ -277,7 +277,7 @@ class ScopeCompletionCheck(BaseModel):
         json_schema_extra={
             "example": {
                 "is_complete": False,
-                "reason": "Need to clarify time period and depth requirements",
+                "reasoning": "Need to clarify time period and depth requirements",
                 "missing_info": ["time_period", "research_depth"]
             }
         }

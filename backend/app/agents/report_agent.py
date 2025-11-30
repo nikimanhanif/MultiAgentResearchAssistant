@@ -10,11 +10,13 @@ Architecture: Supervisor Loop (Phase 3.7+)
 Phase 4.1: Core report generation implementation
 """
 
-from typing import List, Any
+from typing import List, Any, Dict
+import logging
 from langchain_core.runnables import Runnable
 from langchain_core.prompts import ChatPromptTemplate
 
 from app.models.schemas import ResearchBrief, Finding, ReportFormat
+from app.graphs.state import ResearchState
 from app.config import get_deepseek_reasoner
 from app.prompts.report_prompts import (
     get_report_generation_prompt,
@@ -26,6 +28,8 @@ from app.prompts.report_prompts import (
     get_fact_validation_instructions,
     get_ranking_format_instructions,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _build_report_generation_chain() -> Runnable:
@@ -164,3 +168,60 @@ No research findings were available to generate this report.
 
 Unable to complete research due to lack of findings. Please expand the research scope or try different search queries.
 """
+
+
+# LangGraph Node Integration
+
+async def report_agent_node(state: ResearchState) -> Dict[str, Any]:
+    """Report agent node for LangGraph integration.
+    
+    This node wraps the generate_report function to fit into the LangGraph workflow.
+    It extracts the research brief and findings from state, generates the report,
+    and returns a state update with the report content.
+    
+    Handles reviewer feedback for refinement if present in state.
+    
+    Args:
+        state: Current research state with research_brief and findings
+        
+    Returns:
+        State update with report_content
+    """
+    logger.info("Report Agent Node: Generating report")
+    
+    # Extract required fields from state
+    brief = state.get("research_brief")
+    findings = state.get("findings", [])
+    reviewer_feedback = state.get("reviewer_feedback")
+    
+    # Validate inputs
+    if not brief:
+        logger.error("Report Agent: No research brief found in state")
+        return {
+            "report_content": "Error: No research brief available for report generation.",
+            "error": "Missing research brief"
+        }
+    
+    try:
+        # Generate report using existing function
+        logger.info(f"Report Agent: Generating report with {len(findings)} findings")
+        
+        if reviewer_feedback:
+            logger.info(f"Report Agent: Incorporating reviewer feedback: {reviewer_feedback[:100]}...")
+        
+        report_content = await generate_report(brief, findings)
+        
+        logger.info("Report Agent: Report generated successfully")
+        
+        # Return state update
+        return {
+            "report_content": report_content,
+            "reviewer_feedback": None  # Clear feedback after processing
+        }
+    
+    except Exception as e:
+        logger.error(f"Report Agent: Error generating report - {e}")
+        return {
+            "report_content": f"Error generating report: {str(e)}",
+            "error": str(e)
+        }

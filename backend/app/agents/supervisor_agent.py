@@ -43,6 +43,57 @@ class GapAnalysisOutput(BaseModel):
     reasoning: str = Field(description="Reasoning for the decision")
 
 
+def _format_findings_for_supervisor(findings: List[Finding], max_findings: int = 50) -> str:
+    """Format findings for supervisor prompt with content visibility
+    
+    Groups findings by topic and formats them with key claims and scores,
+    truncated to fit context window.
+    
+    Args:
+        findings: List of Finding objects
+        max_findings: Maximum number of findings to include
+        
+    Returns:
+        Formatted string with findings grouped by topic
+    """
+    if not findings:
+        return "No findings yet."
+    
+    # Group findings by topic
+    findings_by_topic = defaultdict(list)
+    for finding in findings:
+        findings_by_topic[finding.topic].append(finding)
+    
+    # Build formatted output
+    formatted_parts = []
+    total_included = 0
+    
+    for topic, topic_findings in sorted(findings_by_topic.items()):
+        # Sort findings by credibility within topic
+        sorted_findings = sorted(topic_findings, key=lambda f: f.credibility_score, reverse=True)
+        
+        # Take top 3 findings per topic
+        topic_findings_limited = sorted_findings[:3]
+        
+        if total_included + len(topic_findings_limited) > max_findings:
+            break
+        
+        topic_part = f"\n**Topic: {topic}** ({len(topic_findings)} total findings)\n"
+        
+        for i, finding in enumerate(topic_findings_limited, 1):
+            # Truncate claim to 200 chars
+            claim_preview = finding.claim[:200] + "..." if len(finding.claim) > 200 else finding.claim
+            source_preview = finding.citation.source[:50] if finding.citation.source else "Unknown"
+            
+            topic_part += f"  {i}. {claim_preview} (Score: {finding.credibility_score:.2f}, Source: {source_preview})\n"
+        
+        formatted_parts.append(topic_part)
+        total_included += len(topic_findings_limited)
+    
+    header = f"\n=== FINDINGS SUMMARY ({len(findings)} total, showing {total_included}) ===\n"
+    return header + "".join(formatted_parts)
+
+
 def supervisor_node(state: ResearchState) -> Dict[str, Any]:
     """Supervisor node for gap analysis and task generation.
     
@@ -95,6 +146,9 @@ def supervisor_node(state: ResearchState) -> Dict[str, Any]:
         if findings else 0.0
     )
     
+    # Format findings context for supervisor (Phase 9.5)
+    findings_context = _format_findings_for_supervisor(findings)
+    
     # Prepare prompt inputs
     prompt_inputs = {
         "scope": brief.scope,
@@ -109,7 +163,8 @@ def supervisor_node(state: ResearchState) -> Dict[str, Any]:
         "max_sub_agents": budget["max_sub_agents"],
         "total_searches": budget.get("total_searches", 0),
         "completed_count": len(completed_tasks),
-        "failed_tasks": ", ".join(failed_tasks) if failed_tasks else "None"
+        "failed_tasks": ", ".join(failed_tasks) if failed_tasks else "None",
+        "findings_context": findings_context
     }
     
     # Get LLM for structured output
@@ -140,6 +195,17 @@ def supervisor_node(state: ResearchState) -> Dict[str, Any]:
         
         # Set completion flag
         state_update["is_complete"] = result.is_complete
+        
+        # If complete, aggregate findings automatically (Phase 9.5)
+        if result.is_complete:
+            logger.info("Supervisor: Research complete, aggregating findings")
+            try:
+                aggregated_findings = aggregate_findings(state)
+                state_update["findings"] = aggregated_findings
+                logger.info(f"Supervisor: Aggregated {len(aggregated_findings)} findings for report")
+            except Exception as agg_error:
+                logger.error(f"Supervisor: Findings aggregation failed - {agg_error}")
+                # Don't fail the entire process, just log the error
         
         return state_update
         

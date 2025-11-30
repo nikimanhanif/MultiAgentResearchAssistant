@@ -235,6 +235,8 @@ TASK GENERATION RULES:
 COMPLETION CRITERIA:
 - All sub-topics have at least 2 findings with credibility \u003e 0.5
 - Budget exhausted (iterations \u003e= max_iterations OR total findings \u003e= max_sub_agents)
+- All sub-topics have at least 2 findings with credibility > 0.5
+- Budget exhausted (iterations >= max_iterations OR total findings >= max_sub_agents)
 - No significant gaps remain
 
 Return your analysis as structured output."""
@@ -249,6 +251,8 @@ Current Findings: {findings_count} findings.
 Covered Topics: {topics_covered}
 Average Credibility: {avg_credibility:.2f}
 
+{findings_context}
+
 Budget Status:
 - Iterations: {iterations}/{max_iterations}
 - Total Sub-agents: {total_sub_agents}/{max_sub_agents}
@@ -257,7 +261,7 @@ Budget Status:
 Already Completed Tasks: {completed_count} tasks
 Failed Tasks (avoid similar): {failed_tasks}
 
-Conduct gap analysis and generate tasks if needed."""
+Conduct gap analysis and generate tasks if needed. Analyze the content of findings above to determine if topics are covered superficially or in-depth."""
     ),
 ])
 

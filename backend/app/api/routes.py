@@ -1,16 +1,13 @@
-"""API routes for the research assistant backend.
+"""API Routes."""
 
-Future implementation:
-- POST /api/v1/chat - Main chat endpoint
-  - Handle multi-turn clarification flow
-  - Route to scope agent, research agent, or report agent based on conversation state
-  - Return clarification questions, research progress, or final report
-  
-- POST /api/v1/config/mcp-servers - Update MCP server configuration
-  - Accept list of enabled MCP servers from frontend
-  - Store in conversation context or user session
-  
-- GET /api/v1/config/mcp-servers - Get available MCP servers
-  - Return list of configured MCP servers and their status
-"""
+from fastapi import APIRouter
+from app.api import conversations, chat
 
+# Create main API router
+api_router = APIRouter(prefix="/api/v1")
+
+# Include sub-routers
+api_router.include_router(conversations.router)
+api_router.include_router(chat.router)
+
+__all__ = ["api_router"]

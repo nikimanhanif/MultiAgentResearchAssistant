@@ -6,6 +6,7 @@ once the scope is sufficient.
 """
 
 from typing import Optional, List, Dict, Any, Union
+import logging
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
@@ -22,6 +23,9 @@ from app.prompts.scope_prompts import (
     SCOPE_BRIEF_GENERATION_TEMPLATE,
 )
 from app.config import get_deepseek_chat
+from app.graphs.state import ResearchState
+
+logger = logging.getLogger(__name__)
 
 
 # Helper Functions
@@ -271,3 +275,89 @@ async def clarify_scope(
     
     # Otherwise, generate more clarifying questions
     return await generate_clarification_questions(user_query, conversation_history)
+
+
+# LangGraph Node Integration
+
+async def scope_node(state: ResearchState) -> Dict[str, Any]:
+    """Scope agent node for LangGraph integration.
+    
+    This node handles the clarification conversation loop within the main graph.
+    It uses state["messages"] for conversation history and generates either:
+    - Clarification questions (if scope incomplete)
+    - ResearchBrief (if scope complete)
+    
+    Args:
+        state: Current research state with messages
+        
+    Returns:
+        State update with new messages or research_brief
+    """
+    logger.info("Scope Node: Processing user input")
+    
+    # Extract messages from state
+    messages = state.get("messages", [])
+    
+    # Get the last user message as the current query
+    user_messages = [msg for msg in messages if msg.get("role") == "user"]
+    if not user_messages:
+        logger.error("No user messages found in state")
+        return {
+            "messages": [{
+                "role": "assistant",
+                "content": "Error: No user query provided."
+            }]
+        }
+    
+    # Get original query (first user message) and conversation history
+    user_query = user_messages[0].get("content", "")
+    
+    # Format conversation history (exclude the initial query from history)
+    conversation_history = [
+        {"role": msg.get("role"), "content": msg.get("content")}
+        for msg in messages[1:]  # Skip first message as it's the user_query
+    ] if len(messages) > 1 else None
+    
+    try:
+        # Check if scope is complete
+        completion_check = await check_scope_completion(user_query, conversation_history)
+        
+        if completion_check.is_complete:
+            # Generate research brief
+            logger.info("Scope Node: Scope complete, generating research brief")
+            brief = await generate_research_brief(user_query, conversation_history)
+            
+            # Return state update with brief and completion message
+            return {
+                "research_brief": brief,
+                "messages": [{
+                    "role": "assistant",
+                    "content": f"Research brief created. Proceeding with research on: {brief.scope}"
+                }]
+            }
+        else:
+            # Generate clarification questions
+            logger.info("Scope Node: Scope incomplete, generating clarification questions")
+            questions = await generate_clarification_questions(user_query, conversation_history)
+            
+            # Format questions as a message
+            questions_text = "\n".join([f"{i+1}. {q}" for i, q in enumerate(questions.clarification_questions)])
+            message_content = f"{questions.context}\n\n{questions_text}"
+            
+            # Return state update with clarification questions
+            return {
+                "messages": [{
+                    "role": "assistant",
+                    "content": message_content
+                }]
+            }
+    
+    except Exception as e:
+        logger.error(f"Scope Node: Error processing - {e}")
+        return {
+            "messages": [{
+                "role": "assistant",
+                "content": f"Error processing your request: {str(e)}"
+            }],
+            "error": str(e)
+        }
