@@ -1,4 +1,4 @@
-"""Unit tests for ReviewAction model"""
+"""Unit tests for ReviewAction model."""
 
 import pytest
 from pydantic import ValidationError

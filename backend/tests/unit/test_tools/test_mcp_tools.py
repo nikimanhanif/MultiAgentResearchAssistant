@@ -1,7 +1,4 @@
-"""Unit tests for MCP tools integration.
-
-Tests for langchain-mcp-adapters integration and tool discovery.
-"""
+"""Unit tests for MCP tools integration."""
 
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock

@@ -1,7 +1,8 @@
-"""MCP server tool configuration.
+"""
+MCP server tool configuration and client management.
 
-This module manages MCP server connections using langchain-mcp-adapters.
-Provides automatic tool discovery from enabled MCP servers.
+Manages MCP server connections using langchain-mcp-adapters and provides
+automatic tool discovery from enabled MCP servers.
 """
 
 import logging
@@ -26,16 +27,17 @@ server_configs: Dict[str, Dict] = {
 
 
 def get_mcp_client(enabled_servers: List[str]) -> MultiServerMCPClient:
-    """Get configured MCP client for enabled servers.
+    """
+    Get configured MCP client for enabled servers.
     
     Args:
-        enabled_servers: List of server names to enable (must exist in server_configs)
+        enabled_servers: List of server names to enable (must exist in server_configs).
         
     Returns:
-        MultiServerMCPClient instance with filtered server configurations
+        MultiServerMCPClient: Client instance with filtered server configurations.
         
     Raises:
-        ValueError: If any enabled server name is not in server_configs
+        ValueError: If any enabled server name is not in server_configs.
     """
     if not enabled_servers:
         logger.warning("No MCP servers enabled, returning client with empty config")
@@ -58,16 +60,17 @@ def get_mcp_client(enabled_servers: List[str]) -> MultiServerMCPClient:
 
 
 async def load_mcp_tools(enabled_servers: List[str]) -> List[BaseTool]:
-    """Load tools from enabled MCP servers with automatic discovery.
+    """
+    Load tools from enabled MCP servers with automatic discovery.
     
     Args:
-        enabled_servers: List of server names to load tools from
+        enabled_servers: List of server names to load tools from.
         
     Returns:
-        List of BaseTool instances from all enabled servers
+        List[BaseTool]: List of BaseTool instances from all enabled servers.
         
     Raises:
-        ValueError: If any enabled server name is invalid
+        ValueError: If any enabled server name is invalid.
     """
     if not enabled_servers:
         logger.info("No MCP servers enabled, returning empty tool list")

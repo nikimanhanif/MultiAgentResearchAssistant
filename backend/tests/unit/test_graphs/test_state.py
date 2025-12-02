@@ -1,8 +1,4 @@
-"""Unit tests for LangGraph state definition.
-
-This module contains tests for the ResearchState TypedDict and state initialization
-functions, verifying proper structure and reducer patterns.
-"""
+"""Unit tests for LangGraph state definition."""
 
 import pytest
 from typing import Dict, Any

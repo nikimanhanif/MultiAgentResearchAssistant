@@ -1,8 +1,4 @@
-"""Unit tests for tool registry and safety wrappers.
-
-Tests for tool combination and execution safety logic.
-
-"""
+"""Unit tests for tool registry and safety wrappers."""
 
 import pytest
 from unittest.mock import patch, AsyncMock, MagicMock
@@ -102,8 +98,6 @@ class TestSafeToolExecute:
         )
         wrapped_tool = _safe_tool_execute(tool)
         
-        # We need to mock the _run method directly because invoke catches exceptions differently
-        # depending on handle_tool_error settings
         result = wrapped_tool._run("input")
         assert "Invalid argument" in result
 

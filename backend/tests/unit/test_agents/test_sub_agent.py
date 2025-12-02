@@ -1,8 +1,4 @@
-"""Unit tests for Sub-Agent node.
-
-Tests research execution, citation extraction, delegation parsing, and budget enforcement.
-Follows backend-testing.md standards: happy path, edge cases, error handling.
-"""
+"""Unit tests for Sub-Agent node."""
 
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
@@ -128,7 +124,6 @@ class TestSubAgentNode:
     @patch("app.agents.sub_agent.get_research_tools")
     async def test_sub_agent_node_no_tools_available_fails(self, mock_get_tools):
         """Test that sub-agent fails gracefully when no tools available."""
-        # Mock context manager returning empty list
         mock_ctx = AsyncMock()
         mock_ctx.__aenter__.return_value = []
         mock_ctx.__aexit__.return_value = None
@@ -188,15 +183,11 @@ class TestSubAgentNode:
         mock_llm = MagicMock()
         mock_get_llm.return_value = mock_llm
         
-        # Mock agent execution
-        # Mock agent execution
         mock_agent = AsyncMock()
         
-        # AI Message triggering tool
         mock_ai_msg = MagicMock(spec=AIMessage)
         mock_ai_msg.tool_calls = [{"name": "tavily_search", "args": {}, "id": "call_1"}]
         
-        # Tool Message with result
         mock_tool_msg = MagicMock(spec=ToolMessage)
         mock_tool_msg.name = "tavily_search"
         mock_tool_msg.content = "Search results"
@@ -210,7 +201,6 @@ class TestSubAgentNode:
         }
         mock_create_agent.return_value = mock_agent
         
-        # Mock citation extraction
         finding = Finding(
             claim="Quantum computing is advancing",
             citation=Citation(source="Nature", url="http://nature.com/1"),
@@ -274,7 +264,6 @@ class TestSubAgentNode:
         mock_llm = MagicMock()
         mock_get_llm.return_value = mock_llm
         
-        # Mock agent with delegation in output AND tool results
         mock_agent = AsyncMock()
         
         mock_ai_msg = MagicMock(spec=AIMessage)
@@ -293,7 +282,6 @@ class TestSubAgentNode:
         }
         mock_create_agent.return_value = mock_agent
         
-        # Mock delegation parsing
         delegated_task = ResearchTask(
             task_id="delegated_subtopic",
             topic="subtopic",
@@ -303,7 +291,6 @@ class TestSubAgentNode:
         )
         mock_parse_delegation.return_value = delegated_task
         
-        # Mock citation extraction
         mock_extract.return_value = []
         
         state: SubAgentState = {
@@ -356,7 +343,6 @@ class TestSubAgentNode:
         mock_llm = MagicMock()
         mock_get_llm.return_value = mock_llm
         
-        # Mock agent failure
         mock_agent = AsyncMock()
         mock_agent.ainvoke.side_effect = Exception("Agent execution failed")
         mock_create_agent.return_value = mock_agent
@@ -391,7 +377,6 @@ class TestSubAgentNode:
         assert "task_006" in result["failed_tasks"]
         assert "error" in result
         assert "Agent execution failed" in result["error"][0]
-        # Budget should still be updated even on failure
         assert result["budget"]["total_searches"] == 5
 
 
@@ -403,7 +388,6 @@ class TestExtractCitations:
     @patch("app.agents.sub_agent.SUB_AGENT_CITATION_EXTRACTION_TEMPLATE")
     async def test_extract_citations_success_returns_findings(self, mock_template, mock_get_llm):
         """Test successful citation extraction."""
-        # Mock LLM chain
         extraction_output = CitationExtractionOutput(
             findings=[
                 Finding(
@@ -440,7 +424,6 @@ class TestExtractCitations:
         mock_llm = MagicMock()
         mock_get_llm.return_value = mock_llm
         
-        # Mock the chain to raise exception
         mock_chain = AsyncMock()
         mock_chain.ainvoke.side_effect = Exception("LLM error")
         mock_template.__or__.return_value = mock_chain

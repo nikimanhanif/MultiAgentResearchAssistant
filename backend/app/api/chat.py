@@ -1,7 +1,8 @@
-"""Chat API - Unified endpoint for research pipeline.
+"""
+Chat API - Unified endpoint for the research pipeline.
 
-This module provides a single streaming endpoint that handles the entire
-research workflow from scope clarification to report review.
+Provides a single streaming endpoint that handles the entire research workflow,
+from scope clarification to report review, using Server-Sent Events (SSE).
 """
 
 import logging
@@ -36,27 +37,24 @@ async def stream_graph_updates(
     initial_state: Dict[str, Any],
     config: Dict[str, Any]
 ) -> AsyncGenerator[str, None]:
-    """Stream graph state updates to client.
+    """
+    Stream graph state updates to the client.
     
     Args:
-        graph: Compiled research graph
-        initial_state: Initial state for graph execution
-        config: Configuration with thread_id for checkpointing
+        graph: Compiled research graph.
+        initial_state: Initial state for graph execution.
+        config: Configuration with thread_id for checkpointing.
         
     Yields:
-        JSON-encoded ChatStreamEvent objects
+        str: JSON-encoded ChatStreamEvent objects as SSE data.
     """
     try:
-        # Stream state updates from graph
         async for state in graph.astream(initial_state, config, stream_mode="updates"):
-            # Each state is a dict with node name as key
             for node_name, node_output in state.items():
-                # Extract relevant data for streaming
                 event_data = {
                     "node": node_name,
                 }
                 
-                # Add messages if present
                 if "messages" in node_output:
                     messages = node_output["messages"]
                     if messages:
@@ -64,26 +62,21 @@ async def stream_graph_updates(
                         event_data["message"] = latest_message.get("content", "")
                         event_data["role"] = latest_message.get("role", "assistant")
                 
-                # Add brief if completed
                 if "research_brief" in node_output and node_output["research_brief"]:
                     event_data["brief_created"] = True
                 
-                # Add report if generated
                 if "report_content" in node_output and node_output["report_content"]:
                     event_data["report"] = node_output["report_content"]
                 
-                # Check for completion
                 if node_output.get("is_complete"):
                     event_data["research_complete"] = True
                 
-                # Stream the update
                 event = ChatStreamEvent(
                     event_type="state_update",
                     data=event_data
                 )
                 yield f"data: {event.model_dump_json()}\n\n"
         
-        # Send completion event
         complete_event = ChatStreamEvent(
             event_type="complete",
             data={"message": "Graph execution complete"}
@@ -101,37 +94,32 @@ async def stream_graph_updates(
 
 @router.post("")
 async def chat(request: ChatRequest):
-    """Unified chat endpoint for research pipeline with streaming.
+    """
+    Unified chat endpoint for the research pipeline with streaming.
     
     Handles the complete workflow:
-    1. Scope clarification (if new thread or no brief)
-    2. Research execution (supervisor loop)
-    3. Report generation
-    4. HITL review
+    1. Scope clarification (if new thread or no brief).
+    2. Research execution (supervisor loop).
+    3. Report generation.
+    4. HITL review.
     
     Returns:
-        StreamingResponse with Server-Sent Events
+        StreamingResponse: Server-Sent Events (SSE) stream.
     """
-    # Generate or use existing thread_id
     thread_id = request.thread_id or f"thread_{uuid.uuid4().hex[:12]}"
     
-    logger.info(f"Chat request: thread_id={thread_id}, message_preview={request.message[:50]}")
-    
-    # Build graph
     try:
         graph = build_research_graph()
     except Exception as e:
         logger.error(f"Failed to build graph: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to initialize research pipeline: {str(e)}")
     
-    # Create config for checkpointing
     config = {
         "configurable": {
             "thread_id": thread_id
         }
     }
     
-    # Prepare initial state with user message
     initial_state = {
         "messages": [{
             "role": "user",
@@ -139,7 +127,6 @@ async def chat(request: ChatRequest):
         }]
     }
     
-    # Stream updates
     return StreamingResponse(
         stream_graph_updates(graph, initial_state, config),
         media_type="text/event-stream",
@@ -153,44 +140,37 @@ async def chat(request: ChatRequest):
 
 @router.post("/{thread_id}/resume")
 async def resume_review(thread_id: str, action: ReviewAction):
-    """Resume a paused run with HITL reviewer feedback.
+    """
+    Resume a paused run with HITL reviewer feedback.
     
-    This endpoint handles reviewer actions (approve/refine/re-research)
-    and resumes the graph execution.
+    Handles reviewer actions (approve/refine/re-research) and resumes
+    the graph execution from the interrupted state.
     
     Args:
-        thread_id: Thread ID of the conversation
-        action: Review action (approve, refine, re_research) with optional feedback
+        thread_id: Thread ID of the conversation.
+        action: Review action with optional feedback.
         
     Returns:
-        StreamingResponse with continued execution
+        StreamingResponse: Continued execution stream.
     """
-    logger.info(f"Resume review: thread_id={thread_id}, action={action.action}")
-    
-    # Build graph
     try:
         graph = build_research_graph()
     except Exception as e:
         logger.error(f"Failed to build graph: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to initialize research pipeline: {str(e)}")
     
-    # Create config
     config = {
         "configurable": {
             "thread_id": thread_id
         }
     }
     
-    # Resume with action
-    # The graph should be paused at the reviewer node
-    # We pass the action as the resume value
     resume_state = {
         "action": action.action,
         "feedback": action.feedback
     }
     
     try:
-        # Stream updates from resumed execution
         return StreamingResponse(
             stream_graph_updates(graph, resume_state, config),
             media_type="text/event-stream",

@@ -1,21 +1,13 @@
-"""Prompt templates for Research Agent.
+"""
+Prompt templates for Research Agent.
 
-This module will contain all prompt templates used by the Research Agent,
-including supervisor coordination, sub-agent task delegation, and findings
-aggregation.
-
-All prompts use LangChain's ChatPromptTemplate for consistent message formatting
-and follow best practices from the LangChain documentation.
-
-Note: Full implementation pending Phase 8. This file provides the structure
-and placeholder prompts for future implementation.
+Contains prompt templates for Supervisor coordination, sub-agent task delegation,
+and findings aggregation using LangChain's ChatPromptTemplate.
 """
 
 from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
 
 
-# Credibility Scoring Heuristics (Phase 7.5)
-# Used by Research Agent to evaluate source quality
 CREDIBILITY_HEURISTICS = """
 CREDIBILITY SCORING HEURISTICS:
 
@@ -42,8 +34,6 @@ MAX SCORE: 1.0
 MIN SCORE: 0.0
 """
 
-# Strategy Selection Prompt (Phase 8.1)
-# Required inputs: research_brief (str), sub_topic_count (int)
 RESEARCH_STRATEGY_SELECTION_TEMPLATE = ChatPromptTemplate.from_messages([
     SystemMessagePromptTemplate.from_template(
         """You are a research strategy planner. Your job is to analyze a research brief and determine the optimal research execution strategy.
@@ -80,8 +70,6 @@ Determine the optimal research strategy."""
 ])
 
 
-# Task Decomposition Prompt (Phase 8.2)
-# Required inputs: research_brief (str), strategy (str)
 RESEARCH_TASK_DECOMPOSITION_TEMPLATE = ChatPromptTemplate.from_messages([
     SystemMessagePromptTemplate.from_template(
         """You are a research task decomposition specialist. Your job is to break down a research brief into distinct, non-overlapping sub-agent tasks.
@@ -122,8 +110,6 @@ Decompose into distinct sub-agent tasks."""
 ])
 
 
-# Error Re-Delegation Prompt (Phase 8.2)
-# Required inputs: original_task (str), error_type (str), error_message (str), attempted_tools (str)
 RESEARCH_ERROR_RE_DELEGATION_TEMPLATE = ChatPromptTemplate.from_messages([
     SystemMessagePromptTemplate.from_template(
         """You are a research error recovery specialist. A sub-agent task failed and needs to be refined for retry.
@@ -165,8 +151,6 @@ Generate a refined task to avoid this error."""
 ])
 
 
-# Findings Compression Prompt (Phase 8.4)
-# Required inputs: raw_results (str), task_description (str)
 RESEARCH_FINDINGS_COMPRESSION_TEMPLATE = ChatPromptTemplate.from_messages([
     SystemMessagePromptTemplate.from_template(
         """You are a research findings compressor. Your job is to extract structured facts from raw search results while preserving key information.
@@ -208,9 +192,6 @@ Extract and compress key findings."""
 ])
 
 
-# Supervisor Gap Analysis Prompt
-# Required inputs: research_brief (ResearchBrief), current_findings (List[Finding]), 
-#                  budget (Dict), completed_tasks (List[str]), failed_tasks (List[str])
 SUPERVISOR_GAP_ANALYSIS_TEMPLATE = ChatPromptTemplate.from_messages([
     SystemMessagePromptTemplate.from_template(
         """You are a research supervisor conducting gap analysis. Your role is to:
@@ -235,8 +216,6 @@ TASK GENERATION RULES:
 COMPLETION CRITERIA:
 - All sub-topics have at least 2 findings with credibility \u003e 0.5
 - Budget exhausted (iterations \u003e= max_iterations OR total findings \u003e= max_sub_agents)
-- All sub-topics have at least 2 findings with credibility > 0.5
-- Budget exhausted (iterations >= max_iterations OR total findings >= max_sub_agents)
 - No significant gaps remain
 
 Return your analysis as structured output."""
@@ -268,8 +247,6 @@ Conduct gap analysis and generate tasks if needed. Analyze the content of findin
 ])
 
 
-# Supervisor Findings Aggregation Prompt
-# Required inputs: findings (List[Finding]), research_brief (ResearchBrief)
 SUPERVISOR_FINDINGS_AGGREGATION_TEMPLATE = ChatPromptTemplate.from_messages([
     SystemMessagePromptTemplate.from_template(
         """You are a research findings aggregator. Your role is to filter and rank findings for report generation.
@@ -296,8 +273,6 @@ Filter and rank these findings for the report."""
 ])
 
 
-# Sub-Agent Research Execution Prompt
-# Required inputs: task (ResearchTask), available_tools (str), budget_remaining (int)
 SUB_AGENT_RESEARCH_TEMPLATE = ChatPromptTemplate.from_messages([
     SystemMessagePromptTemplate.from_template(
         """You are a focused research sub-agent. Your mission is to thoroughly research your assigned topic using available tools.
@@ -350,8 +325,6 @@ Begin your research. Use tools wisely and return findings with citations."""
 ])
 
 
-# Sub-Agent Citation Extraction Prompt
-# Required inputs: raw_results (str), task_topic (str), source_tool (str)
 SUB_AGENT_CITATION_EXTRACTION_TEMPLATE = ChatPromptTemplate.from_messages([
     SystemMessagePromptTemplate.from_template(
         """You are a citation extraction specialist. Extract structured findings from research results.

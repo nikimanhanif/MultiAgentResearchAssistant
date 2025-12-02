@@ -1,8 +1,4 @@
-"""Unit tests for app.prompts module initialization and exports.
-
-Tests ensure that the prompts module correctly exports all required templates
-and that imports work as expected.
-"""
+"""Unit tests for app.prompts module initialization and exports."""
 
 import pytest
 

@@ -271,7 +271,6 @@ class TestReportAgentNode:
     @pytest.mark.asyncio
     async def test_report_agent_node_generates_report_successfully(self):
         """Test that report_agent_node generates report and updates state."""
-        # Arrange
         brief = ResearchBrief(scope="Test", sub_topics=[], constraints={}, deliverables="")
         state = ResearchState(
             research_brief=brief,
@@ -282,10 +281,8 @@ class TestReportAgentNode:
         with patch("app.agents.report_agent.generate_report") as mock_generate:
             mock_generate.return_value = "# Final Report"
             
-            # Act
             result = await report_agent_node(state)
             
-            # Assert
             assert "report_content" in result
             assert result["report_content"] == "# Final Report"
             assert result["reviewer_feedback"] is None
@@ -294,13 +291,10 @@ class TestReportAgentNode:
     @pytest.mark.asyncio
     async def test_report_agent_node_handles_missing_brief(self):
         """Test that report_agent_node handles missing research brief."""
-        # Arrange
         state = ResearchState(findings=[])
         
-        # Act
         result = await report_agent_node(state)
         
-        # Assert
         assert "error" in result
         assert "Missing research brief" in result["error"]
         assert "report_content" in result
@@ -309,7 +303,6 @@ class TestReportAgentNode:
     @pytest.mark.asyncio
     async def test_report_agent_node_passes_reviewer_feedback(self):
         """Test that report_agent_node passes reviewer feedback to generator."""
-        # Arrange
         brief = ResearchBrief(scope="Test", sub_topics=[], constraints={}, deliverables="")
         state = ResearchState(
             research_brief=brief,
@@ -320,27 +313,22 @@ class TestReportAgentNode:
         with patch("app.agents.report_agent.generate_report") as mock_generate:
             mock_generate.return_value = "# Updated Report"
             
-            # Act
             result = await report_agent_node(state)
             
-            # Assert
             assert result["report_content"] == "# Updated Report"
             mock_generate.assert_called_once_with(brief, [], "Make it shorter")
 
     @pytest.mark.asyncio
     async def test_report_agent_node_handles_generation_exception(self):
         """Test that report_agent_node handles exceptions during generation."""
-        # Arrange
         brief = ResearchBrief(scope="Test", sub_topics=[], constraints={}, deliverables="")
         state = ResearchState(research_brief=brief)
         
         with patch("app.agents.report_agent.generate_report") as mock_generate:
             mock_generate.side_effect = Exception("Generation failed")
             
-            # Act
             result = await report_agent_node(state)
             
-            # Assert
             assert "error" in result
             assert "Generation failed" in result["error"]
             assert "report_content" in result

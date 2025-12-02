@@ -1,11 +1,9 @@
-"""Report Agent - One-shot markdown report generation.
+"""
+Report Agent - Generates the final research report.
 
-This agent takes the research brief and list of findings to generate
-a final markdown-formatted report for the user.
-
-- Input: ResearchBrief + List[Finding] (each with embedded Citation)
-- Output: Markdown report with citations
-
+This agent takes the research brief and aggregated findings to produce a
+comprehensive markdown report. It uses a one-shot generation approach with
+the DeepSeek Reasoner model.
 """
 
 from typing import List, Any, Dict
@@ -31,10 +29,11 @@ logger = logging.getLogger(__name__)
 
 
 def _build_report_generation_chain() -> Runnable:
-    """Build chain for report generation.
+    """
+    Build the LangChain runnable for report generation.
     
     Returns:
-        Runnable chain: prompt | LLM
+        Runnable: Chain of prompt | LLM.
     """
     prompt = get_report_generation_prompt()
     llm = get_deepseek_reasoner(temperature=0.5)
@@ -48,25 +47,21 @@ async def generate_report(
     findings: List[Finding],
     reviewer_feedback: str = None
 ) -> str:
-    """Generate markdown report from research brief and findings.
-    
-    This is a one-shot generation function that creates a comprehensive
-    markdown report based on the research brief specifications and the
-    list of findings.
+    """
+    Generate a markdown report from the research brief and findings.
     
     Args:
-        brief: Research brief containing scope, sub-topics, constraints, and format
-        findings: List of Finding objects with embedded citations
-        reviewer_feedback: Optional feedback from previous review cycle
+        brief: The research brief defining scope and format.
+        findings: List of findings with citations.
+        reviewer_feedback: Optional feedback for refinement.
         
     Returns:
-        Markdown-formatted report string
+        str: The generated markdown report.
         
     Raises:
-        ValueError: If brief or findings are invalid
-        Exception: If LLM generation fails
+        ValueError: If inputs are invalid.
+        Exception: If generation fails.
     """
-    # Validate inputs
     if not brief:
         raise ValueError("Research brief cannot be None")
     if not brief.scope:
@@ -74,30 +69,24 @@ async def generate_report(
     if findings is None:
         raise ValueError("Findings list cannot be None (use empty list if no findings)")
     
-    # Handle empty findings gracefully
     if not findings:
         return _generate_no_findings_report(brief)
     
-    # Format brief components for prompt
     brief_subtopics = "\n".join([f"- {topic}" for topic in brief.sub_topics])
     brief_constraints = "\n".join(
         [f"- {key}: {value}" for key, value in brief.constraints.items()]
     ) if brief.constraints else "No specific constraints"
     
-    # Get format-specific instructions
     format_type = brief.format or ReportFormat.OTHER
     format_instructions = _get_format_instructions(format_type)
     
-    # Format findings for prompt context
     findings_context = format_findings_for_prompt(findings)
     
-    # Initialize LLM (DeepSeek Reasoner for long-form generation)
     try:
         chain = _build_report_generation_chain()
     except ValueError as e:
         raise Exception(f"Failed to initialize LLM: {e}")
     
-    # Generate report
     try:
         response = await chain.ainvoke({
             "brief_scope": brief.scope,
@@ -109,7 +98,6 @@ async def generate_report(
             "reviewer_feedback": reviewer_feedback or "None",
         })
         
-        # Extract content from response
         if hasattr(response, 'content'):
             return response.content
         return str(response)
@@ -119,13 +107,14 @@ async def generate_report(
 
 
 def _get_format_instructions(format_type: ReportFormat) -> str:
-    """Get format-specific instructions for report generation.
+    """
+    Get specific instructions based on the requested report format.
     
     Args:
-        format_type: Report format enum value
+        format_type: The desired format (e.g., SUMMARY, COMPARISON).
         
     Returns:
-        Format-specific instruction string
+        str: Format instructions for the prompt.
     """
     format_map = {
         ReportFormat.SUMMARY: get_summary_format_instructions,
@@ -142,13 +131,14 @@ def _get_format_instructions(format_type: ReportFormat) -> str:
 
 
 def _generate_no_findings_report(brief: ResearchBrief) -> str:
-    """Generate minimal report when no findings are available.
+    """
+    Generate a fallback report when no findings are available.
     
     Args:
-        brief: Research brief
+        brief: The research brief.
         
     Returns:
-        Minimal markdown report indicating no findings
+        str: A minimal report stating no findings were found.
     """
     return f"""# Research Report: {brief.scope}
 
@@ -171,53 +161,35 @@ Unable to complete research due to lack of findings. Please expand the research 
 """
 
 
-# LangGraph Node Integration
-
 async def report_agent_node(state: ResearchState) -> Dict[str, Any]:
-    """Report agent node for LangGraph integration.
+    """
+    LangGraph node for the Report Agent.
     
-    This node wraps the generate_report function to fit into the LangGraph workflow.
-    It extracts the research brief and findings from state, generates the report,
-    and returns a state update with the report content.
-    
-    Handles reviewer feedback for refinement if present in state.
+    Wraps report generation logic, handling state extraction and updates.
+    Incorporates reviewer feedback if present.
     
     Args:
-        state: Current research state with research_brief and findings
+        state: Current research state.
         
     Returns:
-        State update with report_content
+        Dict[str, Any]: State update containing the generated report.
     """
-    logger.info("Report Agent Node: Generating report")
-    
-    # Extract required fields from state
     brief = state.get("research_brief")
     findings = state.get("findings", [])
     reviewer_feedback = state.get("reviewer_feedback")
     
-    # Validate inputs
     if not brief:
-        logger.error("Report Agent: No research brief found in state")
         return {
             "report_content": "Error: No research brief available for report generation.",
             "error": "Missing research brief"
         }
     
     try:
-        # Generate report using existing function
-        logger.info(f"Report Agent: Generating report with {len(findings)} findings")
-        
-        if reviewer_feedback:
-            logger.info(f"Report Agent: Incorporating reviewer feedback: {reviewer_feedback[:100]}...")
-        
         report_content = await generate_report(brief, findings, reviewer_feedback)
         
-        logger.info("Report Agent: Report generated successfully")
-        
-        # Return state update
         return {
             "report_content": report_content,
-            "reviewer_feedback": None  # Clear feedback after processing
+            "reviewer_feedback": None
         }
     
     except Exception as e:

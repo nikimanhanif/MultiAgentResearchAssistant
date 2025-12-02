@@ -1,12 +1,8 @@
-"""Human-in-the-loop reviewer node for report review
+"""
+Human-in-the-loop reviewer node for report review.
 
 This module implements the reviewer node using LangGraph's interrupt mechanism
 to pause execution and allow user feedback on generated reports.
-
-The reviewer supports three actions:
-- approve: Accept the report and end workflow
-- refine: Loop back to report agent with refinement feedback
-- re_research: Loop back to supervisor for new research tasks
 """
 
 from typing import Literal
@@ -18,25 +14,20 @@ from app.models.schemas import ResearchTask
 
 
 def reviewer_node(state: ResearchState) -> Command[Literal["__end__", "report_agent", "supervisor"]]:
-    """Node that pauses execution to let the user review the report.
+    """
+    Node that pauses execution to let the user review the report.
     
     Uses LangGraph's interrupt mechanism to pause the graph and wait for
-    user input. The user can approve, request refinement, or request
-    additional research.
+    user input. The user can:
+    - Approve: End workflow.
+    - Refine: Loop back to report agent with feedback.
+    - Re-research: Loop back to supervisor for new tasks.
     
     Args:
-        state: Current research state containing the generated report
+        state: Current research state containing the generated report.
         
     Returns:
-        Command object with routing decision and state updates
-        
-    Workflow:
-        1. Interrupt execution and send report to user for review
-        2. Wait for user input (action: approve/refine/re_research + optional feedback)
-        3. Route based on action:
-           - approve: END (complete workflow)
-           - refine: report_agent (regenerate with feedback)
-           - re_research: supervisor (create new research tasks)
+        Command: Routing decision and state updates.
     """
     user_input = interrupt(value={
         "type": "review_request",
@@ -70,13 +61,14 @@ def reviewer_node(state: ResearchState) -> Command[Literal["__end__", "report_ag
 
 
 def create_new_task(feedback: str) -> ResearchTask:
-    """Create a new research task from user feedback.
+    """
+    Create a new research task from user feedback.
     
     Args:
-        feedback: User feedback describing what additional research is needed
+        feedback: User feedback describing what additional research is needed.
         
     Returns:
-        ResearchTask object for the supervisor to process
+        ResearchTask: New task for the supervisor to process.
     """
     import uuid
     

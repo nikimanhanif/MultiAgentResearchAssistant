@@ -1,4 +1,9 @@
-"""LangGraph Store for long-term conversation persistence."""
+"""
+LangGraph Store for long-term conversation persistence.
+
+Provides initialization, shutdown, and CRUD operations for the AsyncSqliteStore,
+used to persist completed conversations and research results.
+"""
 
 from pathlib import Path
 from datetime import datetime
@@ -12,12 +17,13 @@ _store: AsyncSqliteStore | None = None
 
 
 async def initialize_store() -> AsyncSqliteStore:
-    """Initialize the Store for long-term memory.
-
+    """
+    Initialize the Store for long-term memory.
+    
     Uses AsyncSqliteStore for persistent storage.
-
+    
     Returns:
-        Configured store instance
+        AsyncSqliteStore: Configured store instance.
     """
     global _store
 
@@ -40,15 +46,16 @@ async def shutdown_store() -> None:
 
 
 def get_store() -> AsyncSqliteStore:
-    """Get the initialized store instance.
-
+    """
+    Get the initialized store instance.
+    
     Used when compiling the research graph and in API endpoints.
-
-    Raises:
-        RuntimeError: If store not initialized
-
+    
     Returns:
-        The global store instance
+        AsyncSqliteStore: The global store instance.
+        
+    Raises:
+        RuntimeError: If store is not initialized.
     """
     if _store is None:
         raise RuntimeError(
@@ -65,15 +72,16 @@ async def save_conversation(
     findings: List[Finding],
     report_content: str
 ) -> None:
-    """Save completed conversation to Store.
-
+    """
+    Save completed conversation to Store.
+    
     Args:
-        user_id: User identifier
-        conversation_id: Unique conversation UUID
-        user_query: Original user query
-        research_brief: Generated research brief
-        findings: List of research findings
-        report_content: Final markdown report
+        user_id: User identifier.
+        conversation_id: Unique conversation UUID.
+        user_query: Original user query.
+        research_brief: Generated research brief.
+        findings: List of research findings.
+        report_content: Final markdown report.
     """
     store = get_store()
     namespace = (user_id, "conversations")
@@ -98,14 +106,15 @@ async def get_conversation(
     user_id: str,
     conversation_id: str
 ) -> Optional[Dict[str, Any]]:
-    """Retrieve a specific conversation from Store.
-
+    """
+    Retrieve a specific conversation from Store.
+    
     Args:
-        user_id: User identifier
-        conversation_id: Conversation UUID
-
+        user_id: User identifier.
+        conversation_id: Conversation UUID.
+        
     Returns:
-        Conversation data dict or None if not found
+        Optional[Dict[str, Any]]: Conversation data dict or None if not found.
     """
     store = get_store()
     namespace = (user_id, "conversations")
@@ -118,14 +127,15 @@ async def list_conversations(
     user_id: str,
     limit: int = 50
 ) -> List[Dict[str, Any]]:
-    """List all conversations for a user.
-
+    """
+    List all conversations for a user.
+    
     Args:
-        user_id: User identifier
-        limit: Maximum number of conversations to return
-
+        user_id: User identifier.
+        limit: Maximum number of conversations to return.
+        
     Returns:
-        List of conversation metadata dicts
+        List[Dict[str, Any]]: List of conversation metadata dicts.
     """
     store = get_store()
     namespace = (user_id, "conversations")

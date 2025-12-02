@@ -23,17 +23,14 @@ class TestCheckpointer:
         """Test successful initialization of checkpointer."""
         with patch("aiosqlite.connect", new_callable=AsyncMock) as mock_connect:
             with patch("app.persistence.checkpointer.AsyncSqliteSaver") as mock_saver_cls:
-                # Arrange
                 mock_conn = AsyncMock()
                 mock_connect.return_value = mock_conn
                 
                 mock_saver = AsyncMock()
                 mock_saver_cls.return_value = mock_saver
                 
-                # Act
                 result = await initialize_checkpointer()
                 
-                # Assert
                 assert result == mock_saver
                 mock_connect.assert_called_once()
                 mock_saver_cls.assert_called_once_with(mock_conn)
@@ -42,7 +39,6 @@ class TestCheckpointer:
     @pytest.mark.asyncio
     async def test_shutdown_checkpointer_closes_connection(self):
         """Test that shutdown closes the database connection."""
-        # Arrange - Initialize first
         mock_conn = AsyncMock()
         mock_saver = AsyncMock()
         mock_saver.conn = mock_conn
@@ -52,10 +48,8 @@ class TestCheckpointer:
             with patch("app.persistence.checkpointer.AsyncSqliteSaver", return_value=mock_saver):
                 await initialize_checkpointer()
                 
-                # Act
                 await shutdown_checkpointer()
                 
-                # Assert
                 mock_conn.close.assert_awaited_once()
                 
                 # Verify it's cleared
@@ -65,13 +59,11 @@ class TestCheckpointer:
     @pytest.mark.asyncio
     async def test_shutdown_checkpointer_handles_none(self):
         """Test that shutdown handles uninitialized checkpointer gracefully."""
-        # Act & Assert (should not raise)
         await shutdown_checkpointer()
 
     @pytest.mark.asyncio
     async def test_get_checkpointer_returns_singleton(self):
         """Test that get_checkpointer returns the initialized instance."""
-        # Arrange
         with patch("aiosqlite.connect", new_callable=AsyncMock):
             with patch("app.persistence.checkpointer.AsyncSqliteSaver") as mock_saver_cls:
                 mock_saver = AsyncMock()
@@ -79,11 +71,9 @@ class TestCheckpointer:
                 
                 await initialize_checkpointer()
                 
-                # Act
                 result1 = get_checkpointer()
                 result2 = get_checkpointer()
                 
-                # Assert
                 assert result1 == mock_saver
                 assert result1 is result2
 

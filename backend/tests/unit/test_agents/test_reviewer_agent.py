@@ -1,10 +1,4 @@
-"""Unit tests for reviewer_agent.py (Phase 6.2).
-
-Tests cover:
-- reviewer_node interrupt behavior
-- create_new_task helper function
-- All three routing paths (approve, refine, re_research)
-"""
+"""Unit tests for Reviewer Agent."""
 
 import pytest
 from unittest.mock import Mock, patch

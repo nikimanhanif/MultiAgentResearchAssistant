@@ -1,7 +1,4 @@
-"""Unit tests for Tavily tools integration.
-
-Tests for langchain-tavily integration and credibility scoring.
-"""
+"""Unit tests for Tavily tools integration."""
 
 import pytest
 from unittest.mock import patch, MagicMock

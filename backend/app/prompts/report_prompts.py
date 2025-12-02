@@ -1,28 +1,25 @@
-"""Prompt templates for Report Agent.
+"""
+Prompt templates for Report Agent.
 
-This module contains all prompt templates used by the Report Agent for
-generating various types of research reports (summary, comparison, ranking,
-literature review, gap analysis, etc.).
-
-All prompts use LangChain's ChatPromptTemplate for consistent message formatting
-and follow best practices from the LangChain documentation.
-
-Phase 4.1: Core report generation with List[Finding] input support
+Contains prompt templates for generating various types of research reports
+(summary, comparison, ranking, literature review, gap analysis, etc.)
+using LangChain's ChatPromptTemplate.
 """
 
 from typing import List
 from langchain_core.prompts import ChatPromptTemplate
-from app.models.schemas import Finding, ResearchBrief, ReportFormat
+from app.models.schemas import Finding
 
 
 def format_findings_for_prompt(findings: List[Finding]) -> str:
-    """Format findings list into numbered context for prompt.
+    """
+    Format findings list into numbered context for prompt.
     
     Args:
-        findings: List of Finding objects with embedded citations
+        findings: List of Finding objects with embedded citations.
         
     Returns:
-        Formatted string with numbered findings and citation details
+        str: Formatted string with numbered findings and citation details.
     """
     if not findings:
         return "No findings available."
@@ -31,17 +28,14 @@ def format_findings_for_prompt(findings: List[Finding]) -> str:
     for idx, finding in enumerate(findings):
         citation = finding.citation
         
-        # Format authors
         authors_str = "Unknown Author"
         if citation.authors:
             authors_str = ", ".join(citation.authors)
         
-        # Format credibility warning
         credibility_warning = ""
         if finding.credibility_score < 0.5:
             credibility_warning = f" ⚠️ LOW CREDIBILITY ({finding.credibility_score:.2f})"
         
-        # Build finding entry
         finding_entry = f"""[{idx}] {finding.claim}
    Topic: {finding.topic}
    Source: {citation.title or citation.source}
@@ -61,21 +55,11 @@ def format_findings_for_prompt(findings: List[Finding]) -> str:
 
 
 def get_report_generation_prompt() -> ChatPromptTemplate:
-    """Create report generation prompt template for Phase 4.1.
-    
-    This prompt takes structured Finding objects and generates a markdown report
-    following the research brief specifications.
-    
-    Input variables:
-    - brief_scope: Main research scope/question (str)
-    - brief_subtopics: List of sub-topics as string (str)
-    - brief_constraints: Constraints as string (str)
-    - brief_format: Report format type (str)
-    - findings_context: Formatted findings with citations (str)
-    - format_instructions: Format-specific instructions (str)
+    """
+    Create report generation prompt template.
     
     Returns:
-        ChatPromptTemplate configured for report generation
+        ChatPromptTemplate: Configured for report generation.
     """
     return ChatPromptTemplate.from_messages([
         ("system", """You are an expert research report writer specializing in academic and professional reports.
@@ -181,12 +165,12 @@ Please generate a complete markdown report following the above requirements. If 
     ])
 
 
-# Summary Report Format Instructions (Phase 4.2)
 def get_summary_format_instructions() -> str:
-    """Get instructions for summary report format.
+    """
+    Get instructions for summary report format.
     
     Returns:
-        Formatted instruction string for summary reports
+        str: Formatted instruction string for summary reports.
     """
     return """
 Summary Report Format:
@@ -218,12 +202,12 @@ Structure:
 """
 
 
-# Comparison Report Format Instructions (Phase 4.2)
 def get_comparison_format_instructions() -> str:
-    """Get instructions for comparison report format.
+    """
+    Get instructions for comparison report format.
     
     Returns:
-        Formatted instruction string for comparison reports
+        str: Formatted instruction string for comparison reports.
     """
     return """
 Comparison Report Format:
@@ -259,12 +243,12 @@ Structure:
 """
 
 
-# Literature Review Format Instructions (Phase 4.2)
 def get_literature_review_instructions() -> str:
-    """Get instructions for literature review format.
+    """
+    Get instructions for literature review format.
     
     Returns:
-        Formatted instruction string for literature review reports
+        str: Formatted instruction string for literature review reports.
     """
     return """
 Literature Review Format:
@@ -300,12 +284,12 @@ Structure:
 """
 
 
-# Gap Analysis Format Instructions (Phase 4.2)
 def get_gap_analysis_instructions() -> str:
-    """Get instructions for gap analysis format.
+    """
+    Get instructions for gap analysis format.
     
     Returns:
-        Formatted instruction string for gap analysis reports
+        str: Formatted instruction string for gap analysis reports.
     """
     return """
 Gap Analysis Format:
@@ -346,12 +330,12 @@ Structure:
 """
 
 
-# Fact Validation Format Instructions (Phase 4.2)
 def get_fact_validation_instructions() -> str:
-    """Get instructions for fact validation format.
+    """
+    Get instructions for fact validation format.
     
     Returns:
-        Formatted instruction string for fact validation reports
+        str: Formatted instruction string for fact validation reports.
     """
     return """
 Fact Validation Format:
@@ -385,12 +369,12 @@ Structure:
 """
 
 
-# Ranking Report Format Instructions (Phase 4.2)
 def get_ranking_format_instructions() -> str:
-    """Get instructions for ranking report format.
+    """
+    Get instructions for ranking report format.
     
     Returns:
-        Formatted instruction string for ranking reports
+        str: Formatted instruction string for ranking reports.
     """
     return """
 Ranking Report Format:
@@ -425,10 +409,4 @@ Structure:
 ## References
 [Complete bibliography]
 """
-
-
-# NOTE: Additional prompts for Phase 4 will be added during implementation:
-# - Format-specific prompt variants
-# - Citation formatting prompts
-# - Structure validation prompts
 

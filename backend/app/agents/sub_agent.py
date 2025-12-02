@@ -1,15 +1,11 @@
-"""Sub-Agent - Research execution with delegation capability.
+"""
+Sub-Agent - Executes specific research tasks.
 
-These agents execute specific research tasks assigned by the supervisor:
-- Use tools (Tavily, MCP servers) to gather information
-- Extract key facts and create Finding objects with embedded citations
-- Score citations using LLM with heuristics
-- Can request further research via delegation tool
-
-Architecture: Supervisor Loop
-- Input: ResearchTask (via LangGraph Send API)
-- Output: List[Finding] with embedded citations
-- Delegation: Sub-agent can add new tasks to task_history
+These agents are responsible for:
+- Executing research tasks assigned by the supervisor.
+- Using tools (Tavily, MCP) to gather information.
+- Extracting and scoring findings with citations.
+- Requesting further research via delegation.
 """
 
 import logging
@@ -40,15 +36,16 @@ class CitationExtractionOutput(BaseModel):
 
 
 def _parse_delegation_request(agent_output: str) -> Optional[ResearchTask]:
-    """Parse delegation request from agent output.
+    """
+    Parse a delegation request from the agent's output.
     
     Format: DELEGATION_REQUEST: topic='[subtopic]', reason='[why needed]'
     
     Args:
-        agent_output: Raw output from agent
+        agent_output: Raw text output from the agent.
         
     Returns:
-        ResearchTask if delegation found, None otherwise
+        ResearchTask: A new task if delegation is requested, else None.
     """
     pattern = r"DELEGATION_REQUEST:\s*topic='([^']+)',\s*reason='([^']+)'"
     match = re.search(pattern, agent_output)
@@ -71,41 +68,31 @@ def _parse_delegation_request(agent_output: str) -> Optional[ResearchTask]:
 
 
 async def sub_agent_node(state: SubAgentState) -> Dict[str, Any]:
-    """Sub-agent node for research task execution.
+    """
+    LangGraph node for the Sub-Agent.
     
-    Responsibilities:
-    1. Execute research task using tools (Tavily + MCP)
-    2. Extract findings with citations from results
-    3. Score citations using LLM with credibility heuristics
-    4. Handle delegation requests
-    5. Track search budget
+    Executes a research task using available tools, extracts findings,
+    scores citations, and handles delegation requests.
     
     Args:
-        state: SubAgentState with task and shared context
+        state: Current sub-agent state.
         
     Returns:
-        State update with findings, updated budget, and optionally new tasks
+        Dict[str, Any]: State update with findings, budget usage, and new tasks.
     """
     task = state["task"]
     budget = state["budget"]
     
-    logger.info(f"Sub-agent: Executing task {task.task_id} - {task.topic}")
-    
-    # Check if task already completed or failed
     if task.task_id in state.get("completed_tasks", []):
-        logger.warning(f"Task {task.task_id} already completed, skipping")
         return {}
     
     if task.task_id in state.get("failed_tasks", []):
-        logger.warning(f"Task {task.task_id} already failed, skipping")
         return {}
     
-    # Budget check: enforce max_searches_per_agent
     max_searches = budget.get("max_searches_per_agent", 2)
     total_searches = budget.get("total_searches", 0)
-    budget_remaining = max_searches  # Each sub-agent gets fresh budget
+    budget_remaining = max_searches
     
-    # Load tools within context manager to keep MCP connection alive
     brief = state["research_brief"]
     enabled_mcp_servers = (
         brief.metadata.get("enabled_mcp_servers", ["scientific-papers"])
@@ -120,10 +107,7 @@ async def sub_agent_node(state: SubAgentState) -> Dict[str, Any]:
                 "error": [f"Task {task.task_id} failed: No tools available"]
             }
         
-        # Create ReAct agent for tool execution
         llm = get_deepseek_chat(temperature=0.7)
-        
-        # Render prompt from template
         available_tools_str = ", ".join([tool.name for tool in tools])
         
         prompt_inputs = {
@@ -136,35 +120,27 @@ async def sub_agent_node(state: SubAgentState) -> Dict[str, Any]:
             "available_tools": available_tools_str
         }
         
-        # Render template to string for state_modifier
         rendered_messages = SUB_AGENT_RESEARCH_TEMPLATE.format_messages(**prompt_inputs)
         system_message = rendered_messages[0].content + "\n\n" + rendered_messages[1].content
         
         try:
-            # Create agent with tools
             agent = create_react_agent(
                 llm,
                 tools=tools,
                 prompt=system_message
             )
             
-            # Execute agent
             result = await agent.ainvoke({
                 "messages": [{"role": "user", "content": f"Research topic: {task.query}"}]
             })
             
-            # Extract final message
             agent_output = result["messages"][-1].content if result.get("messages") else ""
-            
-            # Check for delegation requests
             delegation_task = _parse_delegation_request(agent_output)
             
-            # Extract tool results for citation extraction
             tool_results = []
             for msg in result.get("messages", []):
                 if isinstance(msg, ToolMessage):
                     tool_name = msg.name or "unknown"
-                    # Fallback if name is missing (though ToolNode usually sets it)
                     if tool_name == "unknown":
                         tool_call_id = msg.tool_call_id
                         for prev_msg in result.get("messages", []):
@@ -179,12 +155,9 @@ async def sub_agent_node(state: SubAgentState) -> Dict[str, Any]:
                         "result": msg.content
                     })
             
-            # Count searches performed (approximate)
             searches_used = len([r for r in tool_results if "search" in r["tool"].lower()])
             
-            # Combine tool results for citation extraction
             if not tool_results:
-                logger.warning(f"Task {task.task_id}: No tool results found")
                 return {
                     "failed_tasks": [task.task_id],
                     "budget": {**budget, "total_searches": total_searches + searches_used}
@@ -195,26 +168,20 @@ async def sub_agent_node(state: SubAgentState) -> Dict[str, Any]:
                 for r in tool_results
             ])
             
-            # Extract citations using LLM
             findings = await _extract_citations(
                 raw_results=combined_results,
                 topic=task.topic,
                 source_tools=[r["tool"] for r in tool_results]
             )
             
-            logger.info(f"Sub-agent: Extracted {len(findings)} findings from task {task.task_id}")
-            
-            # Build state update
             state_update: Dict[str, Any] = {
                 "findings": findings,
                 "completed_tasks": [task.task_id],
                 "budget": {**budget, "total_searches": total_searches + searches_used}
             }
             
-            # Add delegation task if requested
             if delegation_task:
                 state_update["task_history"] = [delegation_task]
-                logger.info(f"Sub-agent: Delegated new task: {delegation_task.task_id}")
             
             return state_update
             
@@ -232,32 +199,29 @@ async def _extract_citations(
     topic: str,
     source_tools: List[str]
 ) -> List[Finding]:
-    """Extract structured findings with citations using LLM.
+    """
+    Extract structured findings with citations from raw tool output.
     
     Args:
-        raw_results: Combined tool results with source tags
-        topic: Research topic
-        source_tools: List of tools used
+        raw_results: Combined text output from tools.
+        topic: The research topic.
+        source_tools: List of tools that generated the results.
         
     Returns:
-        List of Finding objects with scored citations
+        List[Finding]: Extracted findings with credibility scores.
     """
-    # Determine primary source tool
     primary_tool = source_tools[0] if source_tools else "unknown"
     
-    # Prepare prompt inputs
     prompt_inputs = {
         "credibility_heuristics": CREDIBILITY_HEURISTICS,
         "source_tool": primary_tool,
         "topic": topic,
-        "raw_results": raw_results[:4000]  # Limit to prevent token overflow
+        "raw_results": raw_results[:4000]
     }
     
-    # Get LLM for structured output
-    llm = get_deepseek_chat(temperature=0.3)  # Lower temp for extraction
+    llm = get_deepseek_chat(temperature=0.3)
     structured_llm = llm.with_structured_output(CitationExtractionOutput)
     
-    # Create chain
     chain = SUB_AGENT_CITATION_EXTRACTION_TEMPLATE | structured_llm
     
     try:
@@ -265,5 +229,4 @@ async def _extract_citations(
         return result.findings
     except Exception as e:
         logger.error(f"Citation extraction failed: {e}")
-        # Return empty list on failure
         return []

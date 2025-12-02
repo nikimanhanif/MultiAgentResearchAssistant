@@ -61,27 +61,23 @@ def safe_node(
             
             for attempt in range(max_retries + 1):
                 try:
-                    # Execute the node function
                     result = await func(*args, **kwargs)
                     return result
                     
                 except Exception as e:
                     last_error = e
                     
-                    # Log error with context
                     error_msg = f"Error in node '{func.__name__}' (attempt {attempt + 1}/{max_retries + 1}): {str(e)}"
                     logger.error(error_msg)
                     
                     if log_traceback:
                         logger.error(f"Traceback:\n{traceback.format_exc()}")
                     
-                    # Retry if attempts remaining
                     if attempt < max_retries:
                         logger.info(f"Retrying in {retry_delay} seconds...")
                         await asyncio.sleep(retry_delay)
                         continue
                     
-                    # All retries exhausted, return error state
                     if default_return is not None:
                         error_state = default_return.copy()
                         error_state[error_field] = error_msg
@@ -89,26 +85,22 @@ def safe_node(
                     else:
                         return {error_field: error_msg}
             
-            # Should never reach here, but handle gracefully
             return {error_field: f"Unexpected error in {func.__name__}"}
         
         @functools.wraps(func)
         def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
             """Sync wrapper for node functions."""
             try:
-                # Execute the node function
                 result = func(*args, **kwargs)
                 return result
                 
             except Exception as e:
-                # Log error with context
                 error_msg = f"Error in node '{func.__name__}': {str(e)}"
                 logger.error(error_msg)
                 
                 if log_traceback:
                     logger.error(f"Traceback:\n{traceback.format_exc()}")
                 
-                # Return error state
                 if default_return is not None:
                     error_state = default_return.copy()
                     error_state[error_field] = error_msg
@@ -183,7 +175,6 @@ def should_retry_error(error: Exception) -> bool:
     Returns:
         True if error should be retried, False otherwise
     """
-    # Common transient error patterns
     transient_errors = [
         "timeout",
         "connection",
@@ -199,8 +190,6 @@ def should_retry_error(error: Exception) -> bool:
     return any(pattern in error_str for pattern in transient_errors)
 
 
-# Example usage patterns
-
 async def example_safe_node_usage() -> None:
     """Example demonstrating @safe_node decorator usage."""
     
@@ -209,17 +198,14 @@ async def example_safe_node_usage() -> None:
     @safe_node(max_retries=3, retry_delay=2.0)
     async def risky_research_node(state: ResearchState) -> Dict[str, Any]:
         """Example node that might fail."""
-        # Simulate risky operation
         if state.get("error"):
             raise ValueError("Previous error detected")
         
-        # Normal processing
         return {
             "findings": [{"topic": "test", "summary": "results"}],
             "is_complete": True
         }
     
-    # Usage
     initial_state: ResearchState = {"research_brief": None, "error": None}
     result = await risky_research_node(initial_state)
     

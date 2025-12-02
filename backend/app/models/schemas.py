@@ -1,4 +1,9 @@
-"""Pydantic schemas for request/response models."""
+"""
+Pydantic schemas for request/response models and internal data structures.
+
+Defines the data models used throughout the application, including API requests,
+responses, and core research entities like Findings, ResearchTasks, and Citations.
+"""
 
 from datetime import datetime
 from typing import Optional, List, Dict, Any
@@ -60,8 +65,8 @@ class ChatResponse(BaseModel):
     timestamp: datetime = Field(
         default_factory=datetime.utcnow, description="Response timestamp"
     )
-    response_type: Optional[str] = None  # CLARIFICATION, RESEARCH_PROGRESS, REPORT
-    scope_status: Optional[str] = None  # CLARIFYING, COMPLETE
+    response_type: Optional[str] = None
+    scope_status: Optional[str] = None
 
     @field_validator("conversation_id", mode="before")
     @classmethod
@@ -83,7 +88,7 @@ class ChatResponse(BaseModel):
 
 
 class ResearchRequest(BaseModel):
-    """Request model for research tasks (for future use)."""
+    """Request model for research tasks (future use)."""
 
     query: str = Field(..., description="Research query", min_length=1)
     context: Optional[str] = Field(None, description="Additional context for research")
@@ -136,8 +141,6 @@ class ErrorResponse(BaseModel):
     )
 
 
-# New models for agent pipeline (minimal stubs - implementation deferred)
-
 class ScopeStatus(str, Enum):
     """Status of scope clarification phase."""
     CLARIFYING = "CLARIFYING"
@@ -161,9 +164,8 @@ class SourceType(str, Enum):
 
 
 class Citation(BaseModel):
-    """
-    Citation model for sources with credibility scoring.
-    """
+    """Citation model for sources with credibility scoring."""
+    
     # Basic citation information
     source: str = Field(..., description="Source name or identifier")
     url: Optional[str] = Field(None, description="URL to the source")
@@ -174,7 +176,7 @@ class Citation(BaseModel):
     )
     year: Optional[int] = Field(None, description="Publication year", ge=1900, le=2100)
     
-    # Credibility scoring fields (Phase 7.5)
+    # Credibility scoring fields
     credibility_score: Optional[float] = Field(
         None,
         description="Credibility score (0.0-1.0)",
@@ -226,7 +228,6 @@ class Citation(BaseModel):
     )
 
 
-
 class ClarificationQuestion(BaseModel):
     """Single clarification question."""
     question: str = Field(..., description="The question to ask the user")
@@ -266,7 +267,8 @@ class ClarificationResponse(BaseModel):
 
 
 class ScopeCompletionCheck(BaseModel):
-    """Model for scope completion analysis output.
+    """
+    Model for scope completion analysis output.
     
     Used by scope agent to determine if enough information has been gathered.
     """
@@ -295,27 +297,25 @@ class ScopeCompletionCheck(BaseModel):
 
 
 class ReportFormat(str, Enum):
-    """Report format types for different use cases.
-    
-    Created in Phase 1.2, used in Phase 4.2 for report formatting.
+    """
+    Report format types for different use cases.
     
     Formats map to specific use cases:
     - SUMMARY: General-purpose quick overview
-    - COMPARISON: Use Case 2 - Comparative analysis
+    - COMPARISON: Comparative analysis
     - RANKING: Top-N ranked lists with criteria
-    - FACT_VALIDATION: Use Case 3 - Fact validation and credibility assessment
-    - LITERATURE_REVIEW: Use Case 1 - Structured academic literature review
-    - GAP_ANALYSIS: Use Case 4 - Research gap identification
-    - OTHER: Fallback format when no specific format is requested or format cannot be determined.
-            Uses generic markdown structure with standard sections (Introduction, Findings, Conclusion, References).
+    - FACT_VALIDATION: Claims with validation results
+    - LITERATURE_REVIEW: Structured academic literature review
+    - GAP_ANALYSIS: Research gap identification
+    - OTHER: Fallback generic markdown structure
     """
-    SUMMARY = "summary"  # Simple summary with key findings
-    COMPARISON = "comparison"  # Side-by-side comparison with metrics (Use Case 2)
-    RANKING = "ranking"  # Ranked items with criteria and justification
-    FACT_VALIDATION = "fact_validation"  # Claims with validation results (Use Case 3)
-    LITERATURE_REVIEW = "literature_review"  # Structured academic review (Use Case 1)
-    GAP_ANALYSIS = "gap_analysis"  # Research gap identification (Use Case 4)
-    OTHER = "other"  # Fallback format - generic markdown structure when format is unspecified
+    SUMMARY = "summary"
+    COMPARISON = "comparison"
+    RANKING = "ranking"
+    FACT_VALIDATION = "fact_validation"
+    LITERATURE_REVIEW = "literature_review"
+    GAP_ANALYSIS = "gap_analysis"
+    OTHER = "other"
 
 
 class ResearchBrief(BaseModel):
@@ -344,10 +344,10 @@ class ResearchBrief(BaseModel):
 
 
 class Finding(BaseModel):
-    """Single research finding with embedded citation.
+    """
+    Single research finding with embedded citation.
     
-    Replaces SubAgentFindings for Supervisor Loop architecture (Phase 3.7+).
-    Each finding represents a single factual claim with its source.
+    Represents a single factual claim with its source.
     """
     claim: str = Field(..., description="The factual claim or finding")
     citation: Citation = Field(..., description="Embedded citation with all metadata")
@@ -405,18 +405,15 @@ class ResearchTask(BaseModel):
 
 class GapType(str, Enum):
     """Types of research gaps identified."""
-    COVERAGE = "coverage"  # Missing sub-topics from brief
-    DEPTH = "depth"  # Insufficient sources per topic
-    QUALITY = "quality"  # Low average credibility score
-    TEMPORAL = "temporal"  # Missing time periods from constraints
-    PERSPECTIVE = "perspective"  # Missing viewpoints or approaches
+    COVERAGE = "coverage"
+    DEPTH = "depth"
+    QUALITY = "quality"
+    TEMPORAL = "temporal"
+    PERSPECTIVE = "perspective"
 
 
 class ResearchGap(BaseModel):
-    """Model for identified research gaps.
-    
-    Used in Phase 8.5 for gap analysis and conditional re-research.
-    """
+    """Model for identified research gaps."""
     gap_type: GapType = Field(..., description="Type of gap identified")
     description: str = Field(..., description="Description of the gap")
     severity: float = Field(
@@ -436,10 +433,7 @@ class ResearchGap(BaseModel):
 
 
 class CoverageAnalysis(BaseModel):
-    """Analysis of research coverage.
-    
-    Used in Phase 8.5 for gap identification and Phase 4.2 for report formatting.
-    """
+    """Analysis of research coverage."""
     total_topics: int = Field(..., description="Total number of sub-topics", ge=0)
     covered_topics: int = Field(..., description="Number of covered topics", ge=0)
     coverage_percentage: float = Field(
@@ -470,10 +464,7 @@ class CoverageAnalysis(BaseModel):
 
 
 class ReviewAction(BaseModel):
-    """Model for user review actions on generated reports (Phase 6.2).
-    
-    Used in HITL reviewer node to capture user feedback and routing decisions.
-    """
+    """Model for user review actions on generated reports."""
     action: str = Field(
         ...,
         description="Action to take: approve, refine, or re_research",

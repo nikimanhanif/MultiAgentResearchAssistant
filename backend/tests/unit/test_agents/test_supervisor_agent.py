@@ -1,8 +1,4 @@
-"""Unit tests for Supervisor Agent node.
-
-Tests gap analysis, task generation, budget enforcement, and completion detection.
-Follows backend-testing.md standards: happy path, edge cases, error handling.
-"""
+"""Unit tests for Supervisor Agent node."""
 
 import pytest
 from unittest.mock import MagicMock, patch, AsyncMock
@@ -118,7 +114,6 @@ class TestSupervisorNode:
     @patch("app.agents.supervisor_agent.get_deepseek_reasoner")
     def test_supervisor_node_generates_tasks_for_gaps(self, mock_get_llm, mock_template):
         """Test that supervisor generates new tasks when gaps exist."""
-        # Create mock response object
         mock_response = MagicMock()
         mock_response.content = """{
             "has_gaps": true,
@@ -181,7 +176,6 @@ class TestSupervisorNode:
     @patch("app.agents.supervisor_agent.get_deepseek_reasoner")
     def test_supervisor_node_marks_complete_when_no_gaps(self, mock_get_llm, mock_template):
         """Test that supervisor marks complete when no gaps exist."""
-        # Create mock response object
         mock_response = MagicMock()
         mock_response.content = """{
             "has_gaps": false,
@@ -241,7 +235,6 @@ class TestSupervisorNode:
     @patch("app.agents.supervisor_agent.get_deepseek_reasoner")
     def test_supervisor_node_increments_iterations(self, mock_get_llm, mock_template):
         """Test that supervisor correctly increments iteration counter."""
-        # Mock LLM and chain to avoid real API calls
         mock_llm = MagicMock()
         mock_get_llm.return_value = mock_llm
         gap_output = GapAnalysisOutput(
@@ -436,8 +429,6 @@ class TestAggregateFindings:
             "findings": findings
         }
         
-        # Note: The implementation checks URL first. If URLs differ, it continues to next check.
-        # So title+author check SHOULD catch this.
         result = aggregate_findings(state)
         
         assert len(result) == 1

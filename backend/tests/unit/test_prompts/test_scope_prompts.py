@@ -1,8 +1,4 @@
-"""Unit tests for Scope Agent prompt templates.
-
-Tests ensure that all scope agent prompts are correctly structured,
-contain required input variables, and format properly with valid inputs.
-"""
+"""Unit tests for Scope Agent prompt templates."""
 
 import pytest
 from langchain_core.prompts import ChatPromptTemplate

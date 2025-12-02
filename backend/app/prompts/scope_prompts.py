@@ -1,15 +1,13 @@
-"""Prompt templates for Scope Agent.
+"""
+Prompt templates for Scope Agent.
 
-This module contains all prompt templates used by the Scope Agent for
-multi-turn clarification conversations and research brief generation.
-
+Contains prompt templates for multi-turn clarification conversations and
+research brief generation using LangChain's ChatPromptTemplate.
 """
 
 from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
 
 
-# Question Generation Prompt
-# Required inputs: user_query (str), conversation_history (str)
 SCOPE_QUESTION_GENERATION_TEMPLATE = ChatPromptTemplate.from_messages([
     SystemMessagePromptTemplate.from_template(
         """You are a research scope clarification assistant. Your job is to ask clear, concise clarifying questions to understand the user's research needs better.
@@ -38,8 +36,6 @@ Based on the user's query and conversation so far, generate 1-3 clarifying quest
 ])
 
 
-# Completion Detection Prompt
-# Required inputs: user_query (str), conversation_history (str)
 SCOPE_COMPLETION_DETECTION_TEMPLATE = ChatPromptTemplate.from_messages([
     SystemMessagePromptTemplate.from_template(
         """You are a research scope analyzer. Your job is to determine if we have enough information to proceed with research.
@@ -63,8 +59,6 @@ Determine if we have sufficient information to proceed with research."""
 ])
 
 
-# Research Brief Generation Prompt
-# Required inputs: user_query (str), conversation_history (str)
 SCOPE_BRIEF_GENERATION_TEMPLATE = ChatPromptTemplate.from_messages([
     SystemMessagePromptTemplate.from_template(
         """You are a research brief generator. Based on the clarified conversation, create a structured research brief.

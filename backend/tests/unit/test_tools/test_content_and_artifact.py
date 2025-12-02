@@ -1,4 +1,4 @@
-"""Additional test cases for content_and_artifact tools."""
+"""Unit tests for content_and_artifact tools."""
 
 import pytest
 from unittest.mock import patch, AsyncMock, MagicMock

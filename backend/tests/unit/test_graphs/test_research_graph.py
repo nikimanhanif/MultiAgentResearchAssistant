@@ -1,6 +1,4 @@
-"""Unit tests for research graph structure and routing logic.
-
-"""
+"""Unit tests for research graph structure and routing logic."""
 
 import pytest
 from typing import List
@@ -26,7 +24,7 @@ class TestRouteFromSupervisor:
             completed_tasks=[],
             failed_tasks=[],
             budget={"iterations": 1, "max_iterations": 20, "max_sub_agents": 20},
-            is_complete=True,  # Set complete flag
+            is_complete=True,
             gaps=None,
             error=None,
             messages=[],
@@ -47,7 +45,7 @@ class TestRouteFromSupervisor:
             task_history=[ResearchTask(task_id="task1", topic="test", query="test", priority=1)],
             completed_tasks=[],
             failed_tasks=[],
-            budget={"iterations": 20, "max_iterations": 20, "max_sub_agents": 20},  # At limit
+            budget={"iterations": 20, "max_iterations": 20, "max_sub_agents": 20},
             is_complete=False,
             gaps=None,
             error=None,
@@ -61,7 +59,6 @@ class TestRouteFromSupervisor:
     
     def test_route_from_supervisor_max_sub_agents_routes_to_report(self):
         """Test that exceeding max_sub_agents routes to report_agent."""
-        # Create 20 findings to hit the limit
         findings = [
             Finding(
                 claim=f"claim {i}",
@@ -80,7 +77,7 @@ class TestRouteFromSupervisor:
             task_history=[ResearchTask(task_id="task1", topic="test", query="test", priority=1)],
             completed_tasks=[],
             failed_tasks=[],
-            budget={"iterations": 5, "max_iterations": 20, "max_sub_agents": 20},  # Findings at limit
+            budget={"iterations": 5, "max_iterations": 20, "max_sub_agents": 20},
             is_complete=False,
             gaps=None,
             error=None,
@@ -99,7 +96,7 @@ class TestRouteFromSupervisor:
                 scope="test", sub_topics=[], constraints={}, format=None, deliverables="test report"
             ),
             findings=[],
-            task_history=[],  # No tasks
+            task_history=[],
             completed_tasks=[],
             failed_tasks=[],
             budget={"iterations": 1, "max_iterations": 20, "max_sub_agents": 20},
@@ -124,7 +121,7 @@ class TestRouteFromSupervisor:
                 scope="test", sub_topics=[], constraints={}, format=None, deliverables="test report"
             ),
             findings=[],
-            task_history=[task1, task2],  # Two pending tasks
+            task_history=[task1, task2],
             completed_tasks=[],
             failed_tasks=[],
             budget={"iterations": 1, "max_iterations": 20, "max_sub_agents": 20},
@@ -138,7 +135,6 @@ class TestRouteFromSupervisor:
         
         result = route_from_supervisor(state)
         
-        # Should return list of Send objects
         assert isinstance(result, list)
         assert len(result) == 2
         assert all(isinstance(send, Send) for send in result)
@@ -154,7 +150,7 @@ class TestRouteFromSupervisor:
             ),
             findings=[],
             task_history=[task1, task2],
-            completed_tasks=["task1"],  # task1 completed
+            completed_tasks=["task1"],
             failed_tasks=[],
             budget={"iterations": 1, "max_iterations": 20, "max_sub_agents": 20},
             is_complete=False,
@@ -183,7 +179,7 @@ class TestRouteFromSupervisor:
             findings=[],
             task_history=[task1, task2],
             completed_tasks=[],
-            failed_tasks=["task1"],  # task1 failed
+            failed_tasks=["task1"],
             budget={"iterations": 1, "max_iterations": 20, "max_sub_agents": 20},
             is_complete=False,
             gaps=None,
@@ -207,7 +203,6 @@ class TestBuildResearchGraph:
         """Test that build_research_graph creates a compiled graph."""
         from unittest.mock import patch, MagicMock
         
-        # Mock get_checkpointer to return a dummy checkpointer
         with patch("app.graphs.research_graph.get_checkpointer") as mock_get_cp:
             mock_cp = MagicMock()
             mock_get_cp.return_value = mock_cp
@@ -215,7 +210,6 @@ class TestBuildResearchGraph:
             graph = build_research_graph()
         
         assert graph is not None
-        # Graph should be compiled (has .invoke, .ainvoke methods)
         assert hasattr(graph, "invoke")
         assert hasattr(graph, "ainvoke")
     
@@ -223,15 +217,12 @@ class TestBuildResearchGraph:
         """Test that graph has supervisor and sub_agent nodes."""
         from unittest.mock import patch, MagicMock
         
-        # Mock get_checkpointer
         with patch("app.graphs.research_graph.get_checkpointer") as mock_get_cp:
             mock_cp = MagicMock()
             mock_get_cp.return_value = mock_cp
             
             graph = build_research_graph()
         
-        # Check nodes exist in graph structure
-        # LangGraph compiled graphs expose node names via .nodes
         node_names = list(graph.nodes.keys())
         assert "scope" in node_names
         assert "supervisor" in node_names

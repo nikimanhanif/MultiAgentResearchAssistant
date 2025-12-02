@@ -1,8 +1,4 @@
-"""Unit tests for Report Agent prompt templates and format instruction functions.
-
-Tests ensure that report prompts are correctly structured and format instruction
-functions return properly formatted markdown templates.
-"""
+"""Unit tests for Report Agent prompt templates and format instruction functions."""
 
 import pytest
 from langchain_core.prompts import ChatPromptTemplate

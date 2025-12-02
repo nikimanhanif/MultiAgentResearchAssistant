@@ -1,9 +1,8 @@
-"""Tavily web search tool configuration.
+"""
+Tavily web search tool configuration.
 
-This module provides web search capabilities via langchain-tavily integration.
-Uses native LangChain Tavily tools (TavilySearch, TavilyExtract) for research.
-
-Implementation: Phase 7.1
+Provides web search capabilities via langchain-tavily integration,
+using native LangChain Tavily tools (TavilySearch, TavilyExtract) for research.
 """
 
 import logging
@@ -18,21 +17,22 @@ logger = logging.getLogger(__name__)
 
 
 def get_tavily_tools() -> List[BaseTool]:
-    """Get configured Tavily tools for web search and extraction.
+    """
+    Get configured Tavily tools for web search and extraction.
     
     Returns a list containing:
-    - TavilySearch: Web search with advanced depth
-    - TavilyExtract: Content extraction from URLs
+    - TavilySearch: Web search with advanced depth.
+    - TavilyExtract: Content extraction from URLs.
     
     Configuration:
-    - max_results: 5 (balanced between quality and token usage)
-    - search_depth: "advanced" (comprehensive search)
+    - max_results: 5 (balanced between quality and token usage).
+    - search_depth: "advanced" (comprehensive search).
     
     Returns:
-        List of configured Tavily tools
+        List[BaseTool]: List of configured Tavily tools.
         
     Raises:
-        ValueError: If TAVILY_API_KEY not configured
+        ValueError: If TAVILY_API_KEY is not configured.
     """
     if not settings.TAVILY_API_KEY:
         error_msg = "TAVILY_API_KEY not configured in environment"

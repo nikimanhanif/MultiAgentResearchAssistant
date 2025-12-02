@@ -1,11 +1,10 @@
-"""Tools module for research agent integrations.
+"""
+Tools module for research agent integrations.
 
 This module provides tool integrations using native LangChain packages:
-- langchain-mcp-adapters: MCP server integrations with automatic tool discovery
-- tavily_tools.py: Tavily configuration
-- mcp_tools.py: MCP server configs and client wrapper
-- tool_registry.py: Central tool loading (combines all tools)
-
+- Tavily: Web search and extraction.
+- MCP: Multi-tool Web Server integrations with automatic discovery.
+- Registry: Centralized tool loading and safety wrapping.
 """
 
 from app.tools.tavily_tools import get_tavily_tools

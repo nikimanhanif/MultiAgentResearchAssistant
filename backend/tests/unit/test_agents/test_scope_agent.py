@@ -1,10 +1,4 @@
-"""Unit tests for scope agent.
-
-This module contains comprehensive tests for the refactored scope agent module,
-including chain-based generation with PydanticOutputParser, LLM initialization,
-conversation handling, and research brief generation.
-
-"""
+"""Unit tests for Scope Agent."""
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch

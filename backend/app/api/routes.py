@@ -1,4 +1,9 @@
-"""API Routes."""
+"""
+API Routes Configuration.
+
+Aggregates all API routers (chat, conversations) into a single main router
+with the /api/v1 prefix.
+"""
 
 from fastapi import APIRouter
 from app.api import conversations, chat

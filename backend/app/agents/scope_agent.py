@@ -1,8 +1,9 @@
-"""Scope Agent - Human-in-the-loop clarification agent.
+"""
+Scope Agent - Handles initial research scoping and clarification.
 
-This agent handles multi-turn clarification conversations with users to determine
-the research scope. It asks clarifying questions and generates a research brief
-once the scope is sufficient.
+This agent engages in a multi-turn conversation with the user to clarify
+the research intent. It generates clarifying questions if the scope is ambiguous
+and produces a structured ResearchBrief once the scope is clear.
 """
 
 from typing import Optional, List, Dict, Any, Union
@@ -28,17 +29,15 @@ from app.graphs.state import ResearchState
 logger = logging.getLogger(__name__)
 
 
-# Helper Functions
-
-
 def _format_conversation_history(history: Optional[List[Dict[str, str]]]) -> str:
-    """Format conversation history for prompts.
+    """
+    Format conversation history for prompt context.
     
     Args:
-        history: List of conversation turns with 'role' and 'content'
+        history: List of conversation turns (role, content).
         
     Returns:
-        Formatted string representation of conversation history
+        str: Formatted conversation string.
     """
     if not history:
         return "No previous conversation."
@@ -57,15 +56,16 @@ def _update_brief_metadata(
     user_query: str,
     conversation_history: Optional[List[Dict[str, str]]]
 ) -> Dict[str, Any]:
-    """Update research brief metadata with actual clarification turn count.
+    """
+    Update research brief metadata with conversation stats.
     
     Args:
-        parsed: Parsed brief dictionary from LLM
-        user_query: Original user query
-        conversation_history: List of conversation turns
+        parsed: Parsed brief dictionary from LLM.
+        user_query: Original user query.
+        conversation_history: List of conversation turns.
         
     Returns:
-        Updated brief dictionary with metadata
+        Dict[str, Any]: Updated brief dictionary.
     """
     if conversation_history:
         clarification_turns = len([
@@ -80,13 +80,12 @@ def _update_brief_metadata(
     return parsed
 
 
-# Chain Building Functions
-
 def _build_question_generation_chain() -> Any:
-    """Build chain for generating clarification questions.
+    """
+    Build chain for generating clarification questions.
     
     Returns:
-        Runnable chain: prompt | LLM | parser
+        Runnable: Chain of prompt | LLM | parser.
     """
     parser = PydanticOutputParser(pydantic_object=ClarificationQuestions)
     llm = get_deepseek_chat(temperature=0.7)
@@ -101,10 +100,11 @@ def _build_question_generation_chain() -> Any:
 
 
 def _build_completion_detection_chain() -> Any:
-    """Build chain for detecting scope completion.
+    """
+    Build chain for detecting scope completion.
     
     Returns:
-        Runnable chain: prompt | LLM | parser
+        Runnable: Chain of prompt | LLM | parser.
     """
     parser = PydanticOutputParser(pydantic_object=ScopeCompletionCheck)
     llm = get_deepseek_chat(temperature=0.3)  # Lower temperature for consistent decisions
@@ -119,10 +119,11 @@ def _build_completion_detection_chain() -> Any:
 
 
 def _build_brief_generation_chain() -> Any:
-    """Build chain for generating research brief.
+    """
+    Build chain for generating the research brief.
     
     Returns:
-        Runnable chain: prompt | LLM | parser | metadata updater
+        Runnable: Chain of prompt | LLM | parser.
     """
     parser = PydanticOutputParser(pydantic_object=ResearchBrief)
     llm = get_deepseek_chat(temperature=0.5)
@@ -136,24 +137,22 @@ def _build_brief_generation_chain() -> Any:
     return chain
 
 
-# Main Functions
-
 async def generate_clarification_questions(
     user_query: str,
     conversation_history: Optional[List[Dict[str, str]]] = None
 ) -> ClarificationQuestions:
-    """Generate clarifying questions based on user query and conversation.
+    """
+    Generate clarifying questions based on the user's query.
     
     Args:
-        user_query: User's original or current query
-        conversation_history: List of previous conversation turns
+        user_query: User's original or current query.
+        conversation_history: List of previous conversation turns.
         
     Returns:
-        ClarificationQuestions object with questions and context
+        ClarificationQuestions: Object containing questions and context.
         
     Raises:
-        ValueError: If LLM configuration is invalid
-        Exception: If LLM invocation fails
+        Exception: If generation fails.
     """
     chain = _build_question_generation_chain()
     
@@ -173,18 +172,18 @@ async def check_scope_completion(
     user_query: str,
     conversation_history: Optional[List[Dict[str, str]]] = None
 ) -> ScopeCompletionCheck:
-    """Check if we have enough information to proceed with research.
+    """
+    Check if the research scope is sufficiently defined.
     
     Args:
-        user_query: User's original query
-        conversation_history: List of conversation turns
+        user_query: User's original query.
+        conversation_history: List of conversation turns.
         
     Returns:
-        ScopeCompletionCheck object with completion status and reasoning
+        ScopeCompletionCheck: Status and reasoning.
         
     Raises:
-        ValueError: If LLM configuration is invalid
-        Exception: If LLM invocation fails
+        Exception: If check fails.
     """
     chain = _build_completion_detection_chain()
     
@@ -204,18 +203,18 @@ async def generate_research_brief(
     user_query: str,
     conversation_history: Optional[List[Dict[str, str]]] = None
 ) -> ResearchBrief:
-    """Generate a research brief from the clarification conversation.
+    """
+    Generate a formal research brief from the conversation.
     
     Args:
-        user_query: User's original query
-        conversation_history: List of conversation turns
+        user_query: User's original query.
+        conversation_history: List of conversation turns.
         
     Returns:
-        ResearchBrief object with complete research scope
+        ResearchBrief: The defined research scope.
         
     Raises:
-        ValueError: If LLM configuration is invalid
-        Exception: If LLM invocation fails
+        Exception: If generation fails.
     """
     chain = _build_brief_generation_chain()
     
@@ -247,24 +246,19 @@ async def clarify_scope(
     user_query: str,
     conversation_history: Optional[List[Dict[str, str]]] = None
 ) -> Union[ClarificationQuestions, ResearchBrief]:
-    """Main function to handle scope clarification workflow.
+    """
+    Orchestrate the scope clarification workflow.
     
-    This function orchestrates the multi-turn clarification process:
-    1. Check if scope is complete
-    2. If complete, generate research brief
-    3. If not complete, generate clarifying questions
+    1. Check if scope is complete.
+    2. If complete, generate ResearchBrief.
+    3. If incomplete, generate ClarificationQuestions.
     
     Args:
-        user_query: User's original query
-        conversation_history: List of previous conversation turns
+        user_query: User's original query.
+        conversation_history: List of previous conversation turns.
         
     Returns:
-        Either ClarificationQuestions (if more info needed) or 
-        ResearchBrief (if scope is complete)
-        
-    Raises:
-        ValueError: If LLM configuration is invalid
-        Exception: If LLM invocation fails
+        Union[ClarificationQuestions, ResearchBrief]: The next step in the process.
     """
     # Check if we have enough information
     completion_check = await check_scope_completion(user_query, conversation_history)
@@ -277,36 +271,25 @@ async def clarify_scope(
     return await generate_clarification_questions(user_query, conversation_history)
 
 
-# LangGraph Node Integration
-
 async def scope_node(state: ResearchState) -> Dict[str, Any]:
-    """Scope agent node for LangGraph integration.
+    """
+    LangGraph node for the Scope Agent.
     
-    This node handles the clarification conversation loop within the main graph.
-    It uses state["messages"] for conversation history and generates either:
-    - Clarification questions (if scope incomplete)
-    - ResearchBrief (if scope complete)
+    Manages the clarification loop. Generates either clarification questions
+    (if scope is incomplete) or a ResearchBrief (if scope is complete).
     
     Args:
-        state: Current research state with messages
+        state: Current research state.
         
     Returns:
-        State update with new messages or research_brief
+        Dict[str, Any]: State update with new messages or research_brief.
     """
-    logger.info("Scope Node: Processing user input")
-    
-    # Check if brief already exists (e.g. from direct mode or previous turn)
     if state.get("research_brief"):
-        logger.info("Scope Node: Research brief already exists, skipping clarification")
         return {}
     
-    # Extract messages from state
     messages = state.get("messages", [])
-    
-    # Get the last user message as the current query
     user_messages = [msg for msg in messages if msg.get("role") == "user"]
     if not user_messages:
-        logger.error("No user messages found in state")
         return {
             "messages": [{
                 "role": "assistant",
@@ -314,25 +297,17 @@ async def scope_node(state: ResearchState) -> Dict[str, Any]:
             }]
         }
     
-    # Get original query (first user message) and conversation history
     user_query = user_messages[0].get("content", "")
-    
-    # Format conversation history (exclude the initial query from history)
     conversation_history = [
         {"role": msg.get("role"), "content": msg.get("content")}
-        for msg in messages[1:]  # Skip first message as it's the user_query
+        for msg in messages[1:]
     ] if len(messages) > 1 else None
     
     try:
-        # Check if scope is complete
         completion_check = await check_scope_completion(user_query, conversation_history)
         
         if completion_check.is_complete:
-            # Generate research brief
-            logger.info("Scope Node: Scope complete, generating research brief")
             brief = await generate_research_brief(user_query, conversation_history)
-            
-            # Return state update with brief and completion message
             return {
                 "research_brief": brief,
                 "messages": [{
@@ -341,18 +316,12 @@ async def scope_node(state: ResearchState) -> Dict[str, Any]:
                 }]
             }
         else:
-            # Generate clarification questions
-            logger.info("Scope Node: Scope incomplete, generating clarification questions")
             questions = await generate_clarification_questions(user_query, conversation_history)
-            
-            # Format questions as a simple numbered list
             questions_text = "\n".join([
                 f"{i+1}. {q.question}" 
                 for i, q in enumerate(questions.clarification_questions)
             ])
             message_content = f"{questions.context}\n\n{questions_text}"
-            
-            # Return state update with clarification questions
             return {
                 "messages": [{
                     "role": "assistant",

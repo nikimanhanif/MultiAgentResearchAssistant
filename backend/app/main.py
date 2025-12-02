@@ -12,7 +12,12 @@ from app.persistence import (
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan manager for persistence initialization."""
+    """
+    Manage the application lifecycle.
+
+    Initializes and shuts down persistence layers (checkpointer and store)
+    when the application starts and stops.
+    """
     await initialize_checkpointer()
     await initialize_store()
     yield
@@ -27,12 +32,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Include routers
 from app.api import conversations
 
 app.include_router(conversations.router)
 
-# CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
@@ -44,10 +47,12 @@ app.add_middleware(
 
 @app.get("/")
 async def root():
+    """Root endpoint to verify API is running."""
     return {"message": "Multi-Agent Research Assistant API"}
 
 
 @app.get("/health")
 async def health():
+    """Health check endpoint."""
     return {"status": "healthy"}
 

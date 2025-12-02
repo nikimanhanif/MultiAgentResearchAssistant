@@ -1,6 +1,4 @@
-"""Unit tests for supervisor agent findings aggregation.
-
-"""
+"""Unit tests for supervisor agent findings aggregation."""
 
 import pytest
 from typing import List

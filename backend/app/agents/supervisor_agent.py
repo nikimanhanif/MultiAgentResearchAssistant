@@ -1,15 +1,11 @@
-"""Supervisor Agent - LLM-based gap analysis and task generation.
+"""
+Supervisor Agent - Orchestrates the research process.
 
-This agent coordinates the research phase in the Supervisor Loop:
-- Analyzes gaps in current findings vs research brief (LLM-driven)
-- Generates new research tasks for missing topics
-- Checks completion criteria or budget limits
-- Filters and aggregates final findings
-
-Architecture: Supervisor Loop
-- Flat task queue
-- Prompt-driven strategy selection
-- LLM-based gap analysis 
+This agent acts as the central coordinator in the Supervisor Loop:
+- Analyzes gaps in current findings vs. the research brief.
+- Generates new research tasks for sub-agents.
+- Monitors budget and completion criteria.
+- Aggregates and filters final findings for the report.
 """
 
 import logging
@@ -44,17 +40,18 @@ class GapAnalysisOutput(BaseModel):
 
 
 def _format_findings_for_supervisor(findings: List[Finding], max_findings: int = 50) -> str:
-    """Format findings for supervisor prompt with content visibility
+    """
+    Format findings for the supervisor's context.
     
-    Groups findings by topic and formats them with key claims and scores,
-    truncated to fit context window.
+    Groups findings by topic and provides a summary with key claims and scores,
+    truncated to fit the context window.
     
     Args:
-        findings: List of Finding objects
-        max_findings: Maximum number of findings to include
+        findings: List of Finding objects.
+        max_findings: Maximum number of findings to include.
         
     Returns:
-        Formatted string with findings grouped by topic
+        str: Formatted string of findings grouped by topic.
     """
     if not findings:
         return "No findings yet."
@@ -95,51 +92,40 @@ def _format_findings_for_supervisor(findings: List[Finding], max_findings: int =
 
 
 def supervisor_node(state: ResearchState) -> Dict[str, Any]:
-    """Supervisor node for gap analysis and task generation.
+    """
+    LangGraph node for the Supervisor Agent.
     
-    Responsibilities:
-    1. Analyze current findings vs research brief (LLM-based)
-    2. Generate new tasks for identified gaps
-    3. Check completion criteria and budget limits
-    4. Update iteration counter
+    Performs gap analysis, generates new tasks, checks completion criteria,
+    and aggregates findings when research is complete.
     
     Args:
-        state: Current research state with brief, findings, tasks, budget
+        state: Current research state.
         
     Returns:
-        State update with new tasks or completion signal
+        Dict[str, Any]: State update with new tasks, completion status, or aggregated findings.
     """
-    logger.info("Supervisor: Starting gap analysis")
-    
-    # Extract state fields
     brief = state["research_brief"]
     findings = state.get("findings", [])
     completed_tasks = state.get("completed_tasks", [])
     failed_tasks = state.get("failed_tasks", [])
     budget = state["budget"]
     
-    # Check if already complete (e.g. mock mode or previous iteration)
     if state.get("is_complete"):
-        logger.info("Supervisor: Research already marked complete")
         return {"is_complete": True}
     
-    # Increment iteration counter
     current_iteration = budget["iterations"] + 1
     
-    # Check hard budget limits first
     budget_exhausted = (
         current_iteration >= budget["max_iterations"] or
         len(findings) >= budget["max_sub_agents"]
     )
     
     if budget_exhausted:
-        logger.info(f"Supervisor: Budget exhausted (iterations={current_iteration}, findings={len(findings)})")
         return {
             "budget": {**budget, "iterations": current_iteration},
             "is_complete": True
         }
     
-    # Calculate current research statistics
     findings_by_topic = defaultdict(list)
     for finding in findings:
         findings_by_topic[finding.topic].append(finding)
@@ -151,10 +137,8 @@ def supervisor_node(state: ResearchState) -> Dict[str, Any]:
         if findings else 0.0
     )
     
-    # Format findings context for supervisor (Phase 9.5)
     findings_context = _format_findings_for_supervisor(findings)
     
-    # Prepare prompt inputs
     prompt_inputs = {
         "scope": brief.scope,
         "sub_topics": ", ".join(brief.sub_topics),
@@ -196,7 +180,6 @@ You must respond with valid JSON matching this schema:
 """
     prompt_inputs["json_schema"] = json_schema_instructions
     
-    # Create chain and invoke with JSON mode
     chain = SUPERVISOR_GAP_ANALYSIS_TEMPLATE | llm
     
     try:
@@ -204,38 +187,25 @@ You must respond with valid JSON matching this schema:
         import re
         response = chain.invoke(prompt_inputs)
         
-        # Extract JSON from response (handle DeepSeek Reasoner format)
         response_text = response.content if hasattr(response, 'content') else str(response)
-        
-        # Log raw response for debugging
-        logger.debug(f"Raw LLM response: {response_text[:500]}")
-        
-        # Remove thinking/reasoning blocks if present
         response_text = re.sub(r'<thinking>.*?</thinking>', '', response_text, flags=re.DOTALL)
         
-        # Try to extract JSON from markdown code blocks
         json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', response_text, re.DOTALL)
         if json_match:
             response_text = json_match.group(1)
         
-        # Try to find JSON object in the text
         json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
         if json_match:
             response_text = json_match.group(0)
         
-        # Clean up the response
         response_text = response_text.strip()
         
         if not response_text:
             raise ValueError("Empty response from LLM")
         
         result_dict = json.loads(response_text)
-        
-        # Validate and convert to Pydantic model
         result = GapAnalysisOutput(**result_dict)
-        logger.info(f"Supervisor: Analysis complete - has_gaps={result.has_gaps}, is_complete={result.is_complete}")
         
-        # Update state based on result
         state_update: Dict[str, Any] = {
             "budget": {**budget, "iterations": current_iteration},
             "gaps": {
@@ -245,24 +215,17 @@ You must respond with valid JSON matching this schema:
             }
         }
         
-        # Add new tasks if gaps exist and not complete
         if result.new_tasks and not result.is_complete:
             state_update["task_history"] = result.new_tasks
-            logger.info(f"Supervisor: Generated {len(result.new_tasks)} new tasks")
         
-        # Set completion flag
         state_update["is_complete"] = result.is_complete
         
-        # If complete, aggregate findings automatically (Phase 9.5)
         if result.is_complete:
-            logger.info("Supervisor: Research complete, aggregating findings")
             try:
                 aggregated_findings = aggregate_findings(state)
                 state_update["findings"] = aggregated_findings
-                logger.info(f"Supervisor: Aggregated {len(aggregated_findings)} findings for report")
             except Exception as agg_error:
                 logger.error(f"Supervisor: Findings aggregation failed - {agg_error}")
-                # Don't fail the entire process, just log the error
         
         return state_update
         
@@ -284,15 +247,17 @@ You must respond with valid JSON matching this schema:
 
 
 def aggregate_findings(state: ResearchState) -> List[Finding]:
-    """Aggregate and filter findings for report generation (Phase 8.5).
+    """
+    Aggregate and filter findings for report generation.
     
-    Applies LLM-based filtering and programmatic deduplication.
+    Applies programmatic filtering (credibility threshold) and deduplication
+    based on DOI, URL, and Title+Author.
     
     Args:
-        state: Research state with findings and brief
+        state: Research state with findings.
         
     Returns:
-        Filtered and ranked list of findings
+        List[Finding]: Filtered and ranked list of findings.
     """
     findings = state.get("findings", [])
     brief = state["research_brief"]
@@ -300,11 +265,8 @@ def aggregate_findings(state: ResearchState) -> List[Finding]:
     if not findings:
         return []
     
-    # Step 1: Programmatic filtering (credibility threshold)
     filtered = [f for f in findings if f.credibility_score >= 0.5]
-    logger.info(f"Filtered {len(findings)} -> {len(filtered)} findings (credibility >= 0.5)")
     
-    # Step 2: Programmatic deduplication
     seen_dois = {}
     seen_urls = {}
     seen_titles = {}
@@ -313,11 +275,9 @@ def aggregate_findings(state: ResearchState) -> List[Finding]:
     for finding in filtered:
         citation = finding.citation
         
-        # Check if duplicate based on any criteria
         is_duplicate = False
         existing_match = None
         
-        # 1. Check DOI
         if citation.doi:
             if citation.doi in seen_dois:
                 is_duplicate = True
@@ -325,7 +285,6 @@ def aggregate_findings(state: ResearchState) -> List[Finding]:
             else:
                 seen_dois[citation.doi] = finding
         
-        # 2. Check URL (if not already found as duplicate)
         if not is_duplicate and citation.url:
             if citation.url in seen_urls:
                 is_duplicate = True
@@ -333,7 +292,6 @@ def aggregate_findings(state: ResearchState) -> List[Finding]:
             else:
                 seen_urls[citation.url] = finding
                 
-        # 3. Check Title + Author (if not already found as duplicate)
         if not is_duplicate and citation.title and citation.authors:
             key = (citation.title, citation.authors[0] if citation.authors else "")
             if key in seen_titles:
@@ -342,15 +300,12 @@ def aggregate_findings(state: ResearchState) -> List[Finding]:
             else:
                 seen_titles[key] = finding
                 
-        # Handle duplicate or new entry
         if is_duplicate and existing_match:
-            # If new finding has higher credibility, replace the existing one
             if finding.credibility_score > existing_match.credibility_score:
                 if existing_match in deduplicated:
                     deduplicated.remove(existing_match)
                 deduplicated.append(finding)
                 
-                # Update indices to point to new finding
                 if citation.doi: seen_dois[citation.doi] = finding
                 if citation.url: seen_urls[citation.url] = finding
                 if citation.title and citation.authors:
@@ -359,9 +314,6 @@ def aggregate_findings(state: ResearchState) -> List[Finding]:
         else:
             deduplicated.append(finding)
     
-    logger.info(f"Deduplicated {len(filtered)} -> {len(deduplicated)} findings")
-    
-    # Step 3: Sort by credibility (highest first)
     sorted_findings = sorted(
         deduplicated,
         key=lambda f: f.credibility_score,

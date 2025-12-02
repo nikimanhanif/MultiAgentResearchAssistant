@@ -1,4 +1,9 @@
-"""LangGraph checkpointer for research graph state persistence."""
+"""
+LangGraph checkpointer for research graph state persistence.
+
+Provides initialization, shutdown, and retrieval of the AsyncSqliteSaver
+used for checkpointing the research graph state.
+"""
 
 from pathlib import Path
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
@@ -9,12 +14,13 @@ _checkpointer: AsyncSqliteSaver | None = None
 
 
 async def initialize_checkpointer() -> AsyncSqliteSaver:
-    """Initialize the checkpointer with SQLite backend.
-
+    """
+    Initialize the checkpointer with SQLite backend.
+    
     Called during FastAPI lifespan startup.
-
+    
     Returns:
-        Configured AsyncSqliteSaver instance
+        AsyncSqliteSaver: Configured checkpointer instance.
     """
     global _checkpointer
 
@@ -29,8 +35,9 @@ async def initialize_checkpointer() -> AsyncSqliteSaver:
 
 
 async def shutdown_checkpointer() -> None:
-    """Cleanup checkpointer resources.
-
+    """
+    Cleanup checkpointer resources.
+    
     Called during FastAPI lifespan shutdown.
     """
     global _checkpointer
@@ -40,15 +47,16 @@ async def shutdown_checkpointer() -> None:
 
 
 def get_checkpointer() -> AsyncSqliteSaver:
-    """Get the initialized checkpointer instance.
-
+    """
+    Get the initialized checkpointer instance.
+    
     Used when compiling the research graph.
-
-    Raises:
-        RuntimeError: If checkpointer not initialized
-
+    
     Returns:
-        The global checkpointer instance
+        AsyncSqliteSaver: The global checkpointer instance.
+        
+    Raises:
+        RuntimeError: If checkpointer is not initialized.
     """
     if _checkpointer is None:
         raise RuntimeError(

@@ -28,17 +28,14 @@ class TestStore:
         """Test successful initialization of store."""
         with patch("aiosqlite.connect", new_callable=AsyncMock) as mock_connect:
             with patch("app.persistence.store.AsyncSqliteStore") as mock_store_cls:
-                # Arrange
                 mock_conn = AsyncMock()
                 mock_connect.return_value = mock_conn
                 
                 mock_store = AsyncMock()
                 mock_store_cls.return_value = mock_store
                 
-                # Act
                 result = await initialize_store()
                 
-                # Assert
                 assert result == mock_store
                 mock_connect.assert_called_once()
                 mock_store_cls.assert_called_once_with(mock_conn)
@@ -47,7 +44,6 @@ class TestStore:
     @pytest.mark.asyncio
     async def test_shutdown_store_closes_connection(self):
         """Test that shutdown closes the database connection."""
-        # Arrange
         mock_conn = AsyncMock()
         mock_store = AsyncMock()
         mock_store.conn = mock_conn
@@ -57,10 +53,8 @@ class TestStore:
             with patch("app.persistence.store.AsyncSqliteStore", return_value=mock_store):
                 await initialize_store()
                 
-                # Act
                 await shutdown_store()
                 
-                # Assert
                 mock_conn.close.assert_awaited_once()
                 
                 # Verify it's cleared
@@ -75,7 +69,6 @@ class TestStore:
     @pytest.mark.asyncio
     async def test_save_conversation_calls_store_put(self):
         """Test that save_conversation calls store.aput with correct data."""
-        # Arrange
         mock_store = AsyncMock()
         
         with patch("aiosqlite.connect", new_callable=AsyncMock):
@@ -98,7 +91,6 @@ class TestStore:
                     )
                 ]
                 
-                # Act
                 await save_conversation(
                     user_id="user1",
                     conversation_id="conv1",
@@ -108,7 +100,6 @@ class TestStore:
                     report_content="report"
                 )
                 
-                # Assert
                 mock_store.aput.assert_awaited_once()
                 call_args = mock_store.aput.call_args
                 assert call_args.kwargs["namespace"] == ("user1", "conversations")
@@ -119,7 +110,6 @@ class TestStore:
     @pytest.mark.asyncio
     async def test_get_conversation_calls_store_get(self):
         """Test that get_conversation calls store.aget."""
-        # Arrange
         mock_store = AsyncMock()
         mock_item = MagicMock()
         mock_item.value = {"data": "test"}
@@ -129,17 +119,14 @@ class TestStore:
             with patch("app.persistence.store.AsyncSqliteStore", return_value=mock_store):
                 await initialize_store()
                 
-                # Act
                 result = await get_conversation("user1", "conv1")
                 
-                # Assert
                 assert result == {"data": "test"}
                 mock_store.aget.assert_awaited_once_with(("user1", "conversations"), "conv1")
 
     @pytest.mark.asyncio
     async def test_get_conversation_returns_none_if_not_found(self):
         """Test that get_conversation returns None if store returns None."""
-        # Arrange
         mock_store = AsyncMock()
         mock_store.aget.return_value = None
         
@@ -147,16 +134,13 @@ class TestStore:
             with patch("app.persistence.store.AsyncSqliteStore", return_value=mock_store):
                 await initialize_store()
                 
-                # Act
                 result = await get_conversation("user1", "conv1")
                 
-                # Assert
                 assert result is None
 
     @pytest.mark.asyncio
     async def test_list_conversations_calls_store_search(self):
         """Test that list_conversations calls store.asearch and formats results."""
-        # Arrange
         mock_store = AsyncMock()
         mock_item1 = MagicMock()
         mock_item1.key = "conv1"
@@ -172,10 +156,8 @@ class TestStore:
             with patch("app.persistence.store.AsyncSqliteStore", return_value=mock_store):
                 await initialize_store()
                 
-                # Act
                 results = await list_conversations("user1", limit=10)
                 
-                # Assert
                 assert len(results) == 2
                 assert results[0]["conversation_id"] == "conv1"
                 assert results[0]["user_query"] == "q1"

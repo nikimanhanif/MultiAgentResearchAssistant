@@ -1,7 +1,12 @@
-"""Centralized prompts module for easy importing.
+"""
+Prompts module containing centralized prompt templates.
 
-All prompt templates use LangChain's ChatPromptTemplate for consistent
-message formatting and follow best practices from the LangChain documentation.
+This module exports prompt templates for:
+- Scope Agent: Clarification and brief generation.
+- Report Agent: Report generation and formatting.
+- Research Agent: Strategy, task decomposition, and findings processing.
+
+All prompts use LangChain's ChatPromptTemplate for consistent formatting.
 """
 
 from app.prompts.scope_prompts import (
