@@ -22,6 +22,7 @@ from app.agents.scope_agent import (
     _build_brief_generation_chain,
 )
 from app.models.schemas import (
+    ClarificationQuestion,
     ClarificationQuestions,
     ResearchBrief,
     ScopeCompletionCheck,
@@ -219,8 +220,14 @@ class TestGenerateClarificationQuestions:
         mock_chain = AsyncMock()
         expected_questions = ClarificationQuestions(
             clarification_questions=[
-                "What specific aspect of AI are you interested in?",
-                "What is your intended use for this research?"
+                ClarificationQuestion(
+                    question="What specific aspect of AI are you interested in?",
+                    purpose="To narrow down the research scope"
+                ),
+                ClarificationQuestion(
+                    question="What is your intended use for this research?",
+                    purpose="To understand the application context"
+                )
             ],
             context="Need to understand scope and depth"
         )
@@ -233,7 +240,7 @@ class TestGenerateClarificationQuestions:
         # Assert
         assert isinstance(result, ClarificationQuestions)
         assert len(result.clarification_questions) == 2
-        assert "What specific aspect" in result.clarification_questions[0]
+        assert "What specific aspect" in result.clarification_questions[0].question
         assert result.context == "Need to understand scope and depth"
         mock_chain.ainvoke.assert_called_once()
 
@@ -246,7 +253,12 @@ class TestGenerateClarificationQuestions:
         # Arrange
         mock_chain = AsyncMock()
         expected_questions = ClarificationQuestions(
-            clarification_questions=["What time period are you interested in?"],
+            clarification_questions=[
+                ClarificationQuestion(
+                    question="What time period are you interested in?",
+                    purpose="To set temporal boundaries"
+                )
+            ],
             context="Need temporal constraints"
         )
         mock_chain.ainvoke.return_value = expected_questions
@@ -266,7 +278,7 @@ class TestGenerateClarificationQuestions:
         # Assert
         assert isinstance(result, ClarificationQuestions)
         assert len(result.clarification_questions) == 1
-        assert "time period" in result.clarification_questions[0]
+        assert "time period" in result.clarification_questions[0].question
 
     @pytest.mark.asyncio
     @patch("app.agents.scope_agent._build_question_generation_chain")
@@ -611,7 +623,16 @@ class TestClarifyScope:
         )
         
         expected_questions = ClarificationQuestions(
-            clarification_questions=["What aspect?", "What depth?"],
+            clarification_questions=[
+                ClarificationQuestion(
+                    question="What aspect?",
+                    purpose="To understand the specific focus"
+                ),
+                ClarificationQuestion(
+                    question="What depth?",
+                    purpose="To determine the level of detail required"
+                )
+            ],
             context="Need more details"
         )
         mock_generate_questions.return_value = expected_questions
@@ -640,7 +661,12 @@ class TestClarifyScope:
         )
         
         expected_questions = ClarificationQuestions(
-            clarification_questions=["What format would you like?"],
+            clarification_questions=[
+                ClarificationQuestion(
+                    question="What format would you like?",
+                    purpose="To determine the output format"
+                )
+            ],
             context="Need output format"
         )
         mock_generate_questions.return_value = expected_questions

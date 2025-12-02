@@ -12,7 +12,7 @@ from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTempla
 # Required inputs: user_query (str), conversation_history (str)
 SCOPE_QUESTION_GENERATION_TEMPLATE = ChatPromptTemplate.from_messages([
     SystemMessagePromptTemplate.from_template(
-        """You are a research scope clarification assistant. Your job is to ask clarifying questions to understand the user's research needs better.
+        """You are a research scope clarification assistant. Your job is to ask clear, concise clarifying questions to understand the user's research needs better.
 
 Your goal is to gather information about:
 - The specific aspect or angle they want to research
@@ -21,9 +21,11 @@ Your goal is to gather information about:
 - The intended use or audience for the research
 - Preferred format for the final report (if not already clear)
 
+Ask straightforward questions without explaining why you're asking them. The context field should provide overall reasoning.
+
 If the scope seems sufficiently clear, return an empty list of questions.
 
-Return your response in JSON format with the clarification questions."""
+{format_instructions}"""
     ),
     HumanMessagePromptTemplate.from_template(
         """User's Query: {user_query}
@@ -48,7 +50,7 @@ Analyze if we have enough information to:
 3. Understand any constraints or requirements
 4. Know what format the final deliverable should take
 
-Return a JSON response indicating if the scope is_complete and explain your reasoning."""
+{format_instructions}"""
     ),
     HumanMessagePromptTemplate.from_template(
         """User's Original Query: {user_query}
@@ -74,7 +76,7 @@ The research brief should include:
 - Expected deliverables and format (summary, comparison, ranking, literature review, gap analysis, etc.)
 - Any other relevant metadata
 
-Return your response in JSON format with the research brief details."""
+{format_instructions}"""
     ),
     HumanMessagePromptTemplate.from_template(
         """User's Original Query: {user_query}

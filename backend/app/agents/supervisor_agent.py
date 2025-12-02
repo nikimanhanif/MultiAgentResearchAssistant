@@ -201,10 +201,34 @@ You must respond with valid JSON matching this schema:
     
     try:
         import json
+        import re
         response = chain.invoke(prompt_inputs)
         
-        # Parse JSON response
+        # Extract JSON from response (handle DeepSeek Reasoner format)
         response_text = response.content if hasattr(response, 'content') else str(response)
+        
+        # Log raw response for debugging
+        logger.debug(f"Raw LLM response: {response_text[:500]}")
+        
+        # Remove thinking/reasoning blocks if present
+        response_text = re.sub(r'<thinking>.*?</thinking>', '', response_text, flags=re.DOTALL)
+        
+        # Try to extract JSON from markdown code blocks
+        json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', response_text, re.DOTALL)
+        if json_match:
+            response_text = json_match.group(1)
+        
+        # Try to find JSON object in the text
+        json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+        if json_match:
+            response_text = json_match.group(0)
+        
+        # Clean up the response
+        response_text = response_text.strip()
+        
+        if not response_text:
+            raise ValueError("Empty response from LLM")
+        
         result_dict = json.loads(response_text)
         
         # Validate and convert to Pydantic model

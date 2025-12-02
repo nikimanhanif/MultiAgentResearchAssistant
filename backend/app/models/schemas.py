@@ -226,9 +226,15 @@ class Citation(BaseModel):
     )
 
 
+
+class ClarificationQuestion(BaseModel):
+    """Single clarification question."""
+    question: str = Field(..., description="The question to ask the user")
+
+
 class ClarificationQuestions(BaseModel):
     """Model for clarification questions to user."""
-    clarification_questions: List[str] = Field(
+    clarification_questions: List[ClarificationQuestion] = Field(
         ...,
         description="List of 1-3 clarifying questions"
     )
@@ -241,8 +247,12 @@ class ClarificationQuestions(BaseModel):
         json_schema_extra={
             "example": {
                 "clarification_questions": [
-                    "What specific aspect of AI would you like to focus on?",
-                    "What time period should the research cover?"
+                    {
+                        "question": "What specific aspect of AI would you like to focus on?"
+                    },
+                    {
+                        "question": "What time period should the research cover?"
+                    }
                 ],
                 "context": "I need to understand the scope and constraints of your research."
             }

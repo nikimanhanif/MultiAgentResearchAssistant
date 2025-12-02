@@ -345,8 +345,11 @@ async def scope_node(state: ResearchState) -> Dict[str, Any]:
             logger.info("Scope Node: Scope incomplete, generating clarification questions")
             questions = await generate_clarification_questions(user_query, conversation_history)
             
-            # Format questions as a message
-            questions_text = "\n".join([f"{i+1}. {q}" for i, q in enumerate(questions.clarification_questions)])
+            # Format questions as a simple numbered list
+            questions_text = "\n".join([
+                f"{i+1}. {q.question}" 
+                for i, q in enumerate(questions.clarification_questions)
+            ])
             message_content = f"{questions.context}\n\n{questions_text}"
             
             # Return state update with clarification questions
