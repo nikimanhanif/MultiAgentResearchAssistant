@@ -26,17 +26,19 @@ class TestScopeQuestionGenerationTemplate:
         input_vars = SCOPE_QUESTION_GENERATION_TEMPLATE.input_variables
         assert "user_query" in input_vars
         assert "conversation_history" in input_vars
+        assert "format_instructions" in input_vars
 
     def test_template_has_exactly_two_input_variables(self):
-        """Test that template has exactly two input variables."""
+        """Test that template has exactly three input variables."""
         input_vars = SCOPE_QUESTION_GENERATION_TEMPLATE.input_variables
-        assert len(input_vars) == 2
+        assert len(input_vars) == 3
 
     def test_template_formats_with_valid_inputs(self):
         """Test that template formats correctly with valid inputs."""
         formatted = SCOPE_QUESTION_GENERATION_TEMPLATE.format_messages(
             user_query="What is machine learning?",
-            conversation_history="No previous conversation."
+            conversation_history="No previous conversation.",
+            format_instructions="Test format instructions"
         )
         assert len(formatted) == 2  # System + Human messages
         assert formatted[0].type == "system"
@@ -46,19 +48,20 @@ class TestScopeQuestionGenerationTemplate:
         """Test that system message contains clarification instructions."""
         formatted = SCOPE_QUESTION_GENERATION_TEMPLATE.format_messages(
             user_query="Test query",
-            conversation_history="Test history"
+            conversation_history="Test history",
+            format_instructions="Test format instructions"
         )
         system_msg = formatted[0].content
         assert "clarification" in system_msg.lower()
         assert "questions" in system_msg.lower()
-        assert "json" in system_msg.lower()
 
     def test_template_human_message_contains_query(self):
         """Test that human message contains the user query."""
         test_query = "What is deep learning?"
         formatted = SCOPE_QUESTION_GENERATION_TEMPLATE.format_messages(
             user_query=test_query,
-            conversation_history="No conversation"
+            conversation_history="No conversation",
+            format_instructions="Test format instructions"
         )
         human_msg = formatted[1].content
         assert test_query in human_msg
@@ -68,7 +71,8 @@ class TestScopeQuestionGenerationTemplate:
         test_history = "USER: Previous question\nASSISTANT: Previous answer"
         formatted = SCOPE_QUESTION_GENERATION_TEMPLATE.format_messages(
             user_query="Test query",
-            conversation_history=test_history
+            conversation_history=test_history,
+            format_instructions="Test format instructions"
         )
         human_msg = formatted[1].content
         assert test_history in human_msg
@@ -77,7 +81,8 @@ class TestScopeQuestionGenerationTemplate:
         """Test that template handles empty strings."""
         formatted = SCOPE_QUESTION_GENERATION_TEMPLATE.format_messages(
             user_query="",
-            conversation_history=""
+            conversation_history="",
+            format_instructions="Test format instructions"
         )
         assert len(formatted) == 2
         # Should not raise errors with empty strings
@@ -88,7 +93,8 @@ class TestScopeQuestionGenerationTemplate:
         long_history = "Turn: " * 1000  # Very long history
         formatted = SCOPE_QUESTION_GENERATION_TEMPLATE.format_messages(
             user_query=long_query,
-            conversation_history=long_history
+            conversation_history=long_history,
+            format_instructions="Test format instructions"
         )
         assert len(formatted) == 2
 
@@ -105,38 +111,42 @@ class TestScopeCompletionDetectionTemplate:
         input_vars = SCOPE_COMPLETION_DETECTION_TEMPLATE.input_variables
         assert "user_query" in input_vars
         assert "conversation_history" in input_vars
+        assert "format_instructions" in input_vars
 
     def test_template_has_exactly_two_input_variables(self):
-        """Test that template has exactly two input variables."""
+        """Test that template has exactly three input variables."""
         input_vars = SCOPE_COMPLETION_DETECTION_TEMPLATE.input_variables
-        assert len(input_vars) == 2
+        assert len(input_vars) == 3
 
     def test_template_formats_with_valid_inputs(self):
         """Test that template formats correctly with valid inputs."""
         formatted = SCOPE_COMPLETION_DETECTION_TEMPLATE.format_messages(
             user_query="What is AI?",
-            conversation_history="USER: Question\nASSISTANT: Answer"
+            conversation_history="USER: Question\nASSISTANT: Answer",
+            format_instructions="Test format instructions"
         )
         assert len(formatted) == 2  # System + Human messages
         assert formatted[0].type == "system"
         assert formatted[1].type == "human"
 
+
     def test_template_system_message_contains_analyzer_role(self):
         """Test that system message defines analyzer role."""
         formatted = SCOPE_COMPLETION_DETECTION_TEMPLATE.format_messages(
             user_query="Test query",
-            conversation_history="Test history"
+            conversation_history="Test history",
+            format_instructions="Test format instructions"
         )
         system_msg = formatted[0].content
         assert "analyzer" in system_msg.lower()
-        assert "is_complete" in system_msg.lower()
-        assert "json" in system_msg.lower()
+        assert "scope" in system_msg.lower()
 
     def test_template_mentions_required_analysis_criteria(self):
         """Test that template mentions completion criteria."""
         formatted = SCOPE_COMPLETION_DETECTION_TEMPLATE.format_messages(
             user_query="Test",
-            conversation_history="Test"
+            conversation_history="Test",
+            format_instructions="Test format instructions"
         )
         system_msg = formatted[0].content
         # Check for key analysis criteria
@@ -146,7 +156,8 @@ class TestScopeCompletionDetectionTemplate:
         """Test that human message has correct structure."""
         formatted = SCOPE_COMPLETION_DETECTION_TEMPLATE.format_messages(
             user_query="Test query",
-            conversation_history="Test history"
+            conversation_history="Test history",
+            format_instructions="Test format instructions"
         )
         human_msg = formatted[1].content
         assert "Test query" in human_msg
@@ -156,7 +167,8 @@ class TestScopeCompletionDetectionTemplate:
         """Test that template handles empty conversation history."""
         formatted = SCOPE_COMPLETION_DETECTION_TEMPLATE.format_messages(
             user_query="Initial query",
-            conversation_history=""
+            conversation_history="",
+            format_instructions="Test format instructions"
         )
         assert len(formatted) == 2
         human_msg = formatted[1].content
@@ -175,17 +187,19 @@ class TestScopeBriefGenerationTemplate:
         input_vars = SCOPE_BRIEF_GENERATION_TEMPLATE.input_variables
         assert "user_query" in input_vars
         assert "conversation_history" in input_vars
+        assert "format_instructions" in input_vars
 
     def test_template_has_exactly_two_input_variables(self):
-        """Test that template has exactly two input variables."""
+        """Test that template has exactly three input variables."""
         input_vars = SCOPE_BRIEF_GENERATION_TEMPLATE.input_variables
-        assert len(input_vars) == 2
+        assert len(input_vars) == 3
 
     def test_template_formats_with_valid_inputs(self):
         """Test that template formats correctly with valid inputs."""
         formatted = SCOPE_BRIEF_GENERATION_TEMPLATE.format_messages(
             user_query="Research topic",
-            conversation_history="Q: Question\nA: Answer"
+            conversation_history="Q: Question\nA: Answer",
+            format_instructions="Test format instructions"
         )
         assert len(formatted) == 2  # System + Human messages
         assert formatted[0].type == "system"
@@ -195,18 +209,19 @@ class TestScopeBriefGenerationTemplate:
         """Test that system message defines research brief generator role."""
         formatted = SCOPE_BRIEF_GENERATION_TEMPLATE.format_messages(
             user_query="Test",
-            conversation_history="Test"
+            conversation_history="Test",
+            format_instructions="Test format instructions"
         )
         system_msg = formatted[0].content
         assert "research brief" in system_msg.lower()
         assert "generator" in system_msg.lower()
-        assert "json" in system_msg.lower()
 
     def test_template_mentions_required_brief_components(self):
         """Test that template mentions all required brief components."""
         formatted = SCOPE_BRIEF_GENERATION_TEMPLATE.format_messages(
             user_query="Test",
-            conversation_history="Test"
+            conversation_history="Test",
+            format_instructions="Test format instructions"
         )
         system_msg = formatted[0].content
         # Check for key brief components
@@ -218,7 +233,8 @@ class TestScopeBriefGenerationTemplate:
         """Test that template includes report format options."""
         formatted = SCOPE_BRIEF_GENERATION_TEMPLATE.format_messages(
             user_query="Test",
-            conversation_history="Test"
+            conversation_history="Test",
+            format_instructions="Test format instructions"
         )
         system_msg = formatted[0].content
         # Should mention various format types
@@ -230,7 +246,8 @@ class TestScopeBriefGenerationTemplate:
         test_history = "USER: Previous question\nASSISTANT: Previous answer"
         formatted = SCOPE_BRIEF_GENERATION_TEMPLATE.format_messages(
             user_query=test_query,
-            conversation_history=test_history
+            conversation_history=test_history,
+            format_instructions="Test format instructions"
         )
         human_msg = formatted[1].content
         assert test_query in human_msg
@@ -245,7 +262,8 @@ ASSISTANT: Supervised, unsupervised, and reinforcement learning.
 USER: I want to research supervised learning in healthcare."""
         formatted = SCOPE_BRIEF_GENERATION_TEMPLATE.format_messages(
             user_query="Machine learning research",
-            conversation_history=complex_history
+            conversation_history=complex_history,
+            format_instructions="Test format instructions"
         )
         human_msg = formatted[1].content
         assert "supervised learning" in human_msg
@@ -277,15 +295,18 @@ class TestScopePromptsIntegration:
         # Should be able to format all three in sequence
         questions = SCOPE_QUESTION_GENERATION_TEMPLATE.format_messages(
             user_query=test_query,
-            conversation_history=test_history
+            conversation_history=test_history,
+            format_instructions="Test format instructions"
         )
         completion = SCOPE_COMPLETION_DETECTION_TEMPLATE.format_messages(
             user_query=test_query,
-            conversation_history=test_history
+            conversation_history=test_history,
+            format_instructions="Test format instructions"
         )
         brief = SCOPE_BRIEF_GENERATION_TEMPLATE.format_messages(
             user_query=test_query,
-            conversation_history=test_history
+            conversation_history=test_history,
+            format_instructions="Test format instructions"
         )
         
         assert len(questions) == 2
@@ -304,7 +325,8 @@ class TestScopePromptsIntegration:
         ]:
             formatted = template.format_messages(
                 user_query=special_query,
-                conversation_history=special_history
+                conversation_history=special_history,
+                format_instructions="Test format instructions"
             )
             assert len(formatted) == 2
             # Special characters should be preserved in messages
@@ -323,7 +345,8 @@ class TestScopePromptsIntegration:
         ]:
             formatted = template.format_messages(
                 user_query=unicode_query,
-                conversation_history=unicode_history
+                conversation_history=unicode_history,
+                format_instructions="Test format instructions"
             )
             assert len(formatted) == 2
             # Should not raise encoding errors

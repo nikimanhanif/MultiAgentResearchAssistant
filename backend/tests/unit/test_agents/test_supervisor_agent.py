@@ -111,36 +111,36 @@ class TestSupervisorNode:
         
         assert result["is_complete"] is True
         assert "error" in result
-        assert "Supervisor analysis failed" in result["error"]
+        assert any("Supervisor analysis failed" in err for err in result["error"])
         assert result["budget"]["iterations"] == 2
     
     @patch("app.agents.supervisor_agent.SUPERVISOR_GAP_ANALYSIS_TEMPLATE")
     @patch("app.agents.supervisor_agent.get_deepseek_reasoner")
     def test_supervisor_node_generates_tasks_for_gaps(self, mock_get_llm, mock_template):
         """Test that supervisor generates new tasks when gaps exist."""
-        mock_llm = MagicMock()
-        mock_structured = MagicMock()
+        # Create mock response object
+        mock_response = MagicMock()
+        mock_response.content = """{
+            "has_gaps": true,
+            "is_complete": false,
+            "gaps_identified": ["Missing topic2"],
+            "new_tasks": [{
+                "task_id": "task_001",
+                "topic": "topic2",
+                "query": "Research topic2",
+                "priority": 1,
+                "requested_by": "supervisor"
+            }],
+            "reasoning": "Topic2 has no findings"
+        }"""
         
-        gap_output = GapAnalysisOutput(
-            has_gaps=True,
-            is_complete=False,
-            gaps_identified=["Missing topic2"],
-            new_tasks=[
-                ResearchTask(
-                    task_id="task_001",
-                    topic="topic2",
-                    query="Research topic2",
-                    priority=1
-                )
-            ],
-            reasoning="Topic2 has no findings"
-        )
-        
+        # Mock the chain
         mock_chain = MagicMock()
-        mock_chain.invoke.return_value = gap_output
-        mock_template.__or__ = MagicMock(return_value=mock_chain)
+        mock_chain.invoke.return_value = mock_response
+        mock_template.__or__.return_value = mock_chain
         
-        mock_llm.with_structured_output.return_value = mock_structured
+        # Mock the LLM
+        mock_llm = MagicMock()
         mock_get_llm.return_value = mock_llm
         
         state: ResearchState = {
@@ -181,22 +181,23 @@ class TestSupervisorNode:
     @patch("app.agents.supervisor_agent.get_deepseek_reasoner")
     def test_supervisor_node_marks_complete_when_no_gaps(self, mock_get_llm, mock_template):
         """Test that supervisor marks complete when no gaps exist."""
-        mock_llm = MagicMock()
-        mock_structured = MagicMock()
+        # Create mock response object
+        mock_response = MagicMock()
+        mock_response.content = """{
+            "has_gaps": false,
+            "is_complete": true,
+            "gaps_identified": [],
+            "new_tasks": [],
+            "reasoning": "All topics sufficiently covered"
+        }"""
         
-        gap_output = GapAnalysisOutput(
-            has_gaps=False,
-            is_complete=True,
-            gaps_identified=[],
-            new_tasks=[],
-            reasoning="All topics sufficiently covered"
-        )
-        
+        # Mock the chain
         mock_chain = MagicMock()
-        mock_chain.invoke.return_value = gap_output
-        mock_template.__or__ = MagicMock(return_value=mock_chain)
+        mock_chain.invoke.return_value = mock_response
+        mock_template.__or__.return_value = mock_chain
         
-        mock_llm.with_structured_output.return_value = mock_structured
+        # Mock the LLM
+        mock_llm = MagicMock()
         mock_get_llm.return_value = mock_llm
         
         state: ResearchState = {

@@ -238,3 +238,48 @@ class TestBuildResearchGraph:
         assert "sub_agent" in node_names
         assert "report_agent" in node_names
         assert "reviewer" in node_names
+
+class TestRouteFromScope:
+    """Tests for route_from_scope conditional edge function."""
+    
+    def test_route_from_scope_with_brief_routes_to_supervisor(self):
+        """Test that existence of research_brief routes to supervisor."""
+        state = ResearchState(
+            research_brief=ResearchBrief(
+                scope="test", sub_topics=[], constraints={}, format=None, deliverables="test report"
+            ),
+            findings=[],
+            task_history=[],
+            completed_tasks=[],
+            failed_tasks=[],
+            budget={"iterations": 0, "max_iterations": 20, "max_sub_agents": 20},
+            is_complete=False,
+            gaps=None,
+            error=None,
+            messages=[],
+            report_content="",
+            reviewer_feedback=None
+        )
+        
+        result = route_from_scope(state)
+        assert result == "supervisor"
+
+    def test_route_from_scope_without_brief_routes_to_end(self):
+        """Test that missing research_brief routes to END."""
+        state = ResearchState(
+            research_brief=None,
+            findings=[],
+            task_history=[],
+            completed_tasks=[],
+            failed_tasks=[],
+            budget={"iterations": 0, "max_iterations": 20, "max_sub_agents": 20},
+            is_complete=False,
+            gaps=None,
+            error=None,
+            messages=[],
+            report_content="",
+            reviewer_feedback=None
+        )
+        
+        result = route_from_scope(state)
+        assert result == END

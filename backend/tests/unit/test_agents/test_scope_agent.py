@@ -20,6 +20,7 @@ from app.agents.scope_agent import (
     _build_question_generation_chain,
     _build_completion_detection_chain,
     _build_brief_generation_chain,
+    scope_node,
 )
 from app.models.schemas import (
     ClarificationQuestion,
@@ -28,6 +29,7 @@ from app.models.schemas import (
     ScopeCompletionCheck,
     ReportFormat,
 )
+from app.graphs.state import ResearchState
 
 
 class TestFormatConversationHistory:
@@ -714,3 +716,117 @@ class TestClarifyScope:
         # Assert
         assert isinstance(result, ResearchBrief)
         mock_check_completion.assert_called_once_with("Detailed query", None)
+
+
+class TestScopeNode:
+    """Test cases for scope_node LangGraph integration."""
+
+    @pytest.mark.asyncio
+    async def test_scope_node_skips_if_brief_exists(self):
+        """Test that scope_node returns empty update if research_brief exists."""
+        # Arrange
+        state = ResearchState(
+            research_brief=ResearchBrief(scope="Existing", sub_topics=[], constraints={}, deliverables=""),
+            messages=[]
+        )
+        
+        # Act
+        result = await scope_node(state)
+        
+        # Assert
+        assert result == {}
+
+    @pytest.mark.asyncio
+    async def test_scope_node_handles_missing_user_messages(self):
+        """Test that scope_node handles missing user messages gracefully."""
+        # Arrange
+        state = ResearchState(messages=[])
+        
+        # Act
+        result = await scope_node(state)
+        
+        # Assert
+        assert "messages" in result
+        assert "Error: No user query" in result["messages"][0]["content"]
+
+    @pytest.mark.asyncio
+    @patch("app.agents.scope_agent.check_scope_completion")
+    @patch("app.agents.scope_agent.generate_clarification_questions")
+    async def test_scope_node_generates_questions_when_incomplete(
+        self, mock_gen_questions, mock_check_completion
+    ):
+        """Test that scope_node generates questions when scope is incomplete."""
+        # Arrange
+        state = ResearchState(
+            messages=[{"role": "user", "content": "Research AI"}]
+        )
+        
+        mock_check_completion.return_value = ScopeCompletionCheck(
+            is_complete=False, reasoning="Need info", missing_info=["aspect"]
+        )
+        
+        mock_gen_questions.return_value = ClarificationQuestions(
+            clarification_questions=[
+                ClarificationQuestion(question="What aspect?", purpose="Scope")
+            ],
+            context="Need details"
+        )
+        
+        # Act
+        result = await scope_node(state)
+        
+        # Assert
+        assert "messages" in result
+        assert "What aspect?" in result["messages"][0]["content"]
+        mock_check_completion.assert_called_once()
+        mock_gen_questions.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch("app.agents.scope_agent.check_scope_completion")
+    @patch("app.agents.scope_agent.generate_research_brief")
+    async def test_scope_node_generates_brief_when_complete(
+        self, mock_gen_brief, mock_check_completion
+    ):
+        """Test that scope_node generates brief when scope is complete."""
+        # Arrange
+        state = ResearchState(
+            messages=[{"role": "user", "content": "Detailed query"}]
+        )
+        
+        mock_check_completion.return_value = ScopeCompletionCheck(
+            is_complete=True, reasoning="Complete", missing_info=[]
+        )
+        
+        expected_brief = ResearchBrief(
+            scope="Detailed Scope", sub_topics=[], constraints={}, deliverables=""
+        )
+        mock_gen_brief.return_value = expected_brief
+        
+        # Act
+        result = await scope_node(state)
+        
+        # Assert
+        assert "research_brief" in result
+        assert result["research_brief"] == expected_brief
+        assert "messages" in result
+        assert "Research brief created" in result["messages"][0]["content"]
+
+    @pytest.mark.asyncio
+    @patch("app.agents.scope_agent.check_scope_completion")
+    async def test_scope_node_handles_exceptions(self, mock_check_completion):
+        """Test that scope_node handles exceptions gracefully."""
+        # Arrange
+        state = ResearchState(
+            messages=[{"role": "user", "content": "Query"}]
+        )
+        
+        mock_check_completion.side_effect = Exception("Test error")
+        
+        # Act
+        result = await scope_node(state)
+        
+        # Assert
+        assert "error" in result
+        assert "Test error" in result["error"]
+        assert "messages" in result
+        assert "Error processing" in result["messages"][0]["content"]

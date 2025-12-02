@@ -394,3 +394,65 @@ class TestSafeNodeIntegration:
         assert result["findings"] == []
         assert "Persistent failure" in result["error"]
 
+
+    @pytest.mark.asyncio
+    async def test_safe_node_without_traceback_logging(self):
+        """Test that @safe_node respects log_traceback=False."""
+        # Arrange
+        @safe_node(log_traceback=False)
+        async def failing_node(state: dict) -> dict:
+            raise ValueError("Test error")
+        
+        # Act
+        with patch("app.utils.error_handling.logger") as mock_logger:
+            await failing_node({})
+            
+            # Assert
+            # Should log the error message but NOT the traceback
+            assert mock_logger.error.call_count == 1
+            assert "Traceback" not in mock_logger.error.call_args[0][0]
+
+    def test_safe_node_sync_with_default_return(self):
+        """Test that @safe_node sync wrapper uses default_return."""
+        # Arrange
+        default_state = {"is_complete": False, "findings": []}
+        
+        @safe_node(default_return=default_state)
+        def failing_sync_node(state: dict) -> dict:
+            raise ValueError("Sync error")
+        
+        # Act
+        result = failing_sync_node({})
+        
+        # Assert
+        assert result["is_complete"] is False
+        assert result["findings"] == []
+        assert "error" in result
+        assert "Sync error" in result["error"]
+
+    def test_safe_node_sync_without_traceback_logging(self):
+        """Test that @safe_node sync wrapper respects log_traceback=False."""
+        # Arrange
+        @safe_node(log_traceback=False)
+        def failing_sync_node(state: dict) -> dict:
+            raise ValueError("Sync error")
+        
+        # Act
+        with patch("app.utils.error_handling.logger") as mock_logger:
+            failing_sync_node({})
+            
+            # Assert
+            assert mock_logger.error.call_count == 1
+            assert "Traceback" not in mock_logger.error.call_args[0][0]
+
+
+class TestExampleUsage:
+    """Test cases for example usage functions (for coverage)."""
+
+    @pytest.mark.asyncio
+    async def test_example_safe_node_usage_runs(self):
+        """Test that example_safe_node_usage runs without error."""
+        from app.utils.error_handling import example_safe_node_usage
+        
+        # Just ensure it runs, as it prints to stdout
+        await example_safe_node_usage()

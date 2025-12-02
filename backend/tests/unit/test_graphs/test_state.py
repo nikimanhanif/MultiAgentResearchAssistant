@@ -7,8 +7,85 @@ functions, verifying proper structure and reducer patterns.
 import pytest
 from typing import Dict, Any
 
-from app.graphs.state import ResearchState, create_initial_state
+from app.graphs.state import ResearchState, create_initial_state, merge_budgets
 from app.models.schemas import ResearchBrief, Finding, ResearchTask, Citation
+
+
+class TestMergeBudgets:
+    """Test cases for merge_budgets custom reducer."""
+    
+    def test_merge_budgets_uses_max_for_iterations(self):
+        """Test that iterations uses max to preserve supervisor updates."""
+        left = {"iterations": 5, "max_iterations": 20, "total_searches": 10}
+        right = {"iterations": 7, "max_iterations": 20, "total_searches": 10}
+        
+        result = merge_budgets(left, right)
+        
+        assert result["iterations"] == 7
+        
+    def test_merge_budgets_preserves_higher_left_iterations(self):
+        """Test that higher left iterations are preserved."""
+        left = {"iterations": 10, "max_iterations": 20, "total_searches": 5}
+        right = {"iterations": 8, "max_iterations": 20, "total_searches": 5}
+        
+        result = merge_budgets(left, right)
+        
+        assert result["iterations"] == 10
+    
+    def test_merge_budgets_sums_search_deltas_correctly(self):
+        """Test that total_searches increments by delta."""
+        left = {"iterations": 5, "max_iterations": 20, "total_searches": 10}
+        right = {"iterations": 5, "max_iterations": 20, "total_searches": 15}
+        
+        result = merge_budgets(left, right)
+        
+        assert result["total_searches"] == 15
+        
+    def test_merge_budgets_handles_zero_delta(self):
+        """Test that zero delta results in unchanged searches."""
+        left = {"iterations": 5, "max_iterations": 20, "total_searches": 10}
+        right = {"iterations": 6, "max_iterations": 20, "total_searches": 10}
+        
+        result = merge_budgets(left, right)
+        
+        assert result["total_searches"] == 10
+    
+    def test_merge_budgets_ignores_negative_delta(self):
+        """Test that negative deltas are clamped to zero."""
+        left = {"iterations": 5, "max_iterations": 20, "total_searches": 15}
+        right = {"iterations": 6, "max_iterations": 20, "total_searches": 10}
+        
+        result = merge_budgets(left, right)
+        
+        assert result["total_searches"] == 15
+        
+    def test_merge_budgets_preserves_limits_from_right(self):
+        """Test that max limits are taken from right (latest)."""
+        left = {"iterations": 5, "max_iterations": 20, "max_sub_agents": 20, "total_searches": 10}
+        right = {"iterations": 6, "max_iterations": 25, "max_sub_agents": 30, "total_searches": 12}
+        
+        result = merge_budgets(left, right)
+        
+        assert result["max_iterations"] == 25
+        assert result["max_sub_agents"] == 30
+    
+    def test_merge_budgets_handles_missing_iterations(self):
+        """Test that missing iterations defaults to 0."""
+        left = {"max_iterations": 20, "total_searches": 10}
+        right = {"iterations": 5, "max_iterations": 20, "total_searches": 12}
+        
+        result = merge_budgets(left, right)
+        
+        assert result["iterations"] == 5
+        
+    def test_merge_budgets_handles_missing_searches(self):
+        """Test that missing total_searches defaults to 0."""
+        left = {"iterations": 3, "max_iterations": 20}
+        right = {"iterations": 4, "max_iterations": 20, "total_searches": 5}
+        
+        result = merge_budgets(left, right)
+        
+        assert result["total_searches"] == 5
 
 
 class TestResearchState:
