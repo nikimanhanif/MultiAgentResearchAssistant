@@ -27,6 +27,7 @@ dependencies = [
     "pytest-cov==4.1.0",
     "python-multipart==0.0.6",
     "ruff==0.9.10",
+    "streamlit>=1.51.0",
     "uvicorn[standard]==0.24.0",
 ]
 

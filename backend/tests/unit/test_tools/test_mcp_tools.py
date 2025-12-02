@@ -114,8 +114,10 @@ class TestLoadMcpTools:
         )
         
         with patch("app.tools.mcp_tools.get_mcp_client") as mock_get_client:
-            mock_client = AsyncMock()
-            mock_client.get_tools = AsyncMock(return_value=[mock_tool])
+            mock_client = MagicMock()
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client.get_tools = MagicMock(return_value=[mock_tool])
             mock_get_client.return_value = mock_client
             
             tools = await load_mcp_tools(["scientific-papers"])
@@ -135,8 +137,10 @@ class TestLoadMcpTools:
     async def test_calls_get_mcp_client_with_servers(self):
         """Test that load_mcp_tools calls get_mcp_client correctly."""
         with patch("app.tools.mcp_tools.get_mcp_client") as mock_get_client:
-            mock_client = AsyncMock()
-            mock_client.get_tools = AsyncMock(return_value=[])
+            mock_client = MagicMock()
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client.get_tools = MagicMock(return_value=[])
             mock_get_client.return_value = mock_client
             
             await load_mcp_tools(["scientific-papers"])
@@ -147,8 +151,9 @@ class TestLoadMcpTools:
     async def test_graceful_fallback_on_connection_error(self):
         """Test that connection errors return empty list instead of crashing."""
         with patch("app.tools.mcp_tools.get_mcp_client") as mock_get_client:
-            mock_client = AsyncMock()
-            mock_client.get_tools = AsyncMock(side_effect=ConnectionError("Server unavailable"))
+            mock_client = MagicMock()
+            mock_client.__aenter__ = AsyncMock(side_effect=ConnectionError("Server unavailable"))
+            mock_client.__aexit__ = AsyncMock(return_value=None)
             mock_get_client.return_value = mock_client
             
             tools = await load_mcp_tools(["scientific-papers"])
@@ -159,8 +164,9 @@ class TestLoadMcpTools:
     async def test_graceful_fallback_on_generic_error(self):
         """Test that generic errors return empty list with logging."""
         with patch("app.tools.mcp_tools.get_mcp_client") as mock_get_client:
-            mock_client = AsyncMock()
-            mock_client.get_tools = AsyncMock(side_effect=Exception("Unknown error"))
+            mock_client = MagicMock()
+            mock_client.__aenter__ = AsyncMock(side_effect=Exception("Unknown error"))
+            mock_client.__aexit__ = AsyncMock(return_value=None)
             mock_get_client.return_value = mock_client
             
             with patch("app.tools.mcp_tools.logger") as mock_logger:
@@ -188,8 +194,10 @@ class TestLoadMcpTools:
         )
         
         with patch("app.tools.mcp_tools.get_mcp_client") as mock_get_client:
-            mock_client = AsyncMock()
-            mock_client.get_tools = AsyncMock(return_value=[mock_tool])
+            mock_client = MagicMock()
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client.get_tools = MagicMock(return_value=[mock_tool])
             mock_get_client.return_value = mock_client
             
             with patch("app.tools.mcp_tools.logger") as mock_logger:

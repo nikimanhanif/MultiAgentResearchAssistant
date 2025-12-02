@@ -7,14 +7,16 @@ Follows backend-testing.md standards: happy path, edge cases, error handling.
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
 
+from app.models.schemas import ResearchTask, Finding, Citation, SourceType
 from app.agents.sub_agent import (
     sub_agent_node,
     _parse_delegation_request,
     _extract_citations,
     CitationExtractionOutput
 )
+from langchain_core.messages import ToolMessage, AIMessage
 from app.graphs.state import SubAgentState
-from app.models.schemas import ResearchBrief, ResearchTask, Finding, Citation
+from app.models.schemas import ResearchBrief
 
 
 class TestParseDelegationRequest:
@@ -126,7 +128,11 @@ class TestSubAgentNode:
     @patch("app.agents.sub_agent.get_research_tools")
     async def test_sub_agent_node_no_tools_available_fails(self, mock_get_tools):
         """Test that sub-agent fails gracefully when no tools available."""
-        mock_get_tools.return_value = []
+        # Mock context manager returning empty list
+        mock_ctx = AsyncMock()
+        mock_ctx.__aenter__.return_value = []
+        mock_ctx.__aexit__.return_value = None
+        mock_get_tools.return_value = mock_ctx
         
         state: SubAgentState = {
             "task": ResearchTask(
@@ -157,7 +163,7 @@ class TestSubAgentNode:
         assert "failed_tasks" in result
         assert "task_003" in result["failed_tasks"]
         assert "error" in result
-        assert "No tools available" in result["error"]
+        assert "No tools available" in result["error"][0]
     
     @pytest.mark.asyncio
     @patch("app.agents.sub_agent._extract_citations")
@@ -171,21 +177,36 @@ class TestSubAgentNode:
         # Mock tools
         mock_tool = MagicMock()
         mock_tool.name = "tavily_search"
-        mock_get_tools.return_value = [mock_tool]
+        
+        # Mock context manager
+        mock_ctx = AsyncMock()
+        mock_ctx.__aenter__.return_value = [mock_tool]
+        mock_ctx.__aexit__.return_value = None
+        mock_get_tools.return_value = mock_ctx
         
         # Mock LLM
         mock_llm = MagicMock()
         mock_get_llm.return_value = mock_llm
         
         # Mock agent execution
+        # Mock agent execution
         mock_agent = AsyncMock()
-        mock_tool_msg = MagicMock()
-        mock_tool_msg.tool_calls = [{"name": "tavily_search", "args": {}}]
+        
+        # AI Message triggering tool
+        mock_ai_msg = MagicMock(spec=AIMessage)
+        mock_ai_msg.tool_calls = [{"name": "tavily_search", "args": {}, "id": "call_1"}]
+        
+        # Tool Message with result
+        mock_tool_msg = MagicMock(spec=ToolMessage)
+        mock_tool_msg.name = "tavily_search"
+        mock_tool_msg.content = "Search results"
+        mock_tool_msg.tool_call_id = "call_1"
+        
         mock_final_msg = MagicMock()
         mock_final_msg.content = "Found information about quantum computing"
         
         mock_agent.ainvoke.return_value = {
-            "messages": [mock_tool_msg, mock_final_msg]
+            "messages": [mock_ai_msg, mock_tool_msg, mock_final_msg]
         }
         mock_create_agent.return_value = mock_agent
         
@@ -244,18 +265,31 @@ class TestSubAgentNode:
         # Mock tools and LLM
         mock_tool = MagicMock()
         mock_tool.name = "tavily_search"
-        mock_get_tools.return_value = [mock_tool]
+        
+        # Mock context manager
+        mock_ctx = AsyncMock()
+        mock_ctx.__aenter__.return_value = [mock_tool]
+        mock_ctx.__aexit__.return_value = None
+        mock_get_tools.return_value = mock_ctx
         mock_llm = MagicMock()
         mock_get_llm.return_value = mock_llm
         
         # Mock agent with delegation in output AND tool results
         mock_agent = AsyncMock()
-        mock_tool_msg = MagicMock()
-        mock_tool_msg.tool_calls = [{"name": "tavily_search", "args": {}}]
+        
+        mock_ai_msg = MagicMock(spec=AIMessage)
+        mock_ai_msg.tool_calls = [{"name": "tavily_search", "args": {}, "id": "call_1"}]
+        
+        mock_tool_msg = MagicMock(spec=ToolMessage)
+        mock_tool_msg.name = "tavily_search"
+        mock_tool_msg.content = "Search results"
+        mock_tool_msg.tool_call_id = "call_1"
+        
         mock_final_msg = MagicMock()
         mock_final_msg.content = "DELEGATION_REQUEST: topic='subtopic', reason='deeper research needed'"
+        
         mock_agent.ainvoke.return_value = {
-            "messages": [mock_tool_msg, mock_final_msg]
+            "messages": [mock_ai_msg, mock_tool_msg, mock_final_msg]
         }
         mock_create_agent.return_value = mock_agent
         
@@ -313,7 +347,12 @@ class TestSubAgentNode:
         # Mock tools and LLM
         mock_tool = MagicMock()
         mock_tool.name = "tavily_search"
-        mock_get_tools.return_value = [mock_tool]
+        
+        # Mock context manager
+        mock_ctx = AsyncMock()
+        mock_ctx.__aenter__.return_value = [mock_tool]
+        mock_ctx.__aexit__.return_value = None
+        mock_get_tools.return_value = mock_ctx
         mock_llm = MagicMock()
         mock_get_llm.return_value = mock_llm
         
@@ -351,7 +390,7 @@ class TestSubAgentNode:
         assert "failed_tasks" in result
         assert "task_006" in result["failed_tasks"]
         assert "error" in result
-        assert "Agent execution failed" in result["error"]
+        assert "Agent execution failed" in result["error"][0]
         # Budget should still be updated even on failure
         assert result["budget"]["total_searches"] == 5
 

@@ -29,6 +29,40 @@ Key Features:
 from typing import TypedDict, Optional, List, Dict, Any, Annotated
 import operator
 
+def merge_budgets(left: Dict[str, int], right: Dict[str, int]) -> Dict[str, int]:
+    """Custom reducer for budget field to handle concurrent updates.
+    
+    This allows parallel sub-agents to update search counts while
+    the supervisor manages iteration counters.
+    
+    Strategy:
+    - Supervisor updates: iterations (uses max to avoid overwrites)
+    - Sub-agent updates: total_searches (sum the deltas from each agent)
+    - Limits (max_*) should not change during execution
+    
+    Args:
+        left: Current budget state from the graph
+        right: Budget update from a node (contains full budget dict)
+        
+    Returns:
+        Merged budget dictionary
+    """
+    # Start with the right (latest) budget as base (includes limits)
+    merged = right.copy()
+    
+    # For iterations: use max to ensure supervisor updates take precedence
+    merged["iterations"] = max(
+        left.get("iterations", 0), 
+        right.get("iterations", 0)
+    )
+    
+    left_searches = left.get("total_searches", 0)
+    right_searches = right.get("total_searches", 0)
+    searches_delta = max(0, right_searches - left_searches)  # Compute increment
+    merged["total_searches"] = left_searches + searches_delta
+    
+    return merged
+
 from app.models.schemas import (
     ResearchBrief,
     Finding,
@@ -74,8 +108,8 @@ class ResearchState(TypedDict, total=False):
     completed_tasks: Annotated[List[str], operator.add]
     failed_tasks: Annotated[List[str], operator.add]
     
-    # Budget tracking (Phase 8)
-    budget: Dict[str, int]
+    # Budget tracking with reducer for parallel updates (Phase 8)
+    budget: Annotated[Dict[str, int], merge_budgets]
     
     # Gap analysis fields (LLM-based, not algorithmic)
     gaps: Optional[Dict[str, Any]]

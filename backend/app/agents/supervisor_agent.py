@@ -118,6 +118,11 @@ def supervisor_node(state: ResearchState) -> Dict[str, Any]:
     failed_tasks = state.get("failed_tasks", [])
     budget = state["budget"]
     
+    # Check if already complete (e.g. mock mode or previous iteration)
+    if state.get("is_complete"):
+        logger.info("Supervisor: Research already marked complete")
+        return {"is_complete": True}
+    
     # Increment iteration counter
     current_iteration = budget["iterations"] + 1
     
@@ -167,15 +172,43 @@ def supervisor_node(state: ResearchState) -> Dict[str, Any]:
         "findings_context": findings_context
     }
     
-    # Get LLM for structured output
+    # Get LLM with JSON mode (deepseek-reasoner doesn't support tool_choice)
     llm = get_deepseek_reasoner(temperature=0.5)
-    structured_llm = llm.with_structured_output(GapAnalysisOutput)
     
-    # Create chain and invoke
-    chain = SUPERVISOR_GAP_ANALYSIS_TEMPLATE | structured_llm
+    # Add JSON schema instructions to prompt
+    json_schema_instructions = """
+You must respond with valid JSON matching this schema:
+{
+  "has_gaps": boolean,
+  "is_complete": boolean,
+  "gaps_identified": [string],
+  "new_tasks": [
+    {
+      "task_id": string,
+      "topic": string,
+      "query": string,
+      "priority": number,
+      "requested_by": "supervisor"
+    }
+  ],
+  "reasoning": string
+}
+"""
+    prompt_inputs["json_schema"] = json_schema_instructions
+    
+    # Create chain and invoke with JSON mode
+    chain = SUPERVISOR_GAP_ANALYSIS_TEMPLATE | llm
     
     try:
-        result: GapAnalysisOutput = chain.invoke(prompt_inputs)
+        import json
+        response = chain.invoke(prompt_inputs)
+        
+        # Parse JSON response
+        response_text = response.content if hasattr(response, 'content') else str(response)
+        result_dict = json.loads(response_text)
+        
+        # Validate and convert to Pydantic model
+        result = GapAnalysisOutput(**result_dict)
         logger.info(f"Supervisor: Analysis complete - has_gaps={result.has_gaps}, is_complete={result.is_complete}")
         
         # Update state based on result
@@ -209,13 +242,20 @@ def supervisor_node(state: ResearchState) -> Dict[str, Any]:
         
         return state_update
         
+    except json.JSONDecodeError as e:
+        logger.error(f"Supervisor: Failed to parse JSON response - {e}")
+        return {
+            "budget": {**budget, "iterations": current_iteration},
+            "is_complete": True,
+            "error": [f"Supervisor JSON parsing failed: {str(e)}"]
+        }
     except Exception as e:
         logger.error(f"Supervisor gap analysis failed: {e}")
         # On error, mark as complete to avoid infinite loops
         return {
             "budget": {**budget, "iterations": current_iteration},
             "is_complete": True,
-            "error": f"Supervisor analysis failed: {str(e)}"
+            "error": [f"Supervisor analysis failed: {str(e)}"]  # List, not string
         }
 
 

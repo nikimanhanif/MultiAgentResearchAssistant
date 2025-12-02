@@ -261,6 +261,8 @@ Budget Status:
 Already Completed Tasks: {completed_count} tasks
 Failed Tasks (avoid similar): {failed_tasks}
 
+{json_schema}
+
 Conduct gap analysis and generate tasks if needed. Analyze the content of findings above to determine if topics are covered superficially or in-depth."""
     ),
 ])
@@ -303,24 +305,37 @@ SUB_AGENT_RESEARCH_TEMPLATE = ChatPromptTemplate.from_messages([
 {credibility_heuristics}
 
 RESEARCH STRATEGY:
-1. **Budget Awareness**: You have {budget_remaining} searches remaining (max {max_searches_per_agent} for this task)
-2. **Tool Selection**:
-   - For academic topics: Use Scientific Paper Harvester (list_categories → search_papers/fetch_top_cited)
-   - For web/news topics: Use Tavily search
-   - Abstract-First: Prefer abstracts over full-text (fetch_content only if critical)
-3. **Quality Over Quantity**: Find 2-3 high-quality sources rather than many low-quality ones
-4. **Source Tagging**: When logging results, prefix with tool name: [Source: tool_name] content
+1. **Budget**: {budget_remaining} searches remaining (max {max_searches_per_agent})
 
-DELEGATION:
-If you need deeper research on a specific subtopic:
-- Identify the exact subtopic and reason
-- Signal this in your response (do NOT create tasks directly)
-- Format: "DELEGATION_REQUEST: topic='[subtopic]', reason='[why needed]'"
+2. **MCP Tools** (Scientific Papers):
+   - **list_categories** (source: required) - List available categories
+   - **search_papers** (source, query: required | count, field, sortBy: optional) - Search papers
+        • field: "all" | "title" | "abstract" | "author" | "fulltext" (default: "all")
+        • sortBy: "relevance" | "date" | "citations" (default: "relevance")
+        • count: Number of results to return (default: 50, max: 200)
+        • source: "arxiv" | "openalex" | "europepmc" | "core"
+   - **fetch_top_cited** (concept, since: required | count: optional) - Get highly-cited papers
+     •`since` MUST be in "YYYY-MM-DD" format (e.g., "2020-01-01")
+   - **fetch_content** (source, id: required) - Get full paper text by ID
+        • source: "arxiv" | "openalex" | "europepmc" | "core" | "pmc" | "bioRxiv/medRxiv"
+        • id: Paper ID
+        • ID Formats by Source:
+            arXiv: "2401.12345", "cs/0601001", "1234.5678v2"
+            OpenAlex: "W2741809807" or numeric 2741809807
+            PMC: "PMC8245678" or "12345678"
+            Europe PMC: "PMC8245678", "12345678", or DOI
+            bioRxiv/medRxiv: "10.1101/2021.01.01.425001" or "2021.01.01.425001"
+            CORE: Numeric ID like "12345678"
 
-IMPORTANT:
-- Execute searches strategically (you only get 2!)
-- Prioritize credible sources
-- Tag all outputs with source tool name for proper credibility scoring"""
+   - **Tavily**: For web/news topics
+
+3. **Strategy**: Prefer search_papers (most reliable). Get metadata first, full text only if needed.
+
+CRITICAL:
+- Provide ALL required parameters
+- Tag outputs: [Source: tool_name] content
+- Quality over quantity (2-3 sources)
+- Only 2 searches allowed!"""
     ),
     HumanMessagePromptTemplate.from_template(
         """Your Task:

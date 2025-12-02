@@ -218,7 +218,7 @@ class TestGenerateClarificationQuestions:
         # Arrange
         mock_chain = AsyncMock()
         expected_questions = ClarificationQuestions(
-            questions=[
+            clarification_questions=[
                 "What specific aspect of AI are you interested in?",
                 "What is your intended use for this research?"
             ],
@@ -232,8 +232,8 @@ class TestGenerateClarificationQuestions:
         
         # Assert
         assert isinstance(result, ClarificationQuestions)
-        assert len(result.questions) == 2
-        assert "What specific aspect" in result.questions[0]
+        assert len(result.clarification_questions) == 2
+        assert "What specific aspect" in result.clarification_questions[0]
         assert result.context == "Need to understand scope and depth"
         mock_chain.ainvoke.assert_called_once()
 
@@ -246,7 +246,7 @@ class TestGenerateClarificationQuestions:
         # Arrange
         mock_chain = AsyncMock()
         expected_questions = ClarificationQuestions(
-            questions=["What time period are you interested in?"],
+            clarification_questions=["What time period are you interested in?"],
             context="Need temporal constraints"
         )
         mock_chain.ainvoke.return_value = expected_questions
@@ -265,8 +265,8 @@ class TestGenerateClarificationQuestions:
         
         # Assert
         assert isinstance(result, ClarificationQuestions)
-        assert len(result.questions) == 1
-        assert "time period" in result.questions[0]
+        assert len(result.clarification_questions) == 1
+        assert "time period" in result.clarification_questions[0]
 
     @pytest.mark.asyncio
     @patch("app.agents.scope_agent._build_question_generation_chain")
@@ -277,7 +277,7 @@ class TestGenerateClarificationQuestions:
         # Arrange
         mock_chain = AsyncMock()
         expected_questions = ClarificationQuestions(
-            questions=[],
+            clarification_questions=[],
             context="Scope is clear"
         )
         mock_chain.ainvoke.return_value = expected_questions
@@ -288,7 +288,7 @@ class TestGenerateClarificationQuestions:
         
         # Assert
         assert isinstance(result, ClarificationQuestions)
-        assert len(result.questions) == 0
+        assert len(result.clarification_questions) == 0
         assert result.context == "Scope is clear"
 
     @pytest.mark.asyncio
@@ -320,7 +320,7 @@ class TestCheckScopeCompletion:
         mock_chain = AsyncMock()
         expected_check = ScopeCompletionCheck(
             is_complete=True,
-            reason="All necessary information provided",
+            reasoning="All necessary information provided",
             missing_info=[]
         )
         mock_chain.ainvoke.return_value = expected_check
@@ -332,7 +332,7 @@ class TestCheckScopeCompletion:
         # Assert
         assert isinstance(result, ScopeCompletionCheck)
         assert result.is_complete is True
-        assert "necessary information" in result.reason
+        assert "necessary information" in result.reasoning
         assert len(result.missing_info) == 0
 
     @pytest.mark.asyncio
@@ -345,7 +345,7 @@ class TestCheckScopeCompletion:
         mock_chain = AsyncMock()
         expected_check = ScopeCompletionCheck(
             is_complete=False,
-            reason="Need more details on scope",
+            reasoning="Need more details on scope",
             missing_info=["time period", "geographic focus"]
         )
         mock_chain.ainvoke.return_value = expected_check
@@ -357,7 +357,7 @@ class TestCheckScopeCompletion:
         # Assert
         assert isinstance(result, ScopeCompletionCheck)
         assert result.is_complete is False
-        assert "more details" in result.reason
+        assert "more details" in result.reasoning
         assert len(result.missing_info) == 2
         assert "time period" in result.missing_info
 
@@ -371,7 +371,7 @@ class TestCheckScopeCompletion:
         mock_chain = AsyncMock()
         expected_check = ScopeCompletionCheck(
             is_complete=True,
-            reason="All details clarified through conversation",
+            reasoning="All details clarified through conversation",
             missing_info=[]
         )
         mock_chain.ainvoke.return_value = expected_check
@@ -573,7 +573,7 @@ class TestClarifyScope:
         # Arrange
         mock_check_completion.return_value = ScopeCompletionCheck(
             is_complete=True,
-            reason="Sufficient information",
+            reasoning="Sufficient information",
             missing_info=[]
         )
         
@@ -606,12 +606,12 @@ class TestClarifyScope:
         # Arrange
         mock_check_completion.return_value = ScopeCompletionCheck(
             is_complete=False,
-            reason="Need more info",
+            reasoning="Need more info",
             missing_info=["aspect", "depth"]
         )
         
         expected_questions = ClarificationQuestions(
-            questions=["What aspect?", "What depth?"],
+            clarification_questions=["What aspect?", "What depth?"],
             context="Need more details"
         )
         mock_generate_questions.return_value = expected_questions
@@ -621,7 +621,7 @@ class TestClarifyScope:
         
         # Assert
         assert isinstance(result, ClarificationQuestions)
-        assert len(result.questions) == 2
+        assert len(result.clarification_questions) == 2
         mock_check_completion.assert_called_once()
         mock_generate_questions.assert_called_once()
 
@@ -635,12 +635,12 @@ class TestClarifyScope:
         # Arrange
         mock_check_completion.return_value = ScopeCompletionCheck(
             is_complete=False,
-            reason="Need format preference",
+            reasoning="Need format preference",
             missing_info=["format"]
         )
         
         expected_questions = ClarificationQuestions(
-            questions=["What format would you like?"],
+            clarification_questions=["What format would you like?"],
             context="Need output format"
         )
         mock_generate_questions.return_value = expected_questions
@@ -669,7 +669,7 @@ class TestClarifyScope:
         # Arrange
         mock_check_completion.return_value = ScopeCompletionCheck(
             is_complete=True,
-            reason="Query is detailed enough",
+            reasoning="Query is detailed enough",
             missing_info=[]
         )
         

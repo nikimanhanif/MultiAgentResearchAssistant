@@ -159,7 +159,7 @@ class TestCreateInitialState:
             "total_searches": 0
         }
         assert state["is_complete"] is False
-        assert state["error"] is None
+        assert state["error"] == []
         assert state["messages"] == []
 
     def test_create_initial_state_preserves_research_brief_data(self):
@@ -242,8 +242,8 @@ class TestCreateInitialState:
         # Assert
         assert state["is_complete"] is False
 
-    def test_create_initial_state_sets_error_to_none(self):
-        """Test that create_initial_state sets error to None."""
+    def test_create_initial_state_sets_error_to_empty_list(self):
+        """Test that create_initial_state sets error to empty list."""
         # Arrange
         brief = ResearchBrief(
             scope="Test",
@@ -256,5 +256,5 @@ class TestCreateInitialState:
         state = create_initial_state(brief)
         
         # Assert
-        assert state["error"] is None
+        assert state["error"] == []
 

@@ -295,6 +295,11 @@ async def scope_node(state: ResearchState) -> Dict[str, Any]:
     """
     logger.info("Scope Node: Processing user input")
     
+    # Check if brief already exists (e.g. from direct mode or previous turn)
+    if state.get("research_brief"):
+        logger.info("Scope Node: Research brief already exists, skipping clarification")
+        return {}
+    
     # Extract messages from state
     messages = state.get("messages", [])
     

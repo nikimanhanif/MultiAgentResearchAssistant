@@ -74,10 +74,19 @@ async def load_mcp_tools(enabled_servers: List[str]) -> List[BaseTool]:
         return []
     
     try:
+        logger.info(f"Loading MCP tools from servers: {enabled_servers}")
         client = get_mcp_client(enabled_servers)
-        tools = await client.get_tools()
-        logger.info(f"Successfully loaded {len(tools)} tools from {len(enabled_servers)} MCP server(s)")
-        return tools
+        
+        async with client:
+            logger.info(f"MCP client connected to {len(enabled_servers)} server(s)")
+            tools = client.get_tools()  # Synchronous call, but context manager needed for connection
+            
+            logger.info(f"Successfully loaded {len(tools)} tools from {len(enabled_servers)} MCP server(s)")
+            if tools:
+                for i, tool in enumerate(tools, 1):
+                    logger.info(f"  Tool {i}: {tool.name} - {tool.description[:80] if tool.description else 'No description'}...")
+            
+            return tools
         
     except ValueError:
         raise

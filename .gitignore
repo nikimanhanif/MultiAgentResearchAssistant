@@ -277,7 +277,7 @@ cython_debug/
 backend/git_summarizer/
 
 # Test scripts
-backend/test_scripts/
+backend/script_test/
 
 # Logs
 backend/DEVELOPMENT_PLAN.md

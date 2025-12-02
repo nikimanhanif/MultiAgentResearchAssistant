@@ -3,11 +3,9 @@
 This agent takes the research brief and list of findings to generate
 a final markdown-formatted report for the user.
 
-Architecture: Supervisor Loop (Phase 3.7+)
 - Input: ResearchBrief + List[Finding] (each with embedded Citation)
 - Output: Markdown report with citations
 
-Phase 4.1: Core report generation implementation
 """
 
 from typing import List, Any, Dict
@@ -47,7 +45,8 @@ def _build_report_generation_chain() -> Runnable:
 
 async def generate_report(
     brief: ResearchBrief,
-    findings: List[Finding]
+    findings: List[Finding],
+    reviewer_feedback: str = None
 ) -> str:
     """Generate markdown report from research brief and findings.
     
@@ -58,6 +57,7 @@ async def generate_report(
     Args:
         brief: Research brief containing scope, sub-topics, constraints, and format
         findings: List of Finding objects with embedded citations
+        reviewer_feedback: Optional feedback from previous review cycle
         
     Returns:
         Markdown-formatted report string
@@ -106,6 +106,7 @@ async def generate_report(
             "brief_format": format_type.value,
             "findings_context": findings_context,
             "format_instructions": format_instructions,
+            "reviewer_feedback": reviewer_feedback or "None",
         })
         
         # Extract content from response
@@ -209,7 +210,7 @@ async def report_agent_node(state: ResearchState) -> Dict[str, Any]:
         if reviewer_feedback:
             logger.info(f"Report Agent: Incorporating reviewer feedback: {reviewer_feedback[:100]}...")
         
-        report_content = await generate_report(brief, findings)
+        report_content = await generate_report(brief, findings, reviewer_feedback)
         
         logger.info("Report Agent: Report generated successfully")
         
