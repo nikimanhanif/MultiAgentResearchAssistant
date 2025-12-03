@@ -123,3 +123,36 @@ def get_deepseek_reasoner(
         api_key=settings.DEEPSEEK_API_KEY,
         temperature=temperature,
     )
+
+
+def get_deepseek_reasoner_json(
+    temperature: float = 0.5,
+    model: str | None = None
+) -> "ChatDeepSeek":
+    """
+    Get a configured DeepSeek reasoner with JSON output mode enabled.
+       
+    Note: deepseek-reasoner does NOT support tool_choice or LangChain's 
+    with_structured_output(). Use this JSON mode approach instead.
+    
+    Args:
+        temperature: Controls randomness (0.0-1.0).
+        model: Optional model override.
+        
+    Returns:
+        ChatDeepSeek: Configured instance with JSON mode enabled.
+        
+    Raises:
+        ValueError: If DEEPSEEK_API_KEY is missing.
+    """
+    from langchain_deepseek import ChatDeepSeek
+    
+    if not settings.DEEPSEEK_API_KEY:
+        raise ValueError("DEEPSEEK_API_KEY not configured")
+    
+    return ChatDeepSeek(
+        model=model or settings.DEEPSEEK_REASONER_MODEL,
+        api_key=settings.DEEPSEEK_API_KEY,
+        temperature=temperature,
+        model_kwargs={"response_format": {"type": "json_object"}}
+    )

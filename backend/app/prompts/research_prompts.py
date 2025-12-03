@@ -240,7 +240,22 @@ Budget Status:
 Already Completed Tasks: {completed_count} tasks
 Failed Tasks (avoid similar): {failed_tasks}
 
-{json_schema}
+You must respond with valid JSON matching this schema:
+{{
+  "has_gaps": boolean,
+  "is_complete": boolean,
+  "gaps_identified": [string],
+  "new_tasks": [
+    {{
+      "task_id": string,
+      "topic": string,
+      "query": string,
+      "priority": number,
+      "requested_by": "supervisor"
+    }}
+  ],
+  "reasoning": string
+}}
 
 Conduct gap analysis and generate tasks if needed. Analyze the content of findings above to determine if topics are covered superficially or in-depth."""
     ),

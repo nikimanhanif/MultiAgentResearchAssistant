@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 
 from app.graphs.state import ResearchState
 from app.models.schemas import ResearchTask, Finding
-from app.config import get_deepseek_reasoner
+from app.config import get_deepseek_reasoner_json
 from app.prompts.research_prompts import (
     SUPERVISOR_GAP_ANALYSIS_TEMPLATE,
     SUPERVISOR_FINDINGS_AGGREGATION_TEMPLATE,
@@ -156,49 +156,16 @@ def supervisor_node(state: ResearchState) -> Dict[str, Any]:
         "findings_context": findings_context
     }
     
-    # Get LLM with JSON mode (deepseek-reasoner doesn't support tool_choice)
-    llm = get_deepseek_reasoner(temperature=0.5)
-    
-    # Add JSON schema instructions to prompt
-    json_schema_instructions = """
-You must respond with valid JSON matching this schema:
-{
-  "has_gaps": boolean,
-  "is_complete": boolean,
-  "gaps_identified": [string],
-  "new_tasks": [
-    {
-      "task_id": string,
-      "topic": string,
-      "query": string,
-      "priority": number,
-      "requested_by": "supervisor"
-    }
-  ],
-  "reasoning": string
-}
-"""
-    prompt_inputs["json_schema"] = json_schema_instructions
+    # DeepSeek JSON mode (deepseek-reasoner does NOT support with_structured_output())
+    llm = get_deepseek_reasoner_json(temperature=0.5)
     
     chain = SUPERVISOR_GAP_ANALYSIS_TEMPLATE | llm
     
     try:
         import json
-        import re
         response = chain.invoke(prompt_inputs)
-        
+
         response_text = response.content if hasattr(response, 'content') else str(response)
-        response_text = re.sub(r'<thinking>.*?</thinking>', '', response_text, flags=re.DOTALL)
-        
-        json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', response_text, re.DOTALL)
-        if json_match:
-            response_text = json_match.group(1)
-        
-        json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
-        if json_match:
-            response_text = json_match.group(0)
-        
-        response_text = response_text.strip()
         
         if not response_text:
             raise ValueError("Empty response from LLM")

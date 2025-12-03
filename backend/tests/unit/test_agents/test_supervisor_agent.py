@@ -73,7 +73,7 @@ class TestSupervisorNode:
         assert result["is_complete"] is True
     
     @patch("app.agents.supervisor_agent.SUPERVISOR_GAP_ANALYSIS_TEMPLATE")
-    @patch("app.agents.supervisor_agent.get_deepseek_reasoner")
+    @patch("app.agents.supervisor_agent.get_deepseek_reasoner_json")
     def test_supervisor_node_llm_error_marks_complete(self, mock_get_llm, mock_template):
         """Test that LLM errors are handled gracefully and mark research complete."""
         mock_llm = MagicMock()
@@ -111,7 +111,7 @@ class TestSupervisorNode:
         assert result["budget"]["iterations"] == 2
     
     @patch("app.agents.supervisor_agent.SUPERVISOR_GAP_ANALYSIS_TEMPLATE")
-    @patch("app.agents.supervisor_agent.get_deepseek_reasoner")
+    @patch("app.agents.supervisor_agent.get_deepseek_reasoner_json")
     def test_supervisor_node_generates_tasks_for_gaps(self, mock_get_llm, mock_template):
         """Test that supervisor generates new tasks when gaps exist."""
         mock_response = MagicMock()
@@ -173,7 +173,7 @@ class TestSupervisorNode:
         assert result["gaps"]["has_gaps"] is True
     
     @patch("app.agents.supervisor_agent.SUPERVISOR_GAP_ANALYSIS_TEMPLATE")
-    @patch("app.agents.supervisor_agent.get_deepseek_reasoner")
+    @patch("app.agents.supervisor_agent.get_deepseek_reasoner_json")
     def test_supervisor_node_marks_complete_when_no_gaps(self, mock_get_llm, mock_template):
         """Test that supervisor marks complete when no gaps exist."""
         mock_response = MagicMock()
@@ -232,7 +232,7 @@ class TestSupervisorNode:
         assert result["gaps"]["has_gaps"] is False
     
     @patch("app.agents.supervisor_agent.SUPERVISOR_GAP_ANALYSIS_TEMPLATE")
-    @patch("app.agents.supervisor_agent.get_deepseek_reasoner")
+    @patch("app.agents.supervisor_agent.get_deepseek_reasoner_json")
     def test_supervisor_node_increments_iterations(self, mock_get_llm, mock_template):
         """Test that supervisor correctly increments iteration counter."""
         mock_llm = MagicMock()
