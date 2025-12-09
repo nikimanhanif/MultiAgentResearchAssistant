@@ -306,7 +306,9 @@ RESEARCH STRATEGY:
         • source: "arxiv" | "openalex" | "europepmc" | "core"
    - **fetch_top_cited** (concept, since: required | count: optional) - Get highly-cited papers
      •`since` MUST be in "YYYY-MM-DD" format (e.g., "2020-01-01")
-   - **fetch_content** (source, id: required) - Get full paper text by ID
+   - **fetch_content** (source, id: required) - [RESTRICTED] Get full paper text by ID
+        • WARNING: EXPENSIVE OPERATION. Do NOT use unless absolutely necessary.
+        • Rely on abstracts from search_papers whenever possible.
         • source: "arxiv" | "openalex" | "europepmc" | "core" | "pmc" | "bioRxiv/medRxiv"
         • id: Paper ID
         • ID Formats by Source:
@@ -319,7 +321,10 @@ RESEARCH STRATEGY:
 
    - **Tavily**: For web/news topics
 
-3. **Strategy**: Prefer search_papers (most reliable). Get metadata first, full text only if needed.
+3. **Strategy**:
+   - PRIMARY: Use **search_papers** to gather information from abstracts. This is token-efficient.
+   - AVOID: Do NOT use **fetch_content** unless the abstract is insufficient AND the paper is critical.
+   - Get metadata first, full text only if ABSOLUTELY NECESSARY.
 
 CRITICAL:
 - Provide ALL required parameters

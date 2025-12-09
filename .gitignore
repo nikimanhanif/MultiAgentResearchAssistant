@@ -283,6 +283,7 @@ backend/script_test/
 backend/DEVELOPMENT_PLAN.md
 backend/FEATURE_PROPOSALS.md
 backend/UV_HELP.md
+backend/TOKEN_OPTIMIZATION_ANALYSIS.md
 
 backend/tests/evaluation/.deepeval/
 backend/.deepeval/
