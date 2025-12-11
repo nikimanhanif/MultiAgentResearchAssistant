@@ -207,7 +207,12 @@ class TestSubAgentNode:
             topic="quantum computing",
             credibility_score=0.9
         )
-        mock_extract.return_value = [finding]
+        mock_extract.return_value = CitationExtractionOutput(
+            findings=[finding],
+            task_answered=True,
+            key_insights=["Quantum computing is advancing [0]"],
+            gaps_noted=None
+        )
         
         state: SubAgentState = {
             "task": ResearchTask(
@@ -240,6 +245,9 @@ class TestSubAgentNode:
         assert result["findings"][0].claim == "Quantum computing is advancing"
         assert "completed_tasks" in result
         assert "task_004" in result["completed_tasks"]
+        assert "sub_agent_summaries" in result
+        assert len(result["sub_agent_summaries"]) == 1
+        assert result["sub_agent_summaries"][0].task_id == "task_004"
         assert "budget" in result
     
     @pytest.mark.asyncio
@@ -291,7 +299,12 @@ class TestSubAgentNode:
         )
         mock_parse_delegation.return_value = delegated_task
         
-        mock_extract.return_value = []
+        mock_extract.return_value = CitationExtractionOutput(
+            findings=[],
+            task_answered=True,
+            key_insights=[],
+            gaps_noted=None
+        )
         
         state: SubAgentState = {
             "task": ResearchTask(
@@ -410,11 +423,12 @@ class TestExtractCitations:
         result = await _extract_citations(
             raw_results="[Source: tavily_search] Test results",
             topic="test",
+            task_query="test query",
             source_tools=["tavily_search"]
         )
         
-        assert len(result) == 1
-        assert result[0].claim == "Test claim"
+        assert len(result.findings) == 1
+        assert result.findings[0].claim == "Test claim"
     
     @pytest.mark.asyncio
     @patch("app.agents.sub_agent.SUB_AGENT_CITATION_EXTRACTION_TEMPLATE")
@@ -431,10 +445,12 @@ class TestExtractCitations:
         result = await _extract_citations(
             raw_results="Test results",
             topic="test",
+            task_query="test query",
             source_tools=["tool"]
         )
         
-        assert result == []
+        assert result.findings == []
+        assert result.task_answered == False
     
     @pytest.mark.asyncio
     @patch("app.agents.sub_agent.get_deepseek_chat")
@@ -454,7 +470,8 @@ class TestExtractCitations:
         result = await _extract_citations(
             raw_results="",
             topic="test",
+            task_query="test query",
             source_tools=[]
         )
         
-        assert result == []
+        assert result.findings == []

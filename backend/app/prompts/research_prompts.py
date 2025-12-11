@@ -202,9 +202,32 @@ SUPERVISOR_GAP_ANALYSIS_TEMPLATE = ChatPromptTemplate.from_messages([
 
 ANALYSIS FRAMEWORK:
 - Coverage: Are all sub-topics from the brief addressed?
-- Depth: Do we have sufficient sources (2-3+) per topic?
+- Depth: Do we have sufficient sources (1-2+) per topic?
 - Quality: Are credibility scores adequate (avg \u003e 0.6)?
 - Recency: Are sources current enough for the research constraints?
+
+CONVERGENCE DECISION FRAMEWORK:
+
+You are NOT aiming for perfect research. You are aiming for SUFFICIENT research.
+
+Set is_complete=True when:
+1. Each sub-topic has at least 1-2 credible findings (score >= 0.6)
+2. Key claims are supported — you don't need exhaustive coverage
+3. Additional research would provide diminishing returns (marginal new insights)
+4. You have enough material to write a useful, well-cited report
+
+Set is_complete=False ONLY when:
+- A sub-topic has ZERO relevant findings
+- Critical gaps would make the report misleading or incomplete
+- The user's core question cannot be answered with current findings
+
+DO NOT set is_complete=False just because:
+- You could find "one more paper" on a topic
+- Coverage could theoretically be deeper
+- There are tangential related topics unexplored
+
+Err on the side of COMPLETING sooner rather than pursuing perfection.
+If you are unsure, and coverage is reasonable, set is_complete=True.
 
 TASK GENERATION RULES:
 - Create tasks ONLY for identified gaps
@@ -212,11 +235,6 @@ TASK GENERATION RULES:
 - Avoid tasks similar to failed_tasks (check failed task queries)
 - Avoid tasks already in completed_tasks
 - Stay within budget constraints
-
-COMPLETION CRITERIA:
-- All sub-topics have at least 2 findings with credibility \u003e 0.5
-- Budget exhausted (iterations \u003e= max_iterations OR total findings \u003e= max_sub_agents)
-- No significant gaps remain
 
 Return your analysis as structured output."""
     ),
@@ -370,17 +388,23 @@ CREDIBILITY SCORING:
 - Apply tone penalty if needed
 - Clamp to [0.0, 1.0]
 
-Return structured output as list of Finding objects."""
+TASK SUMMARY (for supervisor context):
+After extracting findings, also provide:
+1. task_answered: Did the research sufficiently answer the task query?
+2. key_insights: 3-5 main takeaways, referencing finding indices like [0], [1]
+3. gaps_noted: Any gaps you noticed that the supervisor should know about (or null)
+
+Return structured output with both findings and summary."""
     ),
     HumanMessagePromptTemplate.from_template(
         """Source Tool: {source_tool}
 Topic: {topic}
+Task Query: {task_query}
 
 Raw Results:
 {raw_results}
 
-Extract findings with accurate credibility scores."""
+Extract findings with accurate credibility scores and provide a task summary."""
     ),
 ])
-
 

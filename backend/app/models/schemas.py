@@ -403,6 +403,39 @@ class ResearchTask(BaseModel):
     )
 
 
+class SubAgentSummary(BaseModel):
+    """Summary of research task completion for supervisor context."""
+    task_id: str = Field(..., description="ID of the completed task")
+    task_answered: bool = Field(
+        ...,
+        description="Whether the research sufficiently answered the assigned task"
+    )
+    key_insights: List[str] = Field(
+        ...,
+        description="3-5 key insights from findings, with [finding_idx] references"
+    )
+    gaps_noted: Optional[str] = Field(
+        None,
+        description="Any gaps this sub-agent noticed while researching"
+    )
+    finding_count: int = Field(..., description="Number of findings produced", ge=0)
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "task_id": "task_001",
+                "task_answered": True,
+                "key_insights": [
+                    "Fine-tuning with LoRA reduces memory requirements [0]",
+                    "Domain adaptation improves accuracy by 15-20% [1]"
+                ],
+                "gaps_noted": "Limited research on multilingual fine-tuning",
+                "finding_count": 3
+            }
+        }
+    )
+
+
 class GapType(str, Enum):
     """Types of research gaps identified."""
     COVERAGE = "coverage"

@@ -5,7 +5,7 @@ These agents are responsible for:
 - Executing research tasks assigned by the supervisor.
 - Using tools (Tavily, MCP) to gather information.
 - Extracting and scoring findings with citations.
-- Requesting further research via delegation.
+- Producing summaries for supervisor context.
 """
 
 import logging
@@ -14,7 +14,7 @@ from typing import Dict, List, Any, Optional
 from pydantic import BaseModel, Field
 
 from app.graphs.state import SubAgentState
-from app.models.schemas import Finding, ResearchTask, Citation, SourceType
+from app.models.schemas import Finding, ResearchTask, Citation, SourceType, SubAgentSummary
 from app.config import get_deepseek_chat
 from app.prompts.research_prompts import (
     SUB_AGENT_CITATION_EXTRACTION_TEMPLATE,
@@ -23,15 +23,29 @@ from app.prompts.research_prompts import (
 )
 from app.tools.tool_registry import get_research_tools
 from langgraph.prebuilt import create_react_agent
+from langgraph.errors import GraphRecursionError
 from langchain_core.messages import ToolMessage
+from langchain_core.messages.utils import trim_messages, count_tokens_approximately
 
 logger = logging.getLogger(__name__)
 
 
 class CitationExtractionOutput(BaseModel):
-    """Structured output for citation extraction."""
+    """Structured output for citation extraction with task summary."""
     findings: List[Finding] = Field(
         description="List of extracted findings with citations"
+    )
+    task_answered: bool = Field(
+        default=True,
+        description="Whether the research sufficiently answered the task"
+    )
+    key_insights: List[str] = Field(
+        default_factory=list,
+        description="3-5 key insights with finding index references"
+    )
+    gaps_noted: Optional[str] = Field(
+        default=None,
+        description="Any gaps noticed during research"
     )
 
 
@@ -65,6 +79,25 @@ def _parse_delegation_request(agent_output: str) -> Optional[ResearchTask]:
         )
     
     return None
+
+
+# Max tokens to keep in agent context (leaving room for next LLM response)
+MAX_AGENT_CONTEXT_TOKENS = 64000
+
+
+def _create_pre_model_hook():
+    """Create a pre-model hook that trims message history to prevent context overflow."""
+    def pre_model_hook(state):
+        trimmed = trim_messages(
+            state["messages"],
+            strategy="last",
+            token_counter=count_tokens_approximately,
+            max_tokens=MAX_AGENT_CONTEXT_TOKENS,
+            start_on="human",
+            end_on=("human", "tool"),
+        )
+        return {"llm_input_messages": trimmed}
+    return pre_model_hook
 
 
 async def sub_agent_node(state: SubAgentState) -> Dict[str, Any]:
@@ -127,12 +160,25 @@ async def sub_agent_node(state: SubAgentState) -> Dict[str, Any]:
             agent = create_react_agent(
                 llm,
                 tools=tools,
-                prompt=system_message
+                prompt=system_message,
+                pre_model_hook=_create_pre_model_hook()
             )
             
-            result = await agent.ainvoke({
-                "messages": [{"role": "user", "content": f"Research topic: {task.query}"}]
-            })
+            try:
+                result = await agent.ainvoke(
+                    {"messages": [{"role": "user", "content": f"Research topic: {task.query}"}]},
+                    {"recursion_limit": 15}  # Max 15 steps (~5-7 tool calls)
+                )
+            except GraphRecursionError as e:
+                logger.warning(f"Sub-agent {task.task_id} hit recursion limit, extracting partial results")
+                result = {"messages": getattr(e, 'state', {}).get('messages', [])}
+                if not result["messages"]:
+                    # If we can't get messages from error, mark as failed
+                    return {
+                        "failed_tasks": [task.task_id],
+                        "budget": {**budget, "total_searches": total_searches},
+                        "error": [f"Task {task.task_id} hit recursion limit with no results"]
+                    }
             
             agent_output = result["messages"][-1].content if result.get("messages") else ""
             delegation_task = _parse_delegation_request(agent_output)
@@ -168,14 +214,25 @@ async def sub_agent_node(state: SubAgentState) -> Dict[str, Any]:
                 for r in tool_results
             ])
             
-            findings = await _extract_citations(
+            extraction_result = await _extract_citations(
                 raw_results=combined_results,
                 topic=task.topic,
+                task_query=task.query,
                 source_tools=[r["tool"] for r in tool_results]
             )
             
+            # Create summary for supervisor context
+            summary = SubAgentSummary(
+                task_id=task.task_id,
+                task_answered=extraction_result.task_answered,
+                key_insights=extraction_result.key_insights,
+                gaps_noted=extraction_result.gaps_noted,
+                finding_count=len(extraction_result.findings)
+            )
+            
             state_update: Dict[str, Any] = {
-                "findings": findings,
+                "findings": extraction_result.findings,
+                "sub_agent_summaries": [summary],
                 "completed_tasks": [task.task_id],
                 "budget": {**budget, "total_searches": total_searches + searches_used}
             }
@@ -193,22 +250,23 @@ async def sub_agent_node(state: SubAgentState) -> Dict[str, Any]:
                 "error": [f"Task {task.task_id} failed: {str(e)}"]
             }
 
-
 async def _extract_citations(
     raw_results: str,
     topic: str,
+    task_query: str,
     source_tools: List[str]
-) -> List[Finding]:
+) -> CitationExtractionOutput:
     """
-    Extract structured findings with citations from raw tool output.
+    Extract structured findings with citations and task summary from raw tool output.
     
     Args:
         raw_results: Combined text output from tools.
         topic: The research topic.
+        task_query: The original task query for context.
         source_tools: List of tools that generated the results.
         
     Returns:
-        List[Finding]: Extracted findings with credibility scores.
+        CitationExtractionOutput: Findings with credibility scores and task summary.
     """
     primary_tool = source_tools[0] if source_tools else "unknown"
     
@@ -216,6 +274,7 @@ async def _extract_citations(
         "credibility_heuristics": CREDIBILITY_HEURISTICS,
         "source_tool": primary_tool,
         "topic": topic,
+        "task_query": task_query,
         "raw_results": raw_results[:4000]
     }
     
@@ -226,7 +285,13 @@ async def _extract_citations(
     
     try:
         result: CitationExtractionOutput = await chain.ainvoke(prompt_inputs)
-        return result.findings
+        return result
     except Exception as e:
         logger.error(f"Citation extraction failed: {e}")
-        return []
+        return CitationExtractionOutput(
+            findings=[],
+            task_answered=False,
+            key_insights=[],
+            gaps_noted=f"Extraction failed: {str(e)}"
+        )
+

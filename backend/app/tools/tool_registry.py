@@ -37,20 +37,32 @@ def _safe_tool_execute(tool: BaseTool) -> BaseTool:
     
     uses_content_and_artifact = getattr(tool, 'response_format', None) == 'content_and_artifact'
     
+    MAX_TOOL_OUTPUT_CHARS = 15000
+    
+    def _truncate_if_needed(text: str) -> str:
+        """Truncate text if it exceeds max chars."""
+        if len(text) > MAX_TOOL_OUTPUT_CHARS:
+            return text[:MAX_TOOL_OUTPUT_CHARS] + "\n\n[OUTPUT TRUNCATED - Use more specific queries]"
+        return text
+    
     def _handle_result(result: Any) -> Any:
-        """Handle empty results, preserving tuple structure if needed."""
+        """Handle empty results and truncate large outputs."""
         if uses_content_and_artifact:
             if isinstance(result, tuple) and len(result) == 2:
                 content, artifact = result
                 if content is None or content == "" or content == [] or content == {}:
                     return ("No results found. Try broadening your search or using different keywords.", artifact)
-                return result
+                if isinstance(content, str):
+                    content = _truncate_if_needed(content)
+                return (content, artifact)
             else:
                 logger.warning(f"Tool {tool.name} has response_format='content_and_artifact' but returned non-tuple: {type(result)}")
                 return ("Tool returned malformed response.", result)
         else:
             if result is None or result == "" or result == [] or result == {}:
                 return "No results found. Try broadening your search or using different keywords."
+            if isinstance(result, str):
+                result = _truncate_if_needed(result)
             return result
 
     def _handle_error(e: Exception, args: tuple, kwargs: dict) -> Any:

@@ -125,6 +125,23 @@ Your task is to generate a comprehensive, well-structured markdown report from t
 - Follow the specified report format exactly
 - Ensure all claims are supported by citations
 
+## FINDINGS SELECTION GUIDANCE:
+
+You do NOT need to cite every finding. Select strategically:
+
+1. **Core claims**: Use findings that directly answer the research scope
+2. **High credibility first**: Prefer findings with credibility >= 0.7 for key claims
+3. **Coverage over quantity**: One strong finding per sub-topic is better than three weak ones
+4. **Quality synthesis**: Synthesize information — don't just list findings sequentially
+
+Handling findings:
+- If a finding is tangentially related but not central, you may omit it from the main text
+- If many findings cover the same point, select the most credible one
+- Include ALL cited findings in the References section
+- Consider mentioning additional sources in a "Further Reading" section if relevant
+
+The goal is a coherent, well-supported report — not exhaustive citation of every finding.
+
 DO NOT hallucinate or invent information beyond what's in the findings list.
 DO NOT create fake citations or references.
 ONLY use the finding indices [0], [1], [2]... provided in the findings context."""),

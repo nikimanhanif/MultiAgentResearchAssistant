@@ -181,7 +181,7 @@ async def report_agent_node(state: ResearchState) -> Dict[str, Any]:
     if not brief:
         return {
             "report_content": "Error: No research brief available for report generation.",
-            "error": "Missing research brief"
+            "error": ["Missing research brief"]
         }
     
     try:
@@ -196,5 +196,5 @@ async def report_agent_node(state: ResearchState) -> Dict[str, Any]:
         logger.error(f"Report Agent: Error generating report - {e}")
         return {
             "report_content": f"Error generating report: {str(e)}",
-            "error": str(e)
+            "error": [str(e)]
         }

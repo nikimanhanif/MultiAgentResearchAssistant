@@ -14,7 +14,7 @@ from collections import defaultdict
 from pydantic import BaseModel, Field
 
 from app.graphs.state import ResearchState
-from app.models.schemas import ResearchTask, Finding
+from app.models.schemas import ResearchTask, Finding, SubAgentSummary
 from app.config import get_deepseek_reasoner_json
 from app.prompts.research_prompts import (
     SUPERVISOR_GAP_ANALYSIS_TEMPLATE,
@@ -91,6 +91,31 @@ def _format_findings_for_supervisor(findings: List[Finding], max_findings: int =
     return header + "".join(formatted_parts)
 
 
+def _format_summaries_for_supervisor(summaries: List[SubAgentSummary]) -> str:
+    """
+    Format sub-agent summaries for the supervisor's context.
+    
+    Provides concise task completion status and key insights from each sub-agent.
+    """
+    if not summaries:
+        return "No sub-agent summaries available yet."
+    
+    formatted_parts = []
+    for summary in summaries:
+        status = "Answered" if summary.task_answered else "Incomplete"
+        insights = "\n".join([f"  - {insight}" for insight in summary.key_insights[:3]])
+        
+        part = f"\n**Task {summary.task_id}** [{status}] ({summary.finding_count} findings)\n"
+        if insights:
+            part += f"Key insights:\n{insights}\n"
+        if summary.gaps_noted:
+            part += f"Gaps noted: {summary.gaps_noted}\n"
+        
+        formatted_parts.append(part)
+    
+    return "\n=== SUB-AGENT SUMMARIES ===\n" + "".join(formatted_parts)
+
+
 def supervisor_node(state: ResearchState) -> Dict[str, Any]:
     """
     LangGraph node for the Supervisor Agent.
@@ -137,7 +162,13 @@ def supervisor_node(state: ResearchState) -> Dict[str, Any]:
         if findings else 0.0
     )
     
+    # Format findings and sub-agent summaries for context
     findings_context = _format_findings_for_supervisor(findings)
+    sub_agent_summaries = state.get("sub_agent_summaries", [])
+    summaries_context = _format_summaries_for_supervisor(sub_agent_summaries)
+    
+    # Combine findings and summaries into a single context
+    combined_context = f"{findings_context}\n\n{summaries_context}"
     
     prompt_inputs = {
         "scope": brief.scope,
@@ -153,7 +184,7 @@ def supervisor_node(state: ResearchState) -> Dict[str, Any]:
         "total_searches": budget.get("total_searches", 0),
         "completed_count": len(completed_tasks),
         "failed_tasks": ", ".join(failed_tasks) if failed_tasks else "None",
-        "findings_context": findings_context
+        "findings_context": combined_context
     }
     
     # DeepSeek JSON mode (deepseek-reasoner does NOT support with_structured_output())

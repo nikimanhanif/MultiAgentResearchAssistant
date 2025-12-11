@@ -336,5 +336,5 @@ async def scope_node(state: ResearchState) -> Dict[str, Any]:
                 "role": "assistant",
                 "content": f"Error processing your request: {str(e)}"
             }],
-            "error": str(e)
+            "error": [str(e)]
         }
