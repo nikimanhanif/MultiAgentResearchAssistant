@@ -80,7 +80,7 @@ class TestStore:
                     sub_topics=["t1"],
                     constraints={},
                     deliverables="d1",
-                    format=ReportFormat.SUMMARY
+                    format=ReportFormat.LITERATURE_REVIEW
                 )
                 findings = [
                     Finding(

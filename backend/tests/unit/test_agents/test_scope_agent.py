@@ -437,7 +437,7 @@ class TestGenerateResearchBrief:
                 "depth": "detailed technical analysis"
             },
             deliverables="Comprehensive technical report with citations",
-            format=ReportFormat.SUMMARY,
+            format=ReportFormat.LITERATURE_REVIEW,
             metadata={}
         )
         mock_chain.ainvoke.return_value = expected_brief
@@ -458,7 +458,7 @@ class TestGenerateResearchBrief:
         assert len(result.sub_topics) == 3
         assert "Qubit" in result.sub_topics[0]
         assert result.constraints["time_period"] == "2020-2024"
-        assert result.format == ReportFormat.SUMMARY
+        assert result.format == ReportFormat.LITERATURE_REVIEW
         assert result.metadata["clarification_turns"] == 1
         assert result.metadata["original_query"] == "Quantum computing"
 
@@ -475,7 +475,7 @@ class TestGenerateResearchBrief:
             sub_topics=["Supervised learning", "Unsupervised learning"],
             constraints={},
             deliverables="Summary report",
-            format=ReportFormat.SUMMARY,
+            format=ReportFormat.LITERATURE_REVIEW,
             metadata=None
         )
         mock_chain.ainvoke.return_value = expected_brief
@@ -503,7 +503,7 @@ class TestGenerateResearchBrief:
             sub_topics=["topic1"],
             constraints={},
             deliverables="Test deliverables",
-            format=ReportFormat.SUMMARY,
+            format=ReportFormat.LITERATURE_REVIEW,
             metadata={}
         )
         mock_chain.ainvoke.return_value = expected_brief
@@ -552,7 +552,7 @@ class TestGenerateResearchBrief:
             sub_topics=["t1"],
             constraints={},
             deliverables="d1",
-            format=ReportFormat.SUMMARY,
+            format=ReportFormat.LITERATURE_REVIEW,
             metadata=None  # Explicitly None
         )
         mock_chain.ainvoke.return_value = expected_brief
@@ -590,7 +590,7 @@ class TestClarifyScope:
             sub_topics=["topic1", "topic2"],
             constraints={},
             deliverables="Test deliverables",
-            format=ReportFormat.SUMMARY
+            format=ReportFormat.LITERATURE_REVIEW
         )
         mock_generate_brief.return_value = expected_brief
         
@@ -700,7 +700,7 @@ class TestClarifyScope:
             sub_topics=["topic1"],
             constraints={},
             deliverables="Deliverables",
-            format=ReportFormat.SUMMARY
+            format=ReportFormat.LITERATURE_REVIEW
         )
         mock_generate_brief.return_value = expected_brief
         

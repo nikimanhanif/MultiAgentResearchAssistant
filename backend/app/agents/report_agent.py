@@ -17,12 +17,10 @@ from app.config import get_deepseek_reasoner
 from app.prompts.report_prompts import (
     get_report_generation_prompt,
     format_findings_for_prompt,
-    get_summary_format_instructions,
-    get_comparison_format_instructions,
     get_literature_review_instructions,
+    get_deep_research_instructions,
+    get_comparative_instructions,
     get_gap_analysis_instructions,
-    get_fact_validation_instructions,
-    get_ranking_format_instructions,
 )
 
 logger = logging.getLogger(__name__)
@@ -111,22 +109,20 @@ def _get_format_instructions(format_type: ReportFormat) -> str:
     Get specific instructions based on the requested report format.
     
     Args:
-        format_type: The desired format (e.g., SUMMARY, COMPARISON).
+        format_type: The desired format (aligned with sub-agent strategies).
         
     Returns:
         str: Format instructions for the prompt.
     """
     format_map = {
-        ReportFormat.SUMMARY: get_summary_format_instructions,
-        ReportFormat.COMPARISON: get_comparison_format_instructions,
-        ReportFormat.RANKING: get_ranking_format_instructions,
-        ReportFormat.FACT_VALIDATION: get_fact_validation_instructions,
         ReportFormat.LITERATURE_REVIEW: get_literature_review_instructions,
+        ReportFormat.DEEP_RESEARCH: get_deep_research_instructions,
+        ReportFormat.COMPARATIVE: get_comparative_instructions,
         ReportFormat.GAP_ANALYSIS: get_gap_analysis_instructions,
-        ReportFormat.OTHER: lambda: "Use a general report structure with Introduction, Findings, Conclusion, and References.",
+        ReportFormat.OTHER: get_deep_research_instructions,  # Default to deep research
     }
     
-    instruction_func = format_map.get(format_type, format_map[ReportFormat.OTHER])
+    instruction_func = format_map.get(format_type, get_deep_research_instructions)
     return instruction_func()
 
 

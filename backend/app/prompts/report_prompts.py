@@ -125,22 +125,24 @@ Your task is to generate a comprehensive, well-structured markdown report from t
 - Follow the specified report format exactly
 - Ensure all claims are supported by citations
 
-## FINDINGS SELECTION GUIDANCE:
+## IN-DEPTH ANALYSIS REQUIREMENTS:
 
-You do NOT need to cite every finding. Select strategically:
+This is an academic-quality report. Avoid surface-level summaries. Each section should demonstrate:
 
-1. **Core claims**: Use findings that directly answer the research scope
-2. **High credibility first**: Prefer findings with credibility >= 0.7 for key claims
-3. **Coverage over quantity**: One strong finding per sub-topic is better than three weak ones
-4. **Quality synthesis**: Synthesize information — don't just list findings sequentially
+1. **Comprehensive Coverage**: Use ALL relevant findings. The research effort to gather these was significant.
+2. **Critical Synthesis**: Don't just list what papers found — compare methodologies, note where studies agree/disagree
+3. **Depth Per Section**: Each thematic section should be 3-4 paragraphs minimum:
+   - Opening paragraph: Frame the theme and its importance
+   - Body paragraphs: Discuss 2-3 key papers with methodology, results, and limitations
+   - Synthesis paragraph: Comparative analysis and emergent patterns
+4. **Contextual Analysis**: Explain WHY findings matter, not just WHAT they say
+5. **Acknowledge Limitations**: Note study limitations and areas of uncertainty
 
 Handling findings:
-- If a finding is tangentially related but not central, you may omit it from the main text
-- If many findings cover the same point, select the most credible one
-- Include ALL cited findings in the References section
-- Consider mentioning additional sources in a "Further Reading" section if relevant
-
-The goal is a coherent, well-supported report — not exhaustive citation of every finding.
+- Include findings even if tangentially related — they add context
+- When multiple findings cover the same point, synthesize them rather than picking one
+- Discuss methodology and credibility differences between sources
+- Include ALL relevant findings in the References section
 
 DO NOT hallucinate or invent information beyond what's in the findings list.
 DO NOT create fake citations or references.
@@ -182,122 +184,182 @@ Please generate a complete markdown report following the above requirements. If 
     ])
 
 
-def get_summary_format_instructions() -> str:
-    """
-    Get instructions for summary report format.
-    
-    Returns:
-        str: Formatted instruction string for summary reports.
-    """
-    return """
-Summary Report Format:
-- Start with executive summary (2-3 paragraphs)
-- Organize findings by sub-topic
-- Highlight key takeaways (bullet points)
-- Include brief conclusion
-- Add complete references section
-
-Structure:
-# [Topic] - Research Summary
-
-## Executive Summary
-[2-3 paragraph overview]
-
-## Key Findings
-### [Sub-topic 1]
-[Findings with citations]
-
-### [Sub-topic 2]
-[Findings with citations]
-
-## Conclusion
-[Brief synthesis]
-
-## References
-[1] Citation 1
-[2] Citation 2
-"""
-
-
-def get_comparison_format_instructions() -> str:
-    """
-    Get instructions for comparison report format.
-    
-    Returns:
-        str: Formatted instruction string for comparison reports.
-    """
-    return """
-Comparison Report Format:
-- Introduction explaining comparison criteria
-- Side-by-side comparison table
-- Detailed analysis of each item
-- Recommendations based on comparison
-- Complete references
-
-Structure:
-# [Topic] - Comparative Analysis
-
-## Introduction
-[Context and comparison criteria]
-
-## Comparison Overview
-| Criterion | Option A | Option B | Option C |
-|-----------|----------|----------|----------|
-| ...       | ...      | ...      | ...      |
-
-## Detailed Analysis
-### Option A
-[Analysis with citations]
-
-### Option B
-[Analysis with citations]
-
-## Recommendations
-[Evidence-based recommendations]
-
-## References
-[Complete bibliography]
-"""
-
-
 def get_literature_review_instructions() -> str:
     """
     Get instructions for literature review format.
     
     Returns:
-        str: Formatted instruction string for literature review reports.
+        str: Formatted instruction string for academic literature review reports.
     """
     return """
-Literature Review Format:
-- Introduction with research context
-- Thematic sections organized by sub-topics
-- Critical analysis of sources
-- Identification of research gaps
-- Conclusion with synthesis
-- Bibliography with credibility indicators
+Literature Review Format - ACADEMIC DEPTH REQUIRED
+
+This is an academic literature review. Each section must demonstrate scholarly rigor.
 
 Structure:
 # [Topic] - Literature Review
 
-## Introduction
-[Research context and scope]
+## Introduction (2-3 paragraphs)
+- Research context and significance
+- Define the scope and objectives of the review
+- Outline the structure of the review
 
 ## Literature Analysis
+For EACH thematic section, provide 3-4 paragraphs:
+
 ### [Theme/Sub-topic 1]
-[Review of relevant literature with citations and analysis]
+**Paragraph 1 - Framing**: What is this theme about? Why is it important to the research question?
+
+**Paragraph 2-3 - Key Papers**: For 2-3 key papers, discuss:
+- What methodology did they use?
+- What were their key findings?
+- What are the limitations of their approach?
+
+**Paragraph 4 - Synthesis**: 
+- Where do these studies agree or disagree?
+- What patterns emerge across the literature?
+- What gaps remain within this theme?
 
 ### [Theme/Sub-topic 2]
-[Review of relevant literature with citations and analysis]
+[Same 4-paragraph structure]
 
-## Research Gaps
-[Identified gaps in current research]
+## Research Gaps (1-2 paragraphs per gap)
+- Identify specific gaps in current research
+- Explain why each gap matters
+- Suggest potential research directions
 
-## Conclusion
-[Synthesis and future directions]
+## Conclusion (2-3 paragraphs)
+- Synthesize key findings across all themes
+- Discuss implications for the field
+- Recommend future research directions
 
 ## Bibliography
-[1] Citation with credibility indicator (Score: 0.85)
-[2] Citation with credibility indicator (Score: 0.92)
+[1] Full citation with authors, year, title, publication (Credibility: X.XX)
+[2] ...
+"""
+
+
+def get_deep_research_instructions() -> str:
+    """
+    Get instructions for deep research format.
+    
+    Returns:
+        str: Formatted instruction string for in-depth research reports.
+    """
+    return """
+Deep Research Format - COMPREHENSIVE ANALYSIS REQUIRED
+
+This format is for thorough investigation of a specific topic or question.
+
+Structure:
+# [Topic] - Research Report
+
+## Executive Summary (2-3 paragraphs)
+- Key findings and conclusions upfront
+- Significance of the findings
+- Brief methodology overview
+
+## Background & Context (2-3 paragraphs)
+- Why this topic matters
+- Current state of knowledge
+- Key definitions and framework
+
+## Methodology
+- How the research was conducted
+- What sources were consulted
+- Limitations of the approach
+
+## Findings
+For EACH major finding area, provide in-depth analysis:
+
+### [Finding Area 1]
+**Context**: Why this finding area is important
+
+**Evidence**: Present 2-3 key sources with:
+- What they found (methodology and results)
+- Credibility assessment
+- How they relate to each other
+
+**Analysis**: 
+- Synthesize across sources
+- Discuss implications
+- Note any contradictions or uncertainties
+
+### [Finding Area 2]
+[Same structure]
+
+## Discussion (2-3 paragraphs)
+- What do the findings mean collectively?
+- How do they answer the research question?
+- What remains uncertain?
+
+## Conclusion
+- Summarize key takeaways
+- Practical implications
+- Recommendations
+
+## References
+[Full bibliography with credibility indicators]
+"""
+
+
+def get_comparative_instructions() -> str:
+    """
+    Get instructions for comparative analysis format.
+    
+    Returns:
+        str: Formatted instruction string for comparison reports.
+    """
+    return """
+Comparative Analysis Format - BALANCED EVALUATION REQUIRED
+
+This format compares multiple options, approaches, or technologies.
+
+Structure:
+# [Topic] - Comparative Analysis
+
+## Introduction (2 paragraphs)
+- Context for the comparison
+- Explain the comparison criteria and why they matter
+
+## Comparison Framework
+| Criterion | Option A | Option B | Option C |
+|-----------|----------|----------|----------|
+| ...       | ...      | ...      | ...      |
+
+## Detailed Analysis
+For EACH option, provide 3-4 paragraphs:
+
+### Option A: [Name]
+**Overview**: What is this option? Who uses it?
+
+**Strengths** (with citations):
+- Detailed discussion of advantages
+- Evidence from research/case studies
+
+**Weaknesses** (with citations):
+- Honest assessment of limitations
+- Specific scenarios where it fails
+
+**Best Use Cases**:
+- When to choose this option
+- Who benefits most
+
+### Option B: [Name]
+[Same structure]
+
+## Cross-Cutting Analysis (2-3 paragraphs)
+- How do the options compare on the most important criteria?
+- What trade-offs exist between options?
+- Are there scenarios where each option is clearly better?
+
+## Recommendations
+- Specific recommendations based on use case
+- Decision framework for readers
+- Key factors to consider
+
+## References
+[Full bibliography]
 """
 
 
@@ -306,124 +368,63 @@ def get_gap_analysis_instructions() -> str:
     Get instructions for gap analysis format.
     
     Returns:
-        str: Formatted instruction string for gap analysis reports.
+        str: Formatted instruction string for research gap analysis reports.
     """
     return """
-Gap Analysis Format:
-- Executive summary of gaps found
-- Coverage analysis (what's well-covered vs under-researched)
-- Gap categorization (coverage, depth, temporal, perspective)
-- Recommendations for future research
-- Complete references
+Gap Analysis Format - SYSTEMATIC IDENTIFICATION REQUIRED
+
+This format identifies what's missing or under-researched in a field.
 
 Structure:
 # [Topic] - Research Gap Analysis
 
-## Executive Summary
-[Overview of gap analysis findings]
+## Executive Summary (2 paragraphs)
+- Overview of the analysis scope
+- Key gaps identified (preview)
 
-## Coverage Analysis
-### Well-Covered Areas
-[Topics with substantial research]
+## Current State of Research
 
-### Under-Researched Areas
-[Topics needing more investigation]
+### Well-Covered Areas (2-3 paragraphs per area)
+For each well-covered area:
+- What topics have substantial research?
+- What methodologies are commonly used?
+- What consensus exists?
+- Cite key papers demonstrating coverage
+
+### Moderately-Covered Areas (1-2 paragraphs per area)
+- Topics with some research but room for more
+- What's been done vs. what's missing
 
 ## Gap Identification
-### Coverage Gaps
-[Missing topics or perspectives]
 
-### Depth Gaps
-[Areas needing deeper investigation]
+### Coverage Gaps (2-3 paragraphs)
+- What topics are missing entirely?
+- What perspectives are underrepresented?
+- Why might these gaps exist?
 
-### Temporal Gaps
-[Missing time periods or recent developments]
+### Methodological Gaps (1-2 paragraphs)
+- What approaches haven't been tried?
+- What data sources are underutilized?
 
-## Recommendations
-[Specific recommendations for future research]
+### Temporal Gaps (1-2 paragraphs)
+- What time periods are understudied?
+- What recent developments need investigation?
 
-## References
-[Complete bibliography with credibility indicators]
-"""
+### Applied/Practical Gaps (1-2 paragraphs)
+- Where is the theory-practice disconnect?
+- What implementation studies are needed?
 
+## Prioritized Research Agenda
+- Rank gaps by importance/feasibility
+- Suggest specific research questions
+- Identify potential methodologies
 
-def get_fact_validation_instructions() -> str:
-    """
-    Get instructions for fact validation format.
-    
-    Returns:
-        str: Formatted instruction string for fact validation reports.
-    """
-    return """
-Fact Validation Format:
-- Introduction explaining validation criteria
-- Each claim with validation results
-- Credibility assessment for each source
-- Overall conclusion
-- Complete references with credibility scores
-
-Structure:
-# [Topic] - Fact Validation Report
-
-## Introduction
-[Validation criteria and methodology]
-
-## Claim Validation
-### Claim 1: [Statement]
-**Validation Result**: ✅ Supported / ⚠️ Partially Supported / ❌ Not Supported
-**Evidence**: [Citations with credibility scores]
-**Analysis**: [Explanation]
-
-### Claim 2: [Statement]
-[Same structure]
-
-## Overall Assessment
-[Summary of validation results]
+## Conclusion
+- Summary of most critical gaps
+- Call to action for researchers
 
 ## References
-[1] Source 1 (Credibility: 0.92 - High)
-[2] Source 2 (Credibility: 0.65 - Medium)
+[Full bibliography with credibility indicators]
 """
 
-
-def get_ranking_format_instructions() -> str:
-    """
-    Get instructions for ranking report format.
-    
-    Returns:
-        str: Formatted instruction string for ranking reports.
-    """
-    return """
-Ranking Report Format:
-- Introduction with ranking criteria
-- Ranked list with justification
-- Detailed analysis for each item
-- Summary table
-- Complete references
-
-Structure:
-# [Topic] - Ranking Analysis
-
-## Introduction
-[Ranking criteria and methodology]
-
-## Rankings
-
-### 1. [Top Item]
-**Score**: X/10
-**Strengths**: [With citations]
-**Weaknesses**: [With citations]
-**Justification**: [Why ranked #1]
-
-### 2. [Second Item]
-[Same structure]
-
-## Summary Table
-| Rank | Item | Score | Key Strength |
-|------|------|-------|--------------|
-| 1    | ...  | X/10  | ...          |
-
-## References
-[Complete bibliography]
-"""
 

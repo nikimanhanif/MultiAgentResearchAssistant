@@ -6,12 +6,10 @@ from langchain_core.prompts import ChatPromptTemplate
 from app.prompts.report_prompts import (
     get_report_generation_prompt,
     format_findings_for_prompt,
-    get_summary_format_instructions,
-    get_comparison_format_instructions,
     get_literature_review_instructions,
+    get_deep_research_instructions,
+    get_comparative_instructions,
     get_gap_analysis_instructions,
-    get_fact_validation_instructions,
-    get_ranking_format_instructions,
 )
 
 
@@ -39,9 +37,9 @@ class TestReportGenerationPrompt:
             brief_scope="Research scope",
             brief_subtopics="- Topic 1\n- Topic 2",
             brief_constraints="Time: 2020-2024",
-            brief_format="summary",
+            brief_format="literature_review",
             findings_context="Finding 1\nFinding 2",
-            format_instructions="Summary format instructions",
+            format_instructions="Literature review format instructions",
             reviewer_feedback="No feedback"
         )
         assert len(formatted) == 2  # System + Human messages
@@ -55,7 +53,7 @@ class TestReportGenerationPrompt:
             brief_scope="Test",
             brief_subtopics="Topic",
             brief_constraints="None",
-            brief_format="summary",
+            brief_format="deep_research",
             findings_context="Test findings",
             format_instructions="Test instructions",
             reviewer_feedback=""
@@ -70,7 +68,7 @@ class TestReportGenerationPrompt:
         template = get_report_generation_prompt()
         test_scope = "Research machine learning applications"
         test_findings = "Finding: ML is widely used"
-        test_format = "summary"
+        test_format = "literature_review"
         
         formatted = template.format_messages(
             brief_scope=test_scope,
@@ -78,7 +76,7 @@ class TestReportGenerationPrompt:
             brief_constraints="2020-2024",
             brief_format=test_format,
             findings_context=test_findings,
-            format_instructions="Summary instructions",
+            format_instructions="Literature review instructions",
             reviewer_feedback=""
         )
         human_msg = formatted[1].content
@@ -93,7 +91,7 @@ class TestReportGenerationPrompt:
             brief_scope="Brief",
             brief_subtopics="Topic",
             brief_constraints="None",
-            brief_format="summary",
+            brief_format="deep_research",
             findings_context="",
             format_instructions="Instructions",
             reviewer_feedback=""
@@ -108,79 +106,13 @@ class TestReportGenerationPrompt:
             brief_scope="Test scope",
             brief_subtopics="Topics",
             brief_constraints="Constraints",
-            brief_format="summary",
+            brief_format="literature_review",
             findings_context="Findings",
             format_instructions="Instructions",
             reviewer_feedback=feedback
         )
         human_msg = formatted[1].content
         assert feedback in human_msg or "feedback" in human_msg.lower()
-
-
-class TestSummaryFormatInstructions:
-    """Test cases for get_summary_format_instructions function."""
-
-    def test_function_returns_string(self):
-        """Test that function returns a string."""
-        result = get_summary_format_instructions()
-        assert isinstance(result, str)
-
-    def test_function_returns_non_empty_string(self):
-        """Test that function returns non-empty string."""
-        result = get_summary_format_instructions()
-        assert len(result) > 0
-
-    def test_instructions_contain_summary_keywords(self):
-        """Test that instructions contain summary-related keywords."""
-        result = get_summary_format_instructions()
-        assert "summary" in result.lower()
-        assert "executive" in result.lower() or "overview" in result.lower()
-
-    def test_instructions_contain_markdown_formatting(self):
-        """Test that instructions show markdown formatting examples."""
-        result = get_summary_format_instructions()
-        assert "#" in result  # Markdown headers
-        assert "##" in result or "###" in result
-
-    def test_instructions_mention_references(self):
-        """Test that instructions mention references section."""
-        result = get_summary_format_instructions()
-        assert "reference" in result.lower() or "citation" in result.lower()
-
-    def test_instructions_are_consistent_across_calls(self):
-        """Test that function returns same result on multiple calls."""
-        result1 = get_summary_format_instructions()
-        result2 = get_summary_format_instructions()
-        assert result1 == result2
-
-
-class TestComparisonFormatInstructions:
-    """Test cases for get_comparison_format_instructions function."""
-
-    def test_function_returns_string(self):
-        """Test that function returns a string."""
-        result = get_comparison_format_instructions()
-        assert isinstance(result, str)
-
-    def test_function_returns_non_empty_string(self):
-        """Test that function returns non-empty string."""
-        result = get_comparison_format_instructions()
-        assert len(result) > 0
-
-    def test_instructions_contain_comparison_keywords(self):
-        """Test that instructions contain comparison-related keywords."""
-        result = get_comparison_format_instructions()
-        assert "comparison" in result.lower() or "compare" in result.lower()
-
-    def test_instructions_contain_table_format(self):
-        """Test that instructions show table formatting."""
-        result = get_comparison_format_instructions()
-        assert "|" in result  # Markdown table syntax
-
-    def test_instructions_mention_criteria(self):
-        """Test that instructions mention comparison criteria."""
-        result = get_comparison_format_instructions()
-        assert "criteria" in result.lower() or "criterion" in result.lower()
 
 
 class TestLiteratureReviewInstructions:
@@ -212,10 +144,75 @@ class TestLiteratureReviewInstructions:
         result = get_literature_review_instructions()
         assert "gap" in result.lower()
 
-    def test_instructions_mention_credibility(self):
-        """Test that instructions mention credibility indicators."""
+    def test_instructions_mention_depth_requirements(self):
+        """Test that instructions mention depth requirements."""
         result = get_literature_review_instructions()
-        assert "credibility" in result.lower() or "score" in result.lower()
+        assert "paragraph" in result.lower() or "depth" in result.lower()
+
+
+class TestDeepResearchInstructions:
+    """Test cases for get_deep_research_instructions function."""
+
+    def test_function_returns_string(self):
+        """Test that function returns a string."""
+        result = get_deep_research_instructions()
+        assert isinstance(result, str)
+
+    def test_function_returns_non_empty_string(self):
+        """Test that function returns non-empty string."""
+        result = get_deep_research_instructions()
+        assert len(result) > 0
+
+    def test_instructions_contain_research_keywords(self):
+        """Test that instructions contain research-related keywords."""
+        result = get_deep_research_instructions()
+        assert "research" in result.lower()
+
+    def test_instructions_contain_markdown_formatting(self):
+        """Test that instructions show markdown formatting examples."""
+        result = get_deep_research_instructions()
+        assert "#" in result  # Markdown headers
+        assert "##" in result or "###" in result
+
+    def test_instructions_mention_references(self):
+        """Test that instructions mention references section."""
+        result = get_deep_research_instructions()
+        assert "reference" in result.lower() or "bibliography" in result.lower()
+
+    def test_instructions_are_consistent_across_calls(self):
+        """Test that function returns same result on multiple calls."""
+        result1 = get_deep_research_instructions()
+        result2 = get_deep_research_instructions()
+        assert result1 == result2
+
+
+class TestComparativeInstructions:
+    """Test cases for get_comparative_instructions function."""
+
+    def test_function_returns_string(self):
+        """Test that function returns a string."""
+        result = get_comparative_instructions()
+        assert isinstance(result, str)
+
+    def test_function_returns_non_empty_string(self):
+        """Test that function returns non-empty string."""
+        result = get_comparative_instructions()
+        assert len(result) > 0
+
+    def test_instructions_contain_comparison_keywords(self):
+        """Test that instructions contain comparison-related keywords."""
+        result = get_comparative_instructions()
+        assert "comparison" in result.lower() or "compare" in result.lower() or "comparative" in result.lower()
+
+    def test_instructions_contain_table_format(self):
+        """Test that instructions show table formatting."""
+        result = get_comparative_instructions()
+        assert "|" in result  # Markdown table syntax
+
+    def test_instructions_mention_criteria(self):
+        """Test that instructions mention comparison criteria."""
+        result = get_comparative_instructions()
+        assert "criteria" in result.lower() or "criterion" in result.lower()
 
 
 class TestGapAnalysisInstructions:
@@ -240,85 +237,20 @@ class TestGapAnalysisInstructions:
     def test_instructions_mention_coverage_analysis(self):
         """Test that instructions mention coverage analysis."""
         result = get_gap_analysis_instructions()
-        assert "coverage" in result.lower()
+        assert "coverage" in result.lower() or "covered" in result.lower()
 
     def test_instructions_mention_recommendations(self):
         """Test that instructions mention recommendations section."""
         result = get_gap_analysis_instructions()
-        assert "recommendation" in result.lower()
+        assert "recommendation" in result.lower() or "agenda" in result.lower()
 
     def test_instructions_mention_gap_categories(self):
         """Test that instructions mention different gap categories."""
         result = get_gap_analysis_instructions()
         result_lower = result.lower()
         # Should mention at least some gap types
-        gap_types = ["coverage", "depth", "temporal", "perspective"]
+        gap_types = ["coverage", "methodological", "temporal", "practical"]
         assert any(gap_type in result_lower for gap_type in gap_types)
-
-
-class TestFactValidationInstructions:
-    """Test cases for get_fact_validation_instructions function."""
-
-    def test_function_returns_string(self):
-        """Test that function returns a string."""
-        result = get_fact_validation_instructions()
-        assert isinstance(result, str)
-
-    def test_function_returns_non_empty_string(self):
-        """Test that function returns non-empty string."""
-        result = get_fact_validation_instructions()
-        assert len(result) > 0
-
-    def test_instructions_contain_validation_keywords(self):
-        """Test that instructions contain validation keywords."""
-        result = get_fact_validation_instructions()
-        assert "validation" in result.lower() or "validate" in result.lower()
-
-    def test_instructions_mention_claims(self):
-        """Test that instructions mention claims or statements."""
-        result = get_fact_validation_instructions()
-        assert "claim" in result.lower() or "statement" in result.lower()
-
-    def test_instructions_mention_credibility_scores(self):
-        """Test that instructions mention credibility scoring."""
-        result = get_fact_validation_instructions()
-        assert "credibility" in result.lower() and "score" in result.lower()
-
-    def test_instructions_show_validation_indicators(self):
-        """Test that instructions show validation result indicators."""
-        result = get_fact_validation_instructions()
-        # Should show some kind of validation indicators (checkmarks, warnings, etc.)
-        assert any(indicator in result for indicator in ["✅", "⚠️", "❌", "Supported"])
-
-
-class TestRankingFormatInstructions:
-    """Test cases for get_ranking_format_instructions function."""
-
-    def test_function_returns_string(self):
-        """Test that function returns a string."""
-        result = get_ranking_format_instructions()
-        assert isinstance(result, str)
-
-    def test_function_returns_non_empty_string(self):
-        """Test that function returns non-empty string."""
-        result = get_ranking_format_instructions()
-        assert len(result) > 0
-
-    def test_instructions_contain_ranking_keywords(self):
-        """Test that instructions contain ranking keywords."""
-        result = get_ranking_format_instructions()
-        assert "ranking" in result.lower() or "rank" in result.lower()
-
-    def test_instructions_show_numbered_structure(self):
-        """Test that instructions show numbered ranking structure."""
-        result = get_ranking_format_instructions()
-        # Should show numbered rankings
-        assert any(str(i) in result for i in range(1, 4))
-
-    def test_instructions_mention_justification(self):
-        """Test that instructions mention justification for rankings."""
-        result = get_ranking_format_instructions()
-        assert "justification" in result.lower() or "reason" in result.lower()
 
 
 class TestFormatInstructionsIntegration:
@@ -326,26 +258,22 @@ class TestFormatInstructionsIntegration:
 
     def test_all_functions_return_distinct_results(self):
         """Test that each format function returns different instructions."""
-        summary = get_summary_format_instructions()
-        comparison = get_comparison_format_instructions()
         literature = get_literature_review_instructions()
+        deep_research = get_deep_research_instructions()
+        comparative = get_comparative_instructions()
         gap = get_gap_analysis_instructions()
-        fact = get_fact_validation_instructions()
-        ranking = get_ranking_format_instructions()
         
-        results = [summary, comparison, literature, gap, fact, ranking]
+        results = [literature, deep_research, comparative, gap]
         # All should be different
         assert len(set(results)) == len(results)
 
     def test_all_functions_return_markdown_formatted_strings(self):
         """Test that all format functions return markdown-formatted strings."""
         functions = [
-            get_summary_format_instructions,
-            get_comparison_format_instructions,
             get_literature_review_instructions,
+            get_deep_research_instructions,
+            get_comparative_instructions,
             get_gap_analysis_instructions,
-            get_fact_validation_instructions,
-            get_ranking_format_instructions,
         ]
         
         for func in functions:
@@ -356,12 +284,10 @@ class TestFormatInstructionsIntegration:
     def test_all_functions_mention_references_or_citations(self):
         """Test that all format functions mention references or citations."""
         functions = [
-            get_summary_format_instructions,
-            get_comparison_format_instructions,
             get_literature_review_instructions,
+            get_deep_research_instructions,
+            get_comparative_instructions,
             get_gap_analysis_instructions,
-            get_fact_validation_instructions,
-            get_ranking_format_instructions,
         ]
         
         for func in functions:
@@ -372,16 +298,13 @@ class TestFormatInstructionsIntegration:
     def test_all_functions_are_deterministic(self):
         """Test that all functions return consistent results."""
         functions = [
-            get_summary_format_instructions,
-            get_comparison_format_instructions,
             get_literature_review_instructions,
+            get_deep_research_instructions,
+            get_comparative_instructions,
             get_gap_analysis_instructions,
-            get_fact_validation_instructions,
-            get_ranking_format_instructions,
         ]
         
         for func in functions:
             result1 = func()
             result2 = func()
             assert result1 == result2
-

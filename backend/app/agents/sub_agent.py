@@ -132,6 +132,17 @@ async def sub_agent_node(state: SubAgentState) -> Dict[str, Any]:
         if brief.metadata else ["scientific-papers"]
     )
     
+    # Map ResearchBrief.format to research strategy for prompt
+    FORMAT_TO_STRATEGY = {
+        "literature_review": "LITERATURE_REVIEW",
+        "deep_research": "DEEP_RESEARCH",
+        "comparative": "COMPARATIVE",
+        "gap_analysis": "GAP_ANALYSIS",
+        "other": "DEEP_RESEARCH",  # Default fallback
+    }
+    format_value = (brief.format.value if brief.format else "other").lower()
+    research_goal = FORMAT_TO_STRATEGY.get(format_value, "DEEP_RESEARCH")
+    
     async with get_research_tools(enabled_mcp_servers=enabled_mcp_servers) as tools:
         if not tools:
             logger.error("No tools available for research")
@@ -145,6 +156,7 @@ async def sub_agent_node(state: SubAgentState) -> Dict[str, Any]:
         
         prompt_inputs = {
             "credibility_heuristics": CREDIBILITY_HEURISTICS,
+            "research_goal": research_goal,
             "budget_remaining": budget_remaining,
             "max_searches_per_agent": max_searches,
             "topic": task.topic,
@@ -167,7 +179,7 @@ async def sub_agent_node(state: SubAgentState) -> Dict[str, Any]:
             try:
                 result = await agent.ainvoke(
                     {"messages": [{"role": "user", "content": f"Research topic: {task.query}"}]},
-                    {"recursion_limit": 15}  # Max 15 steps (~5-7 tool calls)
+                    {"recursion_limit": 25}  # Max 15 steps (~5-7 tool calls)
                 )
             except GraphRecursionError as e:
                 logger.warning(f"Sub-agent {task.task_id} hit recursion limit, extracting partial results")
@@ -275,7 +287,7 @@ async def _extract_citations(
         "source_tool": primary_tool,
         "topic": topic,
         "task_query": task_query,
-        "raw_results": raw_results[:4000]
+        "raw_results": raw_results[:40000]
     }
     
     llm = get_deepseek_chat(temperature=0.3)

@@ -243,7 +243,7 @@ class TestCreateInitialState:
             sub_topics=["Qubits", "Error correction"],
             constraints={"depth": "detailed"},
             deliverables="Technical report",
-            format="summary",
+            format="literature_review",
             metadata={"author": "Test"}
         )
         
@@ -255,7 +255,7 @@ class TestCreateInitialState:
         assert len(state["research_brief"].sub_topics) == 2
         assert state["research_brief"].constraints["depth"] == "detailed"
         assert state["research_brief"].deliverables == "Technical report"
-        assert state["research_brief"].format == "summary"
+        assert state["research_brief"].format == "literature_review"
         assert state["research_brief"].metadata["author"] == "Test"
 
     def test_create_initial_state_sets_default_budget(self):

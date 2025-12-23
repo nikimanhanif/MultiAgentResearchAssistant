@@ -168,48 +168,37 @@ class TestGetResearchTools:
     """Test suite for get_research_tools function."""
     
     @pytest.mark.asyncio
-    async def test_combines_tavily_and_mcp_tools(self):
+    async def test_combines_tavily_and_academic_tools(self):
         """Test that tools from both sources are combined."""
         tavily_tool = StructuredTool.from_function(lambda x: x, name="tavily", description="tavily")
-        mcp_tool = StructuredTool.from_function(lambda x: x, name="mcp", description="mcp")
-        
-        # Mock MCP client context manager
-        mock_client = AsyncMock()
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client.get_tools = MagicMock(return_value=[mcp_tool])
+        academic_tool = StructuredTool.from_function(lambda x: x, name="search_papers", description="search")
         
         with patch("app.tools.tool_registry.get_tavily_tools", return_value=[tavily_tool]):
-            with patch("app.tools.tool_registry.get_mcp_client", return_value=mock_client):
-                async with get_research_tools(["server"]) as tools:
+            with patch("app.tools.tool_registry.get_academic_tools", return_value=[academic_tool]):
+                async with get_research_tools() as tools:
                     assert len(tools) == 2
                     assert tools[0].name == "tavily"
-                    assert tools[1].name == "mcp"
+                    assert tools[1].name == "search_papers"
 
     @pytest.mark.asyncio
     async def test_handles_tavily_failure_gracefully(self):
         """Test that Tavily loading failure doesn't crash execution."""
-        mcp_tool = StructuredTool.from_function(lambda x: x, name="mcp", description="mcp")
-        
-        mock_client = AsyncMock()
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client.get_tools = MagicMock(return_value=[mcp_tool])
+        academic_tool = StructuredTool.from_function(lambda x: x, name="search_papers", description="search")
         
         with patch("app.tools.tool_registry.get_tavily_tools", side_effect=Exception("Tavily failed")):
-            with patch("app.tools.tool_registry.get_mcp_client", return_value=mock_client):
-                async with get_research_tools(["server"]) as tools:
+            with patch("app.tools.tool_registry.get_academic_tools", return_value=[academic_tool]):
+                async with get_research_tools() as tools:
                     assert len(tools) == 1
-                    assert tools[0].name == "mcp"
+                    assert tools[0].name == "search_papers"
 
     @pytest.mark.asyncio
-    async def test_handles_mcp_failure_gracefully(self):
-        """Test that MCP loading failure doesn't crash execution."""
+    async def test_handles_academic_failure_gracefully(self):
+        """Test that academic tools loading failure doesn't crash execution."""
         tavily_tool = StructuredTool.from_function(lambda x: x, name="tavily", description="tavily")
         
         with patch("app.tools.tool_registry.get_tavily_tools", return_value=[tavily_tool]):
-            with patch("app.tools.tool_registry.get_mcp_client", side_effect=Exception("MCP failed")):
-                async with get_research_tools(["server"]) as tools:
+            with patch("app.tools.tool_registry.get_academic_tools", side_effect=Exception("Academic failed")):
+                async with get_research_tools() as tools:
                     assert len(tools) == 1
                     assert tools[0].name == "tavily"
 
@@ -219,5 +208,7 @@ class TestGetResearchTools:
         tavily_tool = StructuredTool.from_function(lambda x: x, name="tavily", description="tavily")
         
         with patch("app.tools.tool_registry.get_tavily_tools", return_value=[tavily_tool]):
-            async with get_research_tools() as tools:
-                assert tools[0]._run.__name__ == "safe_run"
+            with patch("app.tools.tool_registry.get_academic_tools", return_value=[]):
+                async with get_research_tools() as tools:
+                    assert tools[0]._run.__name__ == "safe_run"
+

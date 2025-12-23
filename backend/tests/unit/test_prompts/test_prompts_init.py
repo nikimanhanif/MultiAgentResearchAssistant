@@ -151,21 +151,17 @@ class TestReportPromptsSubmodule:
     def test_all_format_instruction_functions_exist(self):
         """Test that all format instruction functions are defined."""
         from app.prompts.report_prompts import (
-            get_summary_format_instructions,
-            get_comparison_format_instructions,
             get_literature_review_instructions,
+            get_deep_research_instructions,
+            get_comparative_instructions,
             get_gap_analysis_instructions,
-            get_fact_validation_instructions,
-            get_ranking_format_instructions,
         )
         
         # All should be callable
-        assert callable(get_summary_format_instructions)
-        assert callable(get_comparison_format_instructions)
         assert callable(get_literature_review_instructions)
+        assert callable(get_deep_research_instructions)
+        assert callable(get_comparative_instructions)
         assert callable(get_gap_analysis_instructions)
-        assert callable(get_fact_validation_instructions)
-        assert callable(get_ranking_format_instructions)
 
 
 class TestPromptsModuleStructure:

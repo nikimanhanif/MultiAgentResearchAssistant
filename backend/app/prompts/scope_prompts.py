@@ -67,7 +67,7 @@ The research brief should include:
 - Clear research scope and boundaries
 - List of specific sub_topics to investigate
 - Any constraints (time periods, source types, depth level, etc.)
-- Expected deliverables and format (summary, comparison, ranking, literature review, gap analysis, etc.)
+- Expected deliverables and format (literature_review, deep_research, comparative, gap_analysis)
 - Any other relevant metadata
 
 {format_instructions}"""

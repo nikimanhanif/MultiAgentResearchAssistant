@@ -49,7 +49,7 @@ class TestGenerateReport:
             sub_topics=["Computer Vision", "NLP"],
             constraints={"time_period": "2020-2024"},
             deliverables="Comprehensive review",
-            format=ReportFormat.SUMMARY
+            format=ReportFormat.LITERATURE_REVIEW
         )
 
     @pytest.fixture
@@ -183,12 +183,10 @@ class TestGenerateReport:
     @pytest.mark.asyncio
     async def test_generate_report_different_formats(self, sample_findings):
         formats = [
-            ReportFormat.SUMMARY,
-            ReportFormat.COMPARISON,
             ReportFormat.LITERATURE_REVIEW,
+            ReportFormat.DEEP_RESEARCH,
+            ReportFormat.COMPARATIVE,
             ReportFormat.GAP_ANALYSIS,
-            ReportFormat.FACT_VALIDATION,
-            ReportFormat.RANKING,
             ReportFormat.OTHER
         ]
 
@@ -218,21 +216,31 @@ class TestGenerateReport:
 class TestGetFormatInstructions:
     """Tests for _get_format_instructions helper function."""
 
-    def test_get_format_instructions_summary(self):
-        result = _get_format_instructions(ReportFormat.SUMMARY)
+    def test_get_format_instructions_literature_review(self):
+        result = _get_format_instructions(ReportFormat.LITERATURE_REVIEW)
         assert isinstance(result, str)
         assert len(result) > 0
-        assert "Summary" in result or "summary" in result
+        assert "literature" in result.lower() or "review" in result.lower()
 
-    def test_get_format_instructions_comparison(self):
-        result = _get_format_instructions(ReportFormat.COMPARISON)
+    def test_get_format_instructions_deep_research(self):
+        result = _get_format_instructions(ReportFormat.DEEP_RESEARCH)
         assert isinstance(result, str)
-        assert "comparison" in result.lower()
+        assert "research" in result.lower()
+
+    def test_get_format_instructions_comparative(self):
+        result = _get_format_instructions(ReportFormat.COMPARATIVE)
+        assert isinstance(result, str)
+        assert "compar" in result.lower()
+
+    def test_get_format_instructions_gap_analysis(self):
+        result = _get_format_instructions(ReportFormat.GAP_ANALYSIS)
+        assert isinstance(result, str)
+        assert "gap" in result.lower()
 
     def test_get_format_instructions_other(self):
         result = _get_format_instructions(ReportFormat.OTHER)
         assert isinstance(result, str)
-        assert "general" in result.lower() or "Introduction" in result
+        assert "research" in result.lower()  # Falls back to deep_research
 
 
 class TestGenerateNoFindingsReport:

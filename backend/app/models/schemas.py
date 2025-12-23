@@ -298,22 +298,18 @@ class ScopeCompletionCheck(BaseModel):
 
 class ReportFormat(str, Enum):
     """
-    Report format types for different use cases.
+    Report format types aligned with sub-agent research strategies.
     
-    Formats map to specific use cases:
-    - SUMMARY: General-purpose quick overview
-    - COMPARISON: Comparative analysis
-    - RANKING: Top-N ranked lists with criteria
-    - FACT_VALIDATION: Claims with validation results
-    - LITERATURE_REVIEW: Structured academic literature review
-    - GAP_ANALYSIS: Research gap identification
+    - LITERATURE_REVIEW: Breadth-focused academic reviews, state-of-the-art surveys
+    - DEEP_RESEARCH: Depth-focused factual questions, specific topic deep-dives
+    - COMPARATIVE: Balanced comparison of options/approaches/technologies
+    - GAP_ANALYSIS: Survey-focused identification of research gaps
     - OTHER: Fallback generic markdown structure
+    
     """
-    SUMMARY = "summary"
-    COMPARISON = "comparison"
-    RANKING = "ranking"
-    FACT_VALIDATION = "fact_validation"
     LITERATURE_REVIEW = "literature_review"
+    DEEP_RESEARCH = "deep_research"
+    COMPARATIVE = "comparative"
     GAP_ANALYSIS = "gap_analysis"
     OTHER = "other"
 
