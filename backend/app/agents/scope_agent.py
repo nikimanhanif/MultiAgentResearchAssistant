@@ -9,7 +9,7 @@ and produces a structured ResearchBrief once the scope is clear.
 from typing import Optional, List, Dict, Any, Union
 import logging
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import PydanticOutputParser
+from langchain_core.output_parsers import PydanticOutputParser, StrOutputParser
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 
 from app.models.schemas import (
@@ -87,15 +87,14 @@ def _build_question_generation_chain() -> Any:
     Returns:
         Runnable: Chain of prompt | LLM | parser.
     """
-    parser = PydanticOutputParser(pydantic_object=ClarificationQuestions)
+    parser = StrOutputParser()
     llm = get_deepseek_chat(temperature=0.7)
     
-    # Add format instructions to the prompt
-    prompt = SCOPE_QUESTION_GENERATION_TEMPLATE.partial(
-        format_instructions=parser.get_format_instructions()
-    )
+    # Prompt now expects Markdown output, no format instructions needed
+    prompt = SCOPE_QUESTION_GENERATION_TEMPLATE
     
-    chain = prompt | llm | parser
+    # Add tag for streaming identification
+    chain = prompt | llm.with_config(tags=["user_visible"]) | parser
     return chain
 
 
@@ -140,7 +139,7 @@ def _build_brief_generation_chain() -> Any:
 async def generate_clarification_questions(
     user_query: str,
     conversation_history: Optional[List[Dict[str, str]]] = None
-) -> ClarificationQuestions:
+) -> str:
     """
     Generate clarifying questions based on the user's query.
     
@@ -149,7 +148,7 @@ async def generate_clarification_questions(
         conversation_history: List of previous conversation turns.
         
     Returns:
-        ClarificationQuestions: Object containing questions and context.
+        str: Clarification questions and context as a string.
         
     Raises:
         Exception: If generation fails.
@@ -245,7 +244,7 @@ async def generate_research_brief(
 async def clarify_scope(
     user_query: str,
     conversation_history: Optional[List[Dict[str, str]]] = None
-) -> Union[ClarificationQuestions, ResearchBrief]:
+) -> Union[str, ResearchBrief]:
     """
     Orchestrate the scope clarification workflow.
     
@@ -258,7 +257,7 @@ async def clarify_scope(
         conversation_history: List of previous conversation turns.
         
     Returns:
-        Union[ClarificationQuestions, ResearchBrief]: The next step in the process.
+        Union[str, ResearchBrief]: The next step in the process.
     """
     # Check if we have enough information
     completion_check = await check_scope_completion(user_query, conversation_history)
@@ -275,8 +274,8 @@ async def scope_node(state: ResearchState) -> Dict[str, Any]:
     """
     LangGraph node for the Scope Agent.
     
-    Manages the clarification loop. Generates either clarification questions
-    (if scope is incomplete) or a ResearchBrief (if scope is complete).
+    Uses interrupt pattern to pause and wait for user clarification responses.
+    This keeps the graph paused (not exited) so checkpoints persist properly.
     
     Args:
         state: Current research state.
@@ -284,6 +283,8 @@ async def scope_node(state: ResearchState) -> Dict[str, Any]:
     Returns:
         Dict[str, Any]: State update with new messages or research_brief.
     """
+    from langgraph.types import interrupt
+    
     if state.get("research_brief"):
         return {}
     
@@ -297,11 +298,14 @@ async def scope_node(state: ResearchState) -> Dict[str, Any]:
             }]
         }
     
+    # Get original query (first user message)
     user_query = user_messages[0].get("content", "")
+    
+    # Build conversation history from all messages after the first
     conversation_history = [
         {"role": msg.get("role"), "content": msg.get("content")}
-        for msg in messages[1:]
-    ] if len(messages) > 1 else None
+        for msg in messages
+    ] if messages else None
     
     try:
         completion_check = await check_scope_completion(user_query, conversation_history)
@@ -316,20 +320,31 @@ async def scope_node(state: ResearchState) -> Dict[str, Any]:
                 }]
             }
         else:
-            questions = await generate_clarification_questions(user_query, conversation_history)
-            questions_text = "\n".join([
-                f"{i+1}. {q.question}" 
-                for i, q in enumerate(questions.clarification_questions)
-            ])
-            message_content = f"{questions.context}\n\n{questions_text}"
+            # Generate clarification questions (now returns formatted string)
+            message_content = await generate_clarification_questions(user_query, conversation_history)
+            
+            # Use interrupt to pause and wait for user response
+            # The graph will pause here until resumed with user input
+            user_response = interrupt(value={
+                "type": "clarification_request",
+                "questions": message_content
+            })
+            
+            # When resumed, user_response contains the user's answer
+            # Add both the questions and user response to messages
             return {
-                "messages": [{
-                    "role": "assistant",
-                    "content": message_content
-                }]
+                "messages": [
+                    {"role": "assistant", "content": message_content},
+                    {"role": "user", "content": user_response}
+                ]
             }
     
     except Exception as e:
+        # Check if it's a GraphInterrupt (which inherits from Exception in some versions or is raised as such)
+        # LangGraph uses a special exception for interrupts
+        if "Interrupt" in type(e).__name__:
+            raise e
+            
         logger.error(f"Scope Node: Error processing - {e}")
         return {
             "messages": [{

@@ -19,11 +19,10 @@ Your goal is to gather information about:
 - The intended use or audience for the research
 - Preferred format for the final report (if not already clear)
 
-Ask straightforward questions without explaining why you're asking them. The context field should provide overall reasoning.
+First, provide a brief, friendly context explaining why you need more information.
+Then, list 1-3 straightforward clarifying questions.
 
-If the scope seems sufficiently clear, return an empty list of questions.
-
-{format_instructions}"""
+Format the output as clear Markdown. Do NOT use JSON."""
     ),
     HumanMessagePromptTemplate.from_template(
         """User's Query: {user_query}
@@ -31,7 +30,7 @@ If the scope seems sufficiently clear, return an empty list of questions.
 Conversation History:
 {conversation_history}
 
-Based on the user's query and conversation so far, generate 1-3 clarifying questions."""
+Based on the user's query and conversation so far, generate the clarification response."""
     ),
 ])
 

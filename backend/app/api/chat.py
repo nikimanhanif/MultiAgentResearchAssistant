@@ -15,7 +15,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from langgraph.types import Command
 
-from app.persistence import save_conversation
+from app.persistence import save_conversation, save_in_progress_conversation, update_conversation_status
 
 from app.graphs.research_graph import build_research_graph
 from app.models.schemas import ReviewAction
@@ -97,10 +97,17 @@ async def stream_graph_with_tokens(
                         # Determine which node is streaming
                         node_name = metadata.get('langgraph_node', 'assistant')
                         
-                        # Only stream tokens for report_agent
+                        # Stream tokens for report_agent OR user-visible scope messages
+                        tags = metadata.get('tags', [])
+                        
                         if node_name == "report_agent":
                             yield create_sse_event(StreamEventType.REPORT_TOKEN, {
                                 "content": message.content
+                            })
+                        elif node_name == "scope" and "user_visible" in tags:
+                            yield create_sse_event(StreamEventType.TOKEN, {
+                                "content": message.content,
+                                "node": "scope"
                             })
                 
                 elif mode == "updates":
@@ -172,16 +179,7 @@ async def stream_graph_with_tokens(
                         if "findings" in node_output and node_output["findings"]:
                             findings_list = node_output["findings"]
                         
-                        # Check for review request (interrupt)
-                        if node_name == "reviewer":
-                            report = node_output.get("report_content", "")
-                            if report:
-                                report_content = report  # Track for persistence
-                                yield create_sse_event(StreamEventType.REVIEW_REQUEST, {
-                                    "report": report
-                                })
-                        
-                        # Track report content
+                        # Track report content from report_agent
                         if "report_content" in node_output and node_output["report_content"]:
                             report_content = node_output["report_content"]
                         
@@ -201,6 +199,60 @@ async def stream_graph_with_tokens(
                         yield create_sse_event(StreamEventType.STATE_UPDATE, {
                             "node": node_name
                         })
+        
+        # Check for pending interrupts (e.g., reviewer waiting for HITL input)
+        try:
+            graph_state = await graph.aget_state(config)
+            if graph_state and graph_state.tasks:
+                for task in graph_state.tasks:
+                    if hasattr(task, 'interrupts') and task.interrupts:
+                        for interrupt_data in task.interrupts:
+                            interrupt_value = interrupt_data.value if hasattr(interrupt_data, 'value') else interrupt_data
+                            if isinstance(interrupt_value, dict) and interrupt_value.get("type") == "clarification_request":
+                                # Update conversation status - still in scoping phase
+                                await update_conversation_status(
+                                    user_id=user_id,
+                                    conversation_id=thread_id,
+                                    status="in_progress",
+                                    phase="scoping"
+                                )
+                                # Surface the clarification request to the frontend
+                                yield create_sse_event(StreamEventType.CLARIFICATION_REQUEST, {
+                                    "questions": interrupt_value.get("questions", "")
+                                })
+                                yield create_progress_event(
+                                    phase="scoping",
+                                    tasks_count=0,
+                                    findings_count=0,
+                                    iterations=0,
+                                    phase_duration_ms=0
+                                )
+                                # Don't send complete event - waiting for user input
+                                return
+                            elif isinstance(interrupt_value, dict) and interrupt_value.get("type") == "review_request":
+                                # Update conversation status to waiting_review
+                                await update_conversation_status(
+                                    user_id=user_id,
+                                    conversation_id=thread_id,
+                                    status="waiting_review",
+                                    phase="review",
+                                    report_content=interrupt_value.get("report", report_content)
+                                )
+                                # Surface the interrupt to the frontend
+                                yield create_sse_event(StreamEventType.REVIEW_REQUEST, {
+                                    "report": interrupt_value.get("report", report_content)
+                                })
+                                yield create_progress_event(
+                                    phase="review",
+                                    tasks_count=tasks_count,
+                                    findings_count=findings_count,
+                                    iterations=0,
+                                    phase_duration_ms=0
+                                )
+                                # Don't send complete event - waiting for user input
+                                return
+        except Exception as state_error:
+            logger.warning(f"Could not check graph state for interrupts: {state_error}")
         
         # Save completed conversation to persistence
         if is_research_complete and research_brief and report_content:
@@ -300,8 +352,54 @@ async def chat(request: ChatRequest):
         }
     }
     
-    # Extract original user query for persistence
-    original_query = request.message
+    # Determine original query for persistence
+    original_query = request.message # Default to current message
+    if conversation_messages and len(conversation_messages) > 0:
+        first_msg = conversation_messages[0]
+        if first_msg.get("role") == "user":
+            original_query = first_msg.get("content", "")
+
+    # Check for pending interrupts (resume flow)
+    try:
+        graph_state = await graph.aget_state(config)
+        if graph_state and graph_state.tasks:
+            for task in graph_state.tasks:
+                if hasattr(task, 'interrupts') and task.interrupts:
+                    for interrupt_data in task.interrupts:
+                        interrupt_value = interrupt_data.value if hasattr(interrupt_data, 'value') else interrupt_data
+                        # If waiting for clarification, resume with the new message
+                        if isinstance(interrupt_value, dict) and interrupt_value.get("type") == "clarification_request":
+                            logger.info(f"Resuming conversation {thread_id} with clarification response")
+                            return StreamingResponse(
+                                stream_graph_with_tokens(
+                                    graph, 
+                                    Command(resume=request.message), # Resume with just the new user message
+                                    config,
+                                    user_query=original_query, # Pass original for logging/persistence updates
+                                    user_id=user_id,
+                                    thread_id=thread_id
+                                ),
+                                media_type="text/event-stream",
+                                headers={
+                                    "Cache-Control": "no-cache",
+                                    "Connection": "keep-alive",
+                                    "X-Accel-Buffering": "no",
+                                    "X-Thread-ID": thread_id,
+                                    "X-User-ID": user_id
+                                }
+                            )
+    except Exception as state_error:
+        logger.warning(f"Error checking state for resume: {state_error}")
+    
+
+    
+    # Save as in-progress conversation immediately for crash recovery
+    await save_in_progress_conversation(
+        user_id=user_id,
+        conversation_id=thread_id,
+        user_query=original_query,
+        phase="scoping"
+    )
     
     return StreamingResponse(
         stream_graph_with_tokens(
@@ -353,6 +451,24 @@ async def resume_review(thread_id: str, action: ReviewAction):
         }
     }
     
+    # Retrieve user_id and original query from persisted state
+    user_id = "default_user"
+    user_query = ""
+    try:
+        graph_state = await graph.aget_state(config)
+        if graph_state and graph_state.values:
+            # Try to get user_id from config or state
+            user_id = graph_state.config.get("configurable", {}).get("user_id", "default_user")
+            # Get original query from first message
+            messages = graph_state.values.get("messages", [])
+            if messages:
+                for msg in messages:
+                    if isinstance(msg, dict) and msg.get("role") == "user":
+                        user_query = msg.get("content", "")
+                        break
+    except Exception as state_error:
+        logger.warning(f"Could not retrieve state for resume: {state_error}")
+    
     # Use Command(resume=...) pattern per LangGraph docs
     resume_value = {
         "action": action.action,
@@ -360,7 +476,14 @@ async def resume_review(thread_id: str, action: ReviewAction):
     }
     
     return StreamingResponse(
-        stream_graph_with_tokens(graph, Command(resume=resume_value), config),
+        stream_graph_with_tokens(
+            graph, 
+            Command(resume=resume_value), 
+            config,
+            user_query=user_query,
+            user_id=user_id,
+            thread_id=thread_id
+        ),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -379,3 +502,69 @@ async def get_or_create_user():
     Returns a UUID that can be stored client-side for conversation persistence.
     """
     return {"user_id": f"user_{uuid.uuid4().hex[:12]}"}
+
+
+@router.post("/{thread_id}/continue")
+async def continue_conversation(thread_id: str):
+    """
+    Continue an in-progress conversation from its checkpointed state.
+    
+    This endpoint resumes graph execution without requiring any input,
+    allowing conversations interrupted mid-flow to pick up where they left off.
+    
+    Args:
+        thread_id: The thread ID of the conversation to continue.
+        
+    Returns:
+        StreamingResponse: SSE stream of graph execution.
+    """
+    try:
+        graph = build_research_graph()
+    except Exception as e:
+        logger.error(f"Failed to build research graph: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to initialize research pipeline: {str(e)}"
+        )
+    
+    config = {
+        "configurable": {
+            "thread_id": thread_id
+        }
+    }
+    
+    # Retrieve user_id and original query from persisted state
+    user_id = "default_user"
+    user_query = ""
+    try:
+        graph_state = await graph.aget_state(config)
+        if graph_state and graph_state.values:
+            user_id = graph_state.config.get("configurable", {}).get("user_id", "default_user")
+            messages = graph_state.values.get("messages", [])
+            if messages:
+                for msg in messages:
+                    if isinstance(msg, dict) and msg.get("role") == "user":
+                        user_query = msg.get("content", "")
+                        break
+    except Exception as state_error:
+        logger.warning(f"Could not retrieve state for continue: {state_error}")
+    
+    # Continue graph execution with None input (lets graph proceed from checkpoint)
+    return StreamingResponse(
+        stream_graph_with_tokens(
+            graph, 
+            None,  # No new input, just continue from checkpoint
+            config,
+            user_query=user_query,
+            user_id=user_id,
+            thread_id=thread_id
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+            "X-Thread-ID": thread_id
+        }
+    )
+

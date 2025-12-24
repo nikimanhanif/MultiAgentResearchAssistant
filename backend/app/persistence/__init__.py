@@ -18,6 +18,9 @@ from app.persistence.store import (
     save_conversation,
     get_conversation,
     list_conversations,
+    save_in_progress_conversation,
+    update_conversation_status,
+    ConversationStatus,
 )
 
 __all__ = [
@@ -30,4 +33,8 @@ __all__ = [
     "save_conversation",
     "get_conversation",
     "list_conversations",
+    "save_in_progress_conversation",
+    "update_conversation_status",
+    "ConversationStatus",
 ]
+

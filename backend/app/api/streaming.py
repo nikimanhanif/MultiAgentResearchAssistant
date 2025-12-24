@@ -17,6 +17,7 @@ class StreamEventType(str, Enum):
     STATE_UPDATE = "state_update"
     BRIEF_CREATED = "brief_created"
     REPORT_TOKEN = "report_token"
+    CLARIFICATION_REQUEST = "clarification_request"
     REVIEW_REQUEST = "review_request"
     COMPLETE = "complete"
     ERROR = "error"

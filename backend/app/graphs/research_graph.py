@@ -32,7 +32,7 @@ from app.persistence.checkpointer import get_checkpointer
 logger = logging.getLogger(__name__)
 
 
-def route_from_scope(state: ResearchState) -> Literal["supervisor", "END"]:
+def route_from_scope(state: ResearchState) -> Literal["supervisor", "scope"]:
     """
     Route from scope node based on brief completion.
     
@@ -40,11 +40,12 @@ def route_from_scope(state: ResearchState) -> Literal["supervisor", "END"]:
         state: Current research state.
         
     Returns:
-        Literal["supervisor", "END"]: Next node or END if waiting for input.
+        Literal["supervisor", "scope"]: Next node - supervisor if brief ready, 
+        else loop back to scope for more clarification.
     """
     if state.get("research_brief"):
         return "supervisor"
-    return END
+    return "scope"  # Loop back for more clarification rounds
 
 
 def route_from_supervisor(state: ResearchState) -> List[Send] | Literal["report_agent", "END"]:
@@ -114,7 +115,7 @@ def build_research_graph() -> StateGraph:
     builder.add_conditional_edges(
         "scope",
         route_from_scope,
-        {"supervisor": "supervisor", END: END}
+        {"supervisor": "supervisor", "scope": "scope"}
     )
     
     builder.add_conditional_edges(

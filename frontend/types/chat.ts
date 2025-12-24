@@ -23,6 +23,7 @@ export type StreamEventType =
   | "state_update"
   | "brief_created"
   | "report_token"
+  | "clarification_request"
   | "review_request"
   | "complete"
   | "error";
@@ -63,6 +64,11 @@ export interface ReportTokenEvent extends BaseStreamEvent {
   content: string;
 }
 
+export interface ClarificationRequestEvent extends BaseStreamEvent {
+  type: "clarification_request";
+  questions: string;
+}
+
 export interface ReviewRequestEvent extends BaseStreamEvent {
   type: "review_request";
   report: string;
@@ -84,6 +90,7 @@ export type StreamEvent =
   | StateUpdateEvent
   | BriefCreatedEvent
   | ReportTokenEvent
+  | ClarificationRequestEvent
   | ReviewRequestEvent
   | CompleteEvent
   | ErrorEvent;
@@ -119,10 +126,14 @@ export interface ReviewRequest {
 }
 
 // Conversation History Types
+export type ConversationStatus = "in_progress" | "waiting_review" | "complete";
+
 export interface ConversationSummary {
   conversation_id: string;
   user_query: string;
   created_at: string;
+  status: ConversationStatus;
+  phase?: string;
 }
 
 export interface ConversationDetail {
@@ -131,6 +142,8 @@ export interface ConversationDetail {
   report_content: string;
   findings_count: number;
   created_at: string;
+  status: ConversationStatus;
+  phase?: string;
 }
 
 // Chat Context State

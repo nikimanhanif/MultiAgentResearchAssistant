@@ -62,6 +62,9 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return { ...state, userId: action.payload }
     
     case 'SET_THREAD_ID':
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('active_thread_id', action.payload)
+      }
       return { ...state, threadId: action.payload }
     
     case 'ADD_MESSAGE':
@@ -123,6 +126,9 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return { ...state, error: action.payload, isStreaming: false, activeNode: null }
     
     case 'RESET_CHAT':
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('active_thread_id')
+      }
       return {
         ...initialState,
         userId: state.userId,
@@ -157,7 +163,25 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const userId = 'test_user'
     dispatch({ type: 'SET_USER_ID', payload: userId })
+    
+    // Check for active thread in localStorage
+    if (typeof window !== 'undefined') {
+      const savedThreadId = localStorage.getItem('active_thread_id')
+      if (savedThreadId) {
+        // We'll let loadConversation handle the state population
+        // But we need to make sure userId is set first, which it is above
+        // However, loadConversation depends on state.userId which might not be updated in this render cycle yet
+        // So we pass userId explicitly or rely on the effect dep. 
+        // Actually, better to trigger a separate effect or call it here with the known ID.
+        // Since loadConversation uses state.userId, we might need to wait.
+        // But dispatch is synchronous for the state update in the sense that the next render sees it.
+        // Actually inside useEffect, state is stale.
+        // Let's rely on a separate effect that watches userId.
+      }
+    }
   }, [])
+
+
 
   // Parse SSE event data
   const parseSSEEvent = useCallback((data: string): StreamEvent | null => {
@@ -198,6 +222,20 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           type: 'SET_BRIEF', 
           payload: { scope: event.scope, subTopics: event.sub_topics }
         })
+        break
+      
+      case 'clarification_request':
+        // Add the clarification questions as an assistant message
+        const clarificationMessage: Message = {
+          id: `msg_${Date.now()}`,
+          role: 'assistant',
+          content: event.questions,
+          timestamp: new Date(),
+          node: 'scope'
+        }
+        dispatch({ type: 'ADD_MESSAGE', payload: clarificationMessage })
+        dispatch({ type: 'SET_STREAMING', payload: false })
+        dispatch({ type: 'SET_STREAMING_CONTENT', payload: '' })
         break
       
       case 'review_request':
@@ -257,7 +295,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           user_id: state.userId
         })
       })
-
+      
       if (!response.ok) {
         throw new Error(`HTTP error: ${response.status}`)
       }
@@ -367,6 +405,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         type: 'SET_ERROR', 
         payload: error instanceof Error ? error.message : 'Unknown error'
       })
+    } finally {
+      // Ensure streaming state is reset even if no complete event was received
+      dispatch({ type: 'SET_STREAMING', payload: false })
     }
   }, [state.threadId, parseSSEEvent, handleStreamEvent])
 
@@ -401,33 +442,152 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'SET_THREAD_ID', payload: conversationId })
         
         // Reconstruct messages from saved data
-        // Add original user query
-        if (data.user_query) {
-          const userMessage: Message = {
-            id: `msg_restored_user_${Date.now()}`,
-            role: 'user',
-            content: data.user_query,
-            timestamp: new Date(data.created_at)
+        // Priority: Use full message history if available
+        if (data.messages && data.messages.length > 0) {
+          data.messages.forEach((msg: any) => {
+             const restoredMessage: Message = {
+              id: `msg_restored_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+              role: msg.role as 'user' | 'assistant',
+              content: msg.content,
+              timestamp: new Date(data.created_at) // Approximate timestamp
+            }
+            dispatch({ type: 'ADD_MESSAGE', payload: restoredMessage })
+          })
+        } else {
+          // Fallback: Add original user query if no history
+          if (data.user_query) {
+            const userMessage: Message = {
+              id: `msg_restored_user_${Date.now()}`,
+              role: 'user',
+              content: data.user_query,
+              timestamp: new Date(data.created_at)
+            }
+            dispatch({ type: 'ADD_MESSAGE', payload: userMessage })
           }
-          dispatch({ type: 'ADD_MESSAGE', payload: userMessage })
         }
         
-        // Add the final report as assistant message
-        if (data.report_content) {
-          const reportMessage: Message = {
-            id: `msg_restored_report_${Date.now()}`,
-            role: 'assistant',
-            content: data.report_content,
-            timestamp: new Date(data.created_at)
-          }
-          dispatch({ type: 'ADD_MESSAGE', payload: reportMessage })
-        }
+        // Handle different conversation statuses
+        const status = data.status || 'complete'
         
-        // Mark research as complete since this is a finished conversation
-        dispatch({ type: 'SET_PROGRESS', payload: { phase: 'complete' } })
+        if (status === 'waiting_review') {
+          // Fetch the conversation state to check for pending interrupt
+          try {
+            const stateResponse = await fetch(
+              `${API_URL}/conversations/${state.userId}/${conversationId}/state`
+            )
+            if (stateResponse.ok) {
+              const stateData = await stateResponse.json()
+              
+              // If there's a pending interrupt with a report, show review modal
+              if (stateData.has_pending_interrupt && stateData.report_content) {
+                dispatch({ 
+                  type: 'SET_REVIEW_REQUEST', 
+                  payload: { report: stateData.report_content, pending: true }
+                })
+                dispatch({ type: 'SET_PROGRESS', payload: { phase: 'review' } })
+              } else if (stateData.report_content) {
+                // No pending interrupt but has report - might be resumable
+                // Only add if not already added via messages list
+                const hasReportMessage = data.messages?.some((m: any) => m.content === stateData.report_content);
+                if (!hasReportMessage) {
+                  const reportMessage: Message = {
+                    id: `msg_restored_report_${Date.now()}`,
+                    role: 'assistant',
+                    content: stateData.report_content,
+                    timestamp: new Date(data.created_at)
+                  }
+                  dispatch({ type: 'ADD_MESSAGE', payload: reportMessage })
+                }
+                dispatch({ type: 'SET_PROGRESS', payload: { phase: 'review' } })
+              }
+            }
+          } catch (stateError) {
+            console.error('Error fetching conversation state:', stateError)
+          }
+        } else if (status === 'in_progress') {
+          // In-progress conversation
+          dispatch({ type: 'SET_PROGRESS', payload: { phase: data.phase || 'scoping' } })
+          
+          // Determine if we need to continue execution
+          const messages = data.messages || []
+          const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null
+          const shouldContinue = lastMessage && lastMessage.role === 'user'
+
+          if (!shouldContinue) {
+             console.log('Restored conversation waiting for user input. Not triggering continue.')
+             return 
+          }
+
+          dispatch({ type: 'SET_STREAMING', payload: true })
+          
+          // Call the continue endpoint to resume graph execution
+          try {
+            const continueResponse = await fetch(
+              `${API_URL}/chat/${conversationId}/continue`,
+              { method: 'POST' }
+            )
+            
+            if (continueResponse.ok && continueResponse.body) {
+              const reader = continueResponse.body.getReader()
+              const decoder = new TextDecoder()
+              let buffer = ''
+              
+              while (true) {
+                const { done, value } = await reader.read()
+                if (done) break
+                
+                buffer += decoder.decode(value, { stream: true })
+                const lines = buffer.split('\n')
+                buffer = lines.pop() || ''
+                
+                for (const line of lines) {
+                  if (line.startsWith('data: ')) {
+                    const eventData = parseSSEEvent(line.slice(6))
+                    if (eventData) {
+                      handleStreamEvent(eventData)
+                    }
+                  }
+                }
+              }
+            }
+          } catch (continueError) {
+            console.error('Error continuing conversation:', continueError)
+            // Fallback to showing a note if continue fails
+            const noteMessage: Message = {
+              id: `msg_continue_error_${Date.now()}`,
+              role: 'assistant',
+              content: `*Could not resume research. Please try starting a new conversation.*`,
+              timestamp: new Date()
+            }
+            dispatch({ type: 'ADD_MESSAGE', payload: noteMessage })
+          } finally {
+            dispatch({ type: 'SET_STREAMING', payload: false })
+          }
+        } else {
+          // Complete conversation - show the report
+          if (data.report_content) {
+            // Check if report is already in messages
+             const hasReportMessage = data.messages?.some((m: any) => m.content === data.report_content);
+             if (!hasReportMessage) {
+                const reportMessage: Message = {
+                  id: `msg_restored_report_${Date.now()}`,
+                  role: 'assistant',
+                  content: data.report_content,
+                  timestamp: new Date(data.created_at)
+                }
+                dispatch({ type: 'ADD_MESSAGE', payload: reportMessage })
+             }
+          }
+          dispatch({ type: 'SET_PROGRESS', payload: { phase: 'complete' } })
+        }
       }
     } catch (error) {
       console.error('Error loading conversation:', error)
+      // If we failed to load the saved thread, clear it to prevent bad state
+      if (typeof window !== 'undefined' && localStorage.getItem('active_thread_id') === conversationId) {
+        localStorage.removeItem('active_thread_id')
+        dispatch({ type: 'SET_ERROR', payload: 'Could not restore previous session' })
+      }
     }
   }, [state.userId])
 
@@ -464,6 +624,18 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       loadConversations()
     }
   }, [state.userId, loadConversations])
+
+  // Restore conversation from localStorage
+  useEffect(() => {
+    if (!state.userId) return
+
+    if (typeof window !== 'undefined') {
+      const savedThreadId = localStorage.getItem('active_thread_id')
+      if (savedThreadId && !state.threadId) {
+        loadConversation(savedThreadId)
+      }
+    }
+  }, [state.userId, loadConversation, state.threadId])
 
   const value: ChatContextType = {
     ...state,

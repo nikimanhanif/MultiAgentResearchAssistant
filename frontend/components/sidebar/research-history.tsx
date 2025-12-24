@@ -2,7 +2,7 @@
 
 import { useChatContext } from '@/context/chat-context'
 import { cn } from '@/lib/utils'
-import { Plus, MessageSquare, MoreVertical, Trash2, BookOpen } from 'lucide-react'
+import { Plus, MessageSquare, MoreVertical, Trash2, BookOpen, Clock, AlertCircle, CheckCircle2 } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,6 +11,8 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Badge } from '@/components/ui/badge'
+import type { ConversationStatus } from '@/types/chat'
 
 export function ResearchHistory() {
   const { conversations, threadId, loadConversation, deleteConversation, startNewChat } = useChatContext()
@@ -28,6 +30,30 @@ export function ResearchHistory() {
 
   const truncateQuery = (query: string, maxLength: number = 28) => {
     return query.length > maxLength ? query.slice(0, maxLength) + '...' : query
+  }
+
+  const getStatusIcon = (status: ConversationStatus) => {
+    switch (status) {
+      case 'in_progress':
+        return <Clock className="h-3 w-3 text-yellow-500" />
+      case 'waiting_review':
+        return <AlertCircle className="h-3 w-3 text-orange-500" />
+      case 'complete':
+      default:
+        return <CheckCircle2 className="h-3 w-3 text-green-500" />
+    }
+  }
+
+  const getStatusLabel = (status: ConversationStatus, phase?: string) => {
+    switch (status) {
+      case 'in_progress':
+        return phase || 'In Progress'
+      case 'waiting_review':
+        return 'Needs Review'
+      case 'complete':
+      default:
+        return null // Don't show label for complete
+    }
   }
 
   return (
@@ -58,54 +84,68 @@ export function ResearchHistory() {
             </div>
           ) : (
             <div className="space-y-1">
-              {conversations.map((conv) => (
-                <div
-                  key={conv.conversation_id}
-                  className={cn(
-                    'group relative flex items-center rounded-md transition-colors',
-                    'hover:bg-accent/50',
-                    threadId === conv.conversation_id && 'bg-accent/70'
-                  )}
-                >
-                  <button
-                    onClick={() => loadConversation(conv.conversation_id)}
+              {conversations.map((conv) => {
+                const status = conv.status || 'complete'
+                const statusLabel = getStatusLabel(status, conv.phase)
+                
+                return (
+                  <div
+                    key={conv.conversation_id}
                     className={cn(
-                      'flex-1 text-left px-3 py-2.5 rounded-md text-sm transition-colors',
-                      'focus:outline-none'
+                      'group relative flex items-center rounded-md transition-colors',
+                      'hover:bg-accent/50',
+                      threadId === conv.conversation_id && 'bg-accent/70',
+                      status === 'waiting_review' && 'border-l-2 border-orange-500'
                     )}
                   >
-                    <div className="flex items-start gap-2">
-                      <MessageSquare className="h-4 w-4 shrink-0 text-muted-foreground mt-0.5" />
-                      <div className="flex-1 min-w-0">
-                        <span className="truncate block text-foreground/90">
-                          {truncateQuery(conv.user_query)}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {formatDate(conv.created_at)}
-                        </span>
+                    <button
+                      onClick={() => loadConversation(conv.conversation_id)}
+                      className={cn(
+                        'flex-1 text-left px-3 py-2.5 rounded-md text-sm transition-colors',
+                        'focus:outline-none'
+                      )}
+                    >
+                      <div className="flex items-start gap-2">
+                        <MessageSquare className="h-4 w-4 shrink-0 text-muted-foreground mt-0.5" />
+                        <div className="flex-1 min-w-0">
+                          <span className="truncate block text-foreground/90">
+                            {truncateQuery(conv.user_query)}
+                          </span>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-xs text-muted-foreground">
+                              {formatDate(conv.created_at)}
+                            </span>
+                            {statusLabel && (
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 gap-1">
+                                {getStatusIcon(status)}
+                                {statusLabel}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
                       </div>
+                    </button>
+                    <div className="opacity-0 group-hover:opacity-100 transition-opacity pr-2">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-7 w-7">
+                            <MoreVertical className="h-3.5 w-3.5" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem 
+                            className="text-destructive"
+                            onClick={() => deleteConversation(conv.conversation_id)}
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
-                  </button>
-                  <div className="opacity-0 group-hover:opacity-100 transition-opacity pr-2">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7">
-                          <MoreVertical className="h-3.5 w-3.5" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem 
-                          className="text-destructive"
-                          onClick={() => deleteConversation(conv.conversation_id)}
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>
@@ -113,3 +153,4 @@ export function ResearchHistory() {
     </div>
   )
 }
+
