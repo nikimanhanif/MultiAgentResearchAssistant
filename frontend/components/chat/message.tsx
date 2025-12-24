@@ -3,22 +3,17 @@
 import { useState } from 'react'
 import type { Message as MessageType } from '@/types/chat'
 import { cn } from '@/lib/utils'
-import { User, Bot, Copy, RotateCcw, Check } from 'lucide-react'
+import { User, Bot, Copy, Check } from 'lucide-react'
 import { MarkdownContent } from './markdown-content'
 import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 interface MessageProps {
   message: MessageType
+  isStreaming?: boolean
 }
 
-export function Message({ message }: MessageProps) {
+export function Message({ message, isStreaming }: MessageProps) {
   const isUser = message.role === 'user'
   const [copied, setCopied] = useState(false)
 
@@ -28,23 +23,22 @@ export function Message({ message }: MessageProps) {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const handleRegenerate = () => {
-    // TODO: Implement regenerate functionality
-  }
-
   return (
     <div
       className={cn(
-        'group relative flex w-full items-start gap-4 p-4 transition-colors',
-        isUser ? 'bg-background hover:bg-muted/30' : 'bg-muted/30 hover:bg-muted/50'
+        'group relative flex w-full items-start gap-4 p-4 rounded-lg transition-colors',
+        isUser 
+          ? 'bg-transparent' 
+          : 'bg-zinc-900/30 border border-subtle'
       )}
     >
+      {/* Avatar */}
       <div
         className={cn(
-          'flex h-8 w-8 shrink-0 select-none items-center justify-center rounded-md border shadow-sm transition-colors',
+          'flex h-8 w-8 shrink-0 select-none items-center justify-center rounded-lg transition-colors',
           isUser
-            ? 'bg-background border-input group-hover:border-primary/50'
-            : 'bg-primary text-primary-foreground border-primary group-hover:border-primary/80'
+            ? 'bg-muted/50 border border-subtle text-muted-foreground'
+            : 'bg-primary/10 border border-primary/20 text-primary'
         )}
       >
         {isUser ? (
@@ -53,10 +47,15 @@ export function Message({ message }: MessageProps) {
           <Bot className="h-4 w-4" />
         )}
       </div>
+
+      {/* Content */}
       <div className="flex-1 space-y-2 overflow-hidden min-w-0">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-sm font-semibold">
-            {isUser ? 'You' : 'Assistant'}
+          <span className={cn(
+            'text-sm font-semibold',
+            isUser ? 'text-muted-foreground' : 'text-primary'
+          )}>
+            {isUser ? 'You' : 'Research Assistant'}
           </span>
           {!isUser && (
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -66,7 +65,7 @@ export function Message({ message }: MessageProps) {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-7 w-7"
+                      className="h-7 w-7 text-muted-foreground hover:text-foreground"
                       onClick={handleCopy}
                     >
                       {copied ? (
@@ -81,29 +80,15 @@ export function Message({ message }: MessageProps) {
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      onClick={handleRegenerate}
-                    >
-                      <RotateCcw className="h-3.5 w-3.5" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Regenerate</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
             </div>
           )}
         </div>
-        <div className="text-sm leading-relaxed">
+        <div className={cn(
+          'text-sm leading-relaxed',
+          isStreaming && 'typewriter-cursor'
+        )}>
           {isUser ? (
-            <p className="whitespace-pre-wrap break-words">{message.content}</p>
+            <p className="whitespace-pre-wrap break-words text-foreground/90">{message.content}</p>
           ) : (
             <MarkdownContent content={message.content} />
           )}

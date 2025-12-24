@@ -72,3 +72,34 @@ async def get_conversation_detail(user_id: str, conversation_id: str):
         findings_count=len(conversation["findings"]),
         created_at=conversation["created_at"]
     )
+
+
+@router.delete("/{user_id}/{conversation_id}")
+async def delete_conversation(user_id: str, conversation_id: str):
+    """
+    Delete a specific conversation.
+    
+    Args:
+        user_id: The ID of the user.
+        conversation_id: The ID of the conversation to delete.
+        
+    Returns:
+        dict: Success message.
+        
+    Raises:
+        HTTPException: If the conversation is not found.
+    """
+    from app.persistence.store import get_store
+    
+    store = get_store()
+    namespace = (user_id, "conversations")
+    
+    # Check if conversation exists
+    result = await store.aget(namespace, conversation_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    
+    # Delete the conversation
+    await store.adelete(namespace, conversation_id)
+    
+    return {"message": "Conversation deleted successfully"}

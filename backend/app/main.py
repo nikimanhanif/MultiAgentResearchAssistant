@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -32,8 +35,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-from app.api import conversations
+from app.api import chat, conversations
 
+app.include_router(chat.router)
 app.include_router(conversations.router)
 
 app.add_middleware(

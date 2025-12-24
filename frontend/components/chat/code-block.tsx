@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Copy, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -13,13 +13,6 @@ interface CodeBlockProps {
 
 export function CodeBlock({ language, code, className }: CodeBlockProps) {
   const [copied, setCopied] = useState(false)
-  const [highlightedCode, setHighlightedCode] = useState<string>(code)
-
-  useEffect(() => {
-    // Simple syntax highlighting fallback
-    // In production, you'd use shiki or react-syntax-highlighter
-    setHighlightedCode(code)
-  }, [code])
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(code)
@@ -52,7 +45,7 @@ export function CodeBlock({ language, code, className }: CodeBlockProps) {
           className
         )}
       >
-        <code className="font-mono">{highlightedCode}</code>
+        <code className="font-mono">{code}</code>
       </pre>
     </div>
   )

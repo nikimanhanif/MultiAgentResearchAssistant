@@ -1,45 +1,129 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Message } from './message'
-import type { Message as MessageType } from '@/types/chat'
-import { Bot } from 'lucide-react'
+import { ReasoningBlock } from './reasoning-block'
+import { useChatContext } from '@/context/chat-context'
+import { Search } from 'lucide-react'
+import { ScrollArea } from '@/components/ui/scroll-area'
 
 export function ChatMessages() {
-  // TODO: Fetch messages from state/API
-  const messages: MessageType[] = []
+  const { 
+    messages, 
+    isStreaming, 
+    currentStreamingContent, 
+    researchProgress,
+    activeNode 
+  } = useChatContext()
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+  }, [messages, currentStreamingContent])
+
+  const hasMessages = messages.length > 0 || currentStreamingContent
+  
+  // Show ReasoningBlock during active research phases
+  const showReasoning = isStreaming && 
+    ['researching', 'generating_report', 'scoping'].includes(researchProgress.phase)
 
   return (
-    <div className="flex-1 overflow-y-auto scroll-smooth">
-      {messages.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-full text-center px-4 animate-in fade-in-0 duration-500">
-          <div className="mb-4">
-            <Bot className="h-12 w-12 text-muted-foreground" />
-          </div>
-          <h2 className="text-2xl font-semibold mb-2">Start a conversation</h2>
-          <p className="text-muted-foreground max-w-md">
-            Ask me anything and I'll help you with your research.
-          </p>
-        </div>
-      ) : (
-        <div className="divide-y divide-border">
-          {messages.map((message, index) => (
-            <div
-              key={message.id}
-              className="animate-in fade-in-0 slide-in-from-bottom-2 duration-300"
-              style={{ animationDelay: `${index * 50}ms` }}
-            >
-              <Message message={message} />
+    <ScrollArea className="h-full">
+      <div className="px-4 py-6">
+        {!hasMessages ? (
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4"
+          >
+            <div className="mb-6 p-5 rounded-2xl bg-primary/10 border border-primary/20">
+              <Search className="h-10 w-10 text-primary" />
             </div>
-          ))}
-          <div ref={messagesEndRef} />
-        </div>
-      )}
-    </div>
+            <h2 className="text-2xl font-semibold mb-3">Start Your Research</h2>
+            <p className="text-muted-foreground max-w-md leading-relaxed">
+              Ask any research question and I&apos;ll help you find comprehensive answers 
+              with citations from academic sources.
+            </p>
+          </motion.div>
+        ) : (
+          <div className="space-y-1 max-w-4xl mx-auto">
+            <AnimatePresence mode="popLayout">
+              {messages.map((message, index) => (
+                <motion.div
+                  key={message.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ 
+                    duration: 0.3, 
+                    delay: Math.min(index * 0.05, 0.2) 
+                  }}
+                >
+                  <Message message={message} />
+                </motion.div>
+              ))}
+            </AnimatePresence>
+            
+            {/* ReasoningBlock - Internal Monologue (during active research) */}
+            <AnimatePresence>
+              {showReasoning && (
+                <ReasoningBlock 
+                  phase={researchProgress.phase}
+                  isActive={isStreaming}
+                  findingsCount={researchProgress.findingsCount}
+                  tasksCount={researchProgress.tasksCount}
+                  durationMs={researchProgress.phaseDurationMs}
+                />
+              )}
+            </AnimatePresence>
+            
+            {/* Streaming message */}
+            <AnimatePresence>
+              {currentStreamingContent && !showReasoning && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                >
+                  <Message
+                    message={{
+                      id: 'streaming',
+                      role: 'assistant',
+                      content: currentStreamingContent,
+                      timestamp: new Date()
+                    }}
+                    isStreaming={true}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+            
+            {/* Typing indicator */}
+            <AnimatePresence>
+              {isStreaming && !currentStreamingContent && !showReasoning && (
+                <motion.div 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="p-4"
+                >
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <div className="flex gap-1">
+                      <span className="w-2 h-2 bg-primary/60 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <span className="w-2 h-2 bg-primary/60 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <span className="w-2 h-2 bg-primary/60 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
+                    <span className="text-sm font-mono">Thinking...</span>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+            
+            <div ref={messagesEndRef} />
+          </div>
+        )}
+      </div>
+    </ScrollArea>
   )
 }

@@ -10,6 +10,7 @@ import re
 import json
 import tempfile
 import httpx
+import concurrent.futures
 from typing import Literal, List, Optional, Tuple, Any, Dict
 from pathlib import Path
 
@@ -17,20 +18,25 @@ from langchain_core.tools import tool, BaseTool
 from langchain_community.document_loaders import ArxivLoader, PyMuPDFLoader
 from langchain_community.utilities import ArxivAPIWrapper
 from langchain_community.utilities.pubmed import PubMedAPIWrapper
-from langchain_community.utilities.semanticscholar import SemanticScholarAPIWrapper
 
 logger = logging.getLogger(__name__)
 
-# Initialize API wrappers
+# Initialize API wrappers lazily to avoid uvloop conflicts
 _arxiv_api = ArxivAPIWrapper(
     top_k_results=5,
     load_max_docs=5,
     load_all_available_meta=True,
 )
 
-_semantic_scholar_api = SemanticScholarAPIWrapper()
+# PubMedAPIWrapper is lazily initialized to avoid event loop issues at import time
+_pubmed_api = None
 
-_pubmed_api = PubMedAPIWrapper()
+def _get_pubmed_api():
+    """Lazily initialize PubMed API wrapper."""
+    global _pubmed_api
+    if _pubmed_api is None:
+        _pubmed_api = PubMedAPIWrapper()
+    return _pubmed_api
 
 
 def _extract_paper_sections(full_text: str, metadata_prefix: str = "") -> str:
@@ -175,12 +181,32 @@ def _search_arxiv(query: str, count: int) -> List[Dict[str, Any]]:
         return []
 
 
-def _search_semantic_scholar(query: str, count: int) -> List[Dict[str, Any]]:
-    """Search Semantic Scholar and return structured paper list with citations."""
+def _search_semantic_scholar_sync(query: str, count: int) -> List[Dict[str, Any]]:
+    """
+    Synchronous Semantic Scholar search (runs in thread pool).
+    
+    The semanticscholar library calls nest_asyncio.apply() in __init__, which
+    fails with uvloop. We monkey-patch it to be a no-op since we don't need
+    nested event loops in our sync thread context.
+    
+    The library also requires an event loop for its async internals, so we
+    create a new standard asyncio loop in the thread (not uvloop).
+    """
+    import asyncio
+    import nest_asyncio
+    
+    original_apply = nest_asyncio.apply
+    nest_asyncio.apply = lambda: None  # Make it a no-op
+    
+    # Create a new event loop for this thread (standard asyncio, not uvloop)
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
     try:
         from semanticscholar import SemanticScholar
         
-        sch = SemanticScholar()
+        # Set a generous timeout for the API client (120s)
+        sch = SemanticScholar(timeout=120)
         results = sch.search_paper(query, limit=count, fields=[
             "paperId", "title", "abstract", "authors", "year", 
             "citationCount", "openAccessPdf", "externalIds"
@@ -224,17 +250,90 @@ def _search_semantic_scholar(query: str, count: int) -> List[Dict[str, Any]]:
                 "arxiv_id": arxiv_id,
             })
         return papers
+    finally:
+        # Cleanup
+        loop.close()
+        nest_asyncio.apply = original_apply
+
+
+def _search_semantic_scholar(query: str, count: int) -> List[Dict[str, Any]]:
+    """
+    Search Semantic Scholar and return structured paper list with citations.
+    
+    Runs in a thread pool to avoid uvloop/nest_asyncio conflict.
+    """
+    try:
+        # Run in thread pool to avoid nest_asyncio + uvloop conflict
+        # Timeout of 120s to handle slow Semantic Scholar API responses
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(_search_semantic_scholar_sync, query, count)
+            return future.result(timeout=120)
         
+    except concurrent.futures.TimeoutError:
+        logger.error("Semantic Scholar search timed out")
+        return []
     except Exception as e:
         logger.error(f"Semantic Scholar search failed: {e}")
         return []
+
+
+def _get_semantic_scholar_paper_sync(paper_id: str, fields: List[str]) -> Optional[Any]:
+    """
+    Synchronous Semantic Scholar paper fetch (runs in thread pool).
+    
+    The semanticscholar library calls nest_asyncio.apply() in __init__, which
+    fails with uvloop. We monkey-patch it to be a no-op since we don't need
+    nested event loops in our sync thread context.
+    
+    The library also requires an event loop for its async internals, so we
+    create a new standard asyncio loop in the thread (not uvloop).
+    """
+    import asyncio
+    import nest_asyncio
+    
+    original_apply = nest_asyncio.apply
+    nest_asyncio.apply = lambda: None  # Make it a no-op
+    
+    # Create a new event loop for this thread (standard asyncio, not uvloop)
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
+    try:
+        from semanticscholar import SemanticScholar
+        
+        # Set a generous timeout for the API client (120s)
+        sch = SemanticScholar(timeout=120)
+        return sch.get_paper(paper_id, fields=fields)
+    finally:
+        # Cleanup
+        loop.close()
+        nest_asyncio.apply = original_apply
+
+
+def _get_semantic_scholar_paper(paper_id: str, fields: List[str]) -> Optional[Any]:
+    """
+    Get paper details from Semantic Scholar.
+    
+    Runs in a thread pool to avoid uvloop/nest_asyncio conflict.
+    """
+    try:
+        # Timeout of 120s to handle slow Semantic Scholar API
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(_get_semantic_scholar_paper_sync, paper_id, fields)
+            return future.result(timeout=120)
+    except concurrent.futures.TimeoutError:
+        logger.error(f"Semantic Scholar paper fetch timed out for {paper_id}")
+        return None
+    except Exception as e:
+        logger.error(f"Semantic Scholar paper fetch failed for {paper_id}: {e}")
+        return None
 
 
 def _search_pubmed(query: str, count: int) -> List[Dict[str, Any]]:
     """Search PubMed and return structured paper list."""
     try:
         # PubMedAPIWrapper returns docs with limited metadata
-        raw_results = _pubmed_api.run(query)
+        raw_results = _get_pubmed_api().run(query)
         
         if not raw_results or raw_results == "No good PubMed Result was found":
             return []
@@ -436,10 +535,8 @@ def fetch_paper_content(
             
         elif source == "semantic_scholar":
             # Get paper details and PDF URL from Semantic Scholar
-            from semanticscholar import SemanticScholar
-            
-            sch = SemanticScholar()
-            paper = sch.get_paper(paper_id, fields=[
+            # Uses thread pool to avoid uvloop/nest_asyncio conflict
+            paper = _get_semantic_scholar_paper(paper_id, [
                 "title", "authors", "year", "abstract", "openAccessPdf"
             ])
             
@@ -490,7 +587,7 @@ def fetch_paper_content(
         elif source == "pubmed":
             # PubMed - try to get from PMC if available
             # First, get the paper metadata
-            result = _pubmed_api.run(f"{paper_id}[PMID]")
+            result = _get_pubmed_api().run(f"{paper_id}[PMID]")
             
             if not result or "No good PubMed Result was found" in result:
                 return (f"Could not find PubMed paper with PMID {paper_id}.", None)
