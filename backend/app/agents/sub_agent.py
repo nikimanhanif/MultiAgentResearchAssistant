@@ -14,7 +14,7 @@ from typing import Dict, List, Any, Optional
 from pydantic import BaseModel, Field
 
 from app.graphs.state import SubAgentState
-from app.models.schemas import Finding, ResearchTask, Citation, SourceType, SubAgentSummary
+from app.models.schemas import Finding, ResearchTask, SubAgentSummary
 from app.config import get_deepseek_chat
 from app.prompts.research_prompts import (
     SUB_AGENT_CITATION_EXTRACTION_TEMPLATE,
@@ -22,10 +22,12 @@ from app.prompts.research_prompts import (
     CREDIBILITY_HEURISTICS,
 )
 from app.tools.tool_registry import get_research_tools
-from langgraph.prebuilt import create_react_agent
+from app.agents.middleware import TrimmingMiddleware, ToolSafetyMiddleware
+
+from langchain.agents import create_agent
 from langgraph.errors import GraphRecursionError
 from langchain_core.messages import ToolMessage
-from langchain_core.messages.utils import trim_messages, count_tokens_approximately
+from langchain_core.messages.utils import count_tokens_approximately
 
 logger = logging.getLogger(__name__)
 
@@ -85,21 +87,6 @@ def _parse_delegation_request(agent_output: str) -> Optional[ResearchTask]:
 MAX_AGENT_CONTEXT_TOKENS = 64000
 
 
-def _create_pre_model_hook():
-    """Create a pre-model hook that trims message history to prevent context overflow."""
-    def pre_model_hook(state):
-        trimmed = trim_messages(
-            state["messages"],
-            strategy="last",
-            token_counter=count_tokens_approximately,
-            max_tokens=MAX_AGENT_CONTEXT_TOKENS,
-            start_on="human",
-            end_on=("human", "tool"),
-        )
-        return {"llm_input_messages": trimmed}
-    return pre_model_hook
-
-
 async def sub_agent_node(state: SubAgentState) -> Dict[str, Any]:
     """
     LangGraph node for the Sub-Agent.
@@ -127,6 +114,9 @@ async def sub_agent_node(state: SubAgentState) -> Dict[str, Any]:
     budget_remaining = max_searches
     
     brief = state["research_brief"]
+    # Provide default for format to avoid validation errors
+    brief_format = brief.format if brief.format else "other"
+    
     enabled_mcp_servers = (
         brief.metadata.get("enabled_mcp_servers", ["scientific-papers"])
         if brief.metadata else ["scientific-papers"]
@@ -140,7 +130,7 @@ async def sub_agent_node(state: SubAgentState) -> Dict[str, Any]:
         "gap_analysis": "GAP_ANALYSIS",
         "other": "DEEP_RESEARCH",  # Default fallback
     }
-    format_value = (brief.format.value if brief.format else "other").lower()
+    format_value = (brief_format.value if hasattr(brief_format, 'value') else str(brief_format)).lower()
     research_goal = FORMAT_TO_STRATEGY.get(format_value, "DEEP_RESEARCH")
     
     async with get_research_tools(enabled_mcp_servers=enabled_mcp_servers) as tools:
@@ -169,16 +159,23 @@ async def sub_agent_node(state: SubAgentState) -> Dict[str, Any]:
         system_message = rendered_messages[0].content + "\n\n" + rendered_messages[1].content
         
         try:
-            agent = create_react_agent(
-                llm,
+            # Create Agent with new Middleware architecture
+            agent = create_agent(
+                model=llm,
                 tools=tools,
-                prompt=system_message,
-                pre_model_hook=_create_pre_model_hook()
+                system_prompt=system_message,
+                middleware=[
+                    TrimmingMiddleware(max_tokens=MAX_AGENT_CONTEXT_TOKENS),
+                    ToolSafetyMiddleware()
+                ]
             )
             
             try:
+                # Use ainvoke with state
+                initial_state = {"messages": [{"role": "user", "content": f"Research topic: {task.query}"}]}
+                
                 result = await agent.ainvoke(
-                    {"messages": [{"role": "user", "content": f"Research topic: {task.query}"}]},
+                    initial_state,
                     {"recursion_limit": 25}  # Max 15 steps (~5-7 tool calls)
                 )
             except GraphRecursionError as e:
@@ -192,6 +189,7 @@ async def sub_agent_node(state: SubAgentState) -> Dict[str, Any]:
                         "error": [f"Task {task.task_id} hit recursion limit with no results"]
                     }
             
+            # Process results (same logic as before)
             agent_output = result["messages"][-1].content if result.get("messages") else ""
             delegation_task = _parse_delegation_request(agent_output)
             
@@ -306,4 +304,3 @@ async def _extract_citations(
             key_insights=[],
             gaps_noted=f"Extraction failed: {str(e)}"
         )
-
