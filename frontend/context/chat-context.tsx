@@ -34,7 +34,11 @@ const initialState: ChatState = {
   reviewRequest: null,
   conversations: [],
   error: null,
-  activeNode: null
+  activeNode: null,
+  isReportStreaming: false,
+  reportPanelOpen: false,
+  focusMode: false,
+  activeReportContent: null
 }
 
 // Action types
@@ -54,6 +58,11 @@ type ChatAction =
   | { type: 'RESET_CHAT' }
   | { type: 'FINALIZE_STREAMING_MESSAGE' }
   | { type: 'SET_ACTIVE_NODE'; payload: string | null }
+  | { type: 'SET_REPORT_STREAMING'; payload: boolean }
+  | { type: 'FINALIZE_AND_SWITCH_TO_REPORT' }
+  | { type: 'OPEN_REPORT'; payload: string }
+  | { type: 'CLOSE_REPORT' }
+  | { type: 'TOGGLE_FOCUS_MODE' }
 
 // Reducer
 function chatReducer(state: ChatState, action: ChatAction): ChatState {
@@ -138,6 +147,46 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
     case 'SET_ACTIVE_NODE':
       return { ...state, activeNode: action.payload }
     
+    case 'SET_REPORT_STREAMING':
+      return { ...state, isReportStreaming: action.payload }
+    
+    case 'FINALIZE_AND_SWITCH_TO_REPORT':
+      // Finalize current scope message (if any) and prepare for report streaming
+      if (state.currentStreamingContent) {
+        const scopeMessage: Message = {
+          id: `msg_${Date.now()}`,
+          role: 'assistant',
+          content: state.currentStreamingContent,
+          timestamp: new Date()
+        }
+        return {
+          ...state,
+          messages: [...state.messages, scopeMessage],
+          currentStreamingContent: '',
+          isReportStreaming: true
+        }
+      }
+      return { ...state, isReportStreaming: true }
+    
+    case 'OPEN_REPORT':
+      return { 
+        ...state, 
+        reportPanelOpen: true, 
+        focusMode: true,  // Enable focus mode by default when opening
+        activeReportContent: action.payload 
+      }
+    
+    case 'CLOSE_REPORT':
+      return { 
+        ...state, 
+        reportPanelOpen: false, 
+        focusMode: false,
+        activeReportContent: null 
+      }
+    
+    case 'TOGGLE_FOCUS_MODE':
+      return { ...state, focusMode: !state.focusMode }
+    
     default:
       return state
   }
@@ -151,6 +200,9 @@ interface ChatContextType extends ChatState {
   loadConversation: (conversationId: string) => Promise<void>
   deleteConversation: (conversationId: string) => Promise<void>
   startNewChat: () => void
+  openReport: (content: string) => void
+  closeReport: () => void
+  toggleFocusMode: () => void
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined)
@@ -164,21 +216,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     const userId = 'test_user'
     dispatch({ type: 'SET_USER_ID', payload: userId })
     
-    // Check for active thread in localStorage
-    if (typeof window !== 'undefined') {
-      const savedThreadId = localStorage.getItem('active_thread_id')
-      if (savedThreadId) {
-        // We'll let loadConversation handle the state population
-        // But we need to make sure userId is set first, which it is above
-        // However, loadConversation depends on state.userId which might not be updated in this render cycle yet
-        // So we pass userId explicitly or rely on the effect dep. 
-        // Actually, better to trigger a separate effect or call it here with the known ID.
-        // Since loadConversation uses state.userId, we might need to wait.
-        // But dispatch is synchronous for the state update in the sense that the next render sees it.
-        // Actually inside useEffect, state is stale.
-        // Let's rely on a separate effect that watches userId.
-      }
-    }
   }, [])
 
 
@@ -201,6 +238,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         break
       
       case 'report_token':
+        // On first report token, finalize any prior scope message and switch to report mode
+        if (!state.isReportStreaming) {
+          dispatch({ type: 'FINALIZE_AND_SWITCH_TO_REPORT' })
+        }
         dispatch({ type: 'APPEND_STREAMING_CONTENT', payload: event.content })
         break
       
@@ -255,13 +296,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       
       case 'complete':
         dispatch({ type: 'FINALIZE_STREAMING_MESSAGE' })
+        dispatch({ type: 'SET_REPORT_STREAMING', payload: false }) // Reset for next conversation
         break
       
       case 'error':
         dispatch({ type: 'SET_ERROR', payload: event.error })
+        dispatch({ type: 'SET_REPORT_STREAMING', payload: false }) // Reset on error
         break
     }
-  }, [])
+  }, [state.isReportStreaming])
 
   // Send a message
   const sendMessage = useCallback(async (content: string) => {
@@ -275,6 +318,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'ADD_MESSAGE', payload: userMessage })
     dispatch({ type: 'SET_STREAMING', payload: true })
     dispatch({ type: 'SET_STREAMING_CONTENT', payload: '' })
+    dispatch({ type: 'SET_REPORT_STREAMING', payload: false })
     dispatch({ type: 'SET_ERROR', payload: null })
 
     try {
@@ -596,6 +640,19 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'RESET_CHAT' })
   }, [])
 
+  // Research workspace panel controls
+  const openReport = useCallback((content: string) => {
+    dispatch({ type: 'OPEN_REPORT', payload: content })
+  }, [])
+
+  const closeReport = useCallback(() => {
+    dispatch({ type: 'CLOSE_REPORT' })
+  }, [])
+
+  const toggleFocusMode = useCallback(() => {
+    dispatch({ type: 'TOGGLE_FOCUS_MODE' })
+  }, [])
+
   // Delete a conversation
   const deleteConversation = useCallback(async (conversationId: string) => {
     if (!state.userId) return
@@ -644,7 +701,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     loadConversations,
     loadConversation,
     deleteConversation,
-    startNewChat
+    startNewChat,
+    openReport,
+    closeReport,
+    toggleFocusMode
   }
 
   return (

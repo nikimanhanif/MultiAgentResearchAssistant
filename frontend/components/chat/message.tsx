@@ -3,19 +3,43 @@
 import { useState } from 'react'
 import type { Message as MessageType } from '@/types/chat'
 import { cn } from '@/lib/utils'
-import { User, Bot, Copy, Check } from 'lucide-react'
+import { User, Bot, Copy, Check, ExternalLink } from 'lucide-react'
 import { MarkdownContent } from './markdown-content'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { useChatContext } from '@/context/chat-context'
 
 interface MessageProps {
   message: MessageType
   isStreaming?: boolean
 }
 
+// Helper to detect if a message contains a research report
+function isReportMessage(content: string): boolean {
+  // Check for common report indicators
+  const reportIndicators = [
+    '# ',           // H1 headers (reports typically start with these)
+    '## Executive Summary',
+    '## Key Findings',
+    '## Introduction',
+    '## Literature Review',
+    '## Methodology',
+    '## Conclusion',
+    '## References'
+  ]
+  
+  // Report messages are typically longer and contain multiple headers
+  const hasMultipleHeaders = (content.match(/^##?\s/gm) || []).length >= 2
+  const hasReportIndicator = reportIndicators.some(indicator => content.includes(indicator))
+  const isLongEnough = content.length > 500
+  
+  return hasMultipleHeaders && (hasReportIndicator || isLongEnough)
+}
+
 export function Message({ message, isStreaming }: MessageProps) {
   const isUser = message.role === 'user'
   const [copied, setCopied] = useState(false)
+  const { openReport, reportPanelOpen, activeReportContent } = useChatContext()
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(message.content)
@@ -23,13 +47,21 @@ export function Message({ message, isStreaming }: MessageProps) {
     setTimeout(() => setCopied(false), 2000)
   }
 
+  const handleViewReport = () => {
+    openReport(message.content)
+  }
+
+  const isReport = !isUser && !isStreaming && isReportMessage(message.content)
+  const isCurrentlyViewing = reportPanelOpen && activeReportContent === message.content
+
   return (
     <div
       className={cn(
         'group relative flex w-full items-start gap-4 p-4 rounded-lg transition-colors',
         isUser 
           ? 'bg-transparent' 
-          : 'bg-zinc-900/30 border border-subtle'
+          : 'bg-zinc-900/30 border border-subtle',
+        isCurrentlyViewing && 'ring-1 ring-primary/30 bg-zinc-900/50'
       )}
     >
       {/* Avatar */}
@@ -60,6 +92,32 @@ export function Message({ message, isStreaming }: MessageProps) {
           {!isUser && (
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <TooltipProvider>
+                {/* View Full Report Button - only for report messages */}
+                {isReport && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className={cn(
+                          "h-7 px-2 text-xs gap-1.5",
+                          isCurrentlyViewing 
+                            ? "text-primary bg-primary/10" 
+                            : "text-muted-foreground hover:text-foreground"
+                        )}
+                        onClick={handleViewReport}
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                        <span>{isCurrentlyViewing ? 'Viewing' : 'View Full Report'}</span>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{isCurrentlyViewing ? 'Currently viewing in panel' : 'Open in side panel'}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+                
+                {/* Copy Button */}
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button

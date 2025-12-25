@@ -159,4 +159,8 @@ export interface ChatState {
   conversations: ConversationSummary[];
   error: string | null;
   activeNode: string | null;
+  isReportStreaming: boolean;
+  reportPanelOpen: boolean;
+  focusMode: boolean;
+  activeReportContent: string | null;
 }
