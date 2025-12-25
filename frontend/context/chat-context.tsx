@@ -12,7 +12,7 @@ import type {
   ReviewAction
 } from '@/types/chat'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'
 
 // Initial state
 const initialProgress: ResearchProgress = {

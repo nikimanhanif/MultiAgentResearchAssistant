@@ -35,10 +35,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-from app.api import chat, conversations
+from app.api.routes import api_router
 
-app.include_router(chat.router)
-app.include_router(conversations.router)
+app.include_router(api_router)
 
 app.add_middleware(
     CORSMiddleware,

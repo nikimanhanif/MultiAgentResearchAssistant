@@ -282,20 +282,18 @@ async def chat(request: ChatRequest):
     Unified chat endpoint for the research pipeline with token streaming.
     
     Handles the complete workflow:
-    1. Scope clarification (if new thread or no brief).
-    2. Research execution (supervisor loop).
-    3. Report generation.
-    4. HITL review.
+    1. Scope clarification (if new thread or no brief)
+    2. Research execution (supervisor loop)
+    3. Report generation
+    4. HITL review
     
-    For continuing conversations (same thread_id), the new message is appended
-    to the existing conversation history using the messages reducer pattern.
+    For continuing conversations, the new message is appended to existing history.
     
     Returns:
         StreamingResponse: Server-Sent Events (SSE) stream with token-by-token output.
     """
     thread_id = request.thread_id or f"thread_{uuid.uuid4().hex[:12]}"
     user_id = request.user_id or "default_user"
-    
     
     try:
         graph = build_research_graph()
@@ -315,7 +313,7 @@ async def chat(request: ChatRequest):
     
     # Build messages list - use full history if provided, otherwise just the new message
     if request.messages:
-        # Frontend sent full conversation history (like Streamlit approach)
+        # Frontend sent full conversation history
         conversation_messages = [
             {"role": msg.role, "content": msg.content}
             for msg in request.messages
@@ -333,12 +331,6 @@ async def chat(request: ChatRequest):
             "content": request.message
         }]
         logger.info(f"Thread {thread_id}: First message, no history")
-    
-    # Debug: Log all messages being sent to graph
-    logger.info(f"=== CONVERSATION MESSAGES ({len(conversation_messages)} total) ===")
-    for i, msg in enumerate(conversation_messages):
-        logger.info(f"  [{i}] {msg['role']}: {msg['content'][:100]}...")
-    logger.info("=== END MESSAGES ===")
     
     # Build input state with full conversation
     input_data = {
@@ -392,7 +384,6 @@ async def chat(request: ChatRequest):
         logger.warning(f"Error checking state for resume: {state_error}")
     
 
-    
     # Save as in-progress conversation immediately for crash recovery
     await save_in_progress_conversation(
         user_id=user_id,

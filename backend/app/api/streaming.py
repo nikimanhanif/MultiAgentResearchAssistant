@@ -11,7 +11,19 @@ from typing import Any, Dict
 
 
 class StreamEventType(str, Enum):
-    """Types of events that can be streamed to the client."""
+    """
+    Types of events that can be streamed to the client.
+    
+    - TOKEN: Streaming text tokens from scope agent
+    - REPORT_TOKEN: Streaming text tokens from report agent
+    - PROGRESS: Research progress updates (phase, counts, duration)
+    - STATE_UPDATE: Node state changes
+    - BRIEF_CREATED: Research brief has been created
+    - CLARIFICATION_REQUEST: Scope agent needs user input
+    - REVIEW_REQUEST: Report ready for human review
+    - COMPLETE: Stream has completed successfully
+    - ERROR: An error occurred during processing
+    """
     TOKEN = "token"
     PROGRESS = "progress"
     STATE_UPDATE = "state_update"
@@ -21,6 +33,7 @@ class StreamEventType(str, Enum):
     REVIEW_REQUEST = "review_request"
     COMPLETE = "complete"
     ERROR = "error"
+
 
 
 def create_sse_event(event_type: StreamEventType, data: Dict[str, Any]) -> str:

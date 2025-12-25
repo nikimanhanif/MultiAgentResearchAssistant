@@ -6,6 +6,7 @@ This module includes:
 - Conversations API: History management for research sessions.
 """
 
-from app.api import conversations
+from app.api.routes import api_router
+from app.api import chat, conversations
 
-__all__ = ["conversations"]
+__all__ = ["api_router", "chat", "conversations"]
