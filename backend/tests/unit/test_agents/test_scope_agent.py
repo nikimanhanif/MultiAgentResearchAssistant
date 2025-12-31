@@ -8,7 +8,6 @@ from app.agents.scope_agent import (
     generate_clarification_questions,
     generate_research_brief,
     check_scope_completion,
-    check_scope_completion,
     _format_conversation_history,
     _update_brief_metadata,
     _build_question_generation_chain,

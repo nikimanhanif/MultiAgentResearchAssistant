@@ -8,9 +8,16 @@ stored in the persistence layer, including in-progress conversations.
 from fastapi import APIRouter, HTTPException
 from typing import List, Optional, Dict
 from pydantic import BaseModel
-from app.persistence.store import get_conversation, list_conversations
-from app.persistence import get_checkpointer
+import logging
+from app.persistence import (
+    get_checkpointer, 
+    get_store, 
+    get_conversation, 
+    list_conversations
+)
 from app.graphs.research_graph import build_research_graph
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
 
@@ -142,7 +149,7 @@ async def get_conversation_detail(user_id: str, conversation_id: str):
                                         })
     except Exception as e:
         # Don't fail the whole request if message loading fails, just log it
-        print(f"Error loading messages for {conversation_id}: {e}")
+        logger.warning(f"Error loading messages for {conversation_id}: {e}")
 
     return ConversationDetail(
         conversation_id=conversation["conversation_id"],
@@ -203,7 +210,7 @@ async def get_conversation_state(user_id: str, conversation_id: str):
                                     report_content = intr.value.get("report")
                         break
         except Exception:
-            pass  # Graph state not available, continue
+            logger.debug(f"Graph state not available for conversation {conversation_id}")
     
     return ConversationState(
         conversation_id=conversation_id,
@@ -230,8 +237,6 @@ async def delete_conversation(user_id: str, conversation_id: str):
     Raises:
         HTTPException: If the conversation is not found.
     """
-    from app.persistence.store import get_store
-    
     store = get_store()
     namespace = (user_id, "conversations")
     
@@ -240,8 +245,24 @@ async def delete_conversation(user_id: str, conversation_id: str):
     if not result:
         raise HTTPException(status_code=404, detail="Conversation not found")
     
-    # Delete the conversation
+    # Delete the conversation from store
     await store.adelete(namespace, conversation_id)
+    
+    # Delete the conversation from checkpointer
+    try:
+        checkpointer = get_checkpointer()
+        await checkpointer.conn.execute(
+            "DELETE FROM checkpoints WHERE thread_id = ?", 
+            (conversation_id,)
+        )
+        await checkpointer.conn.execute(
+            "DELETE FROM writes WHERE thread_id = ?", 
+            (conversation_id,)
+        )
+    except Exception as e:
+        logger.warning(
+            f"Failed to purge checkpoints for {conversation_id}: {e}"
+        )
     
     return {"message": "Conversation deleted successfully"}
 

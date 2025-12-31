@@ -446,10 +446,9 @@ async def chat(request: ChatRequest):
                                     "X-User-ID": user_id
                                 }
                             )
-        logger.info(f"[CHAT] No pending clarification interrupt found, starting fresh")
+        logger.info("[CHAT] No pending clarification interrupt found, starting fresh")
     except Exception as state_error:
         logger.warning(f"Error checking state for resume: {state_error}")
-    
 
     await save_in_progress_conversation(
         user_id=user_id,

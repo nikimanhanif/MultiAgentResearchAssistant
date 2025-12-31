@@ -127,19 +127,17 @@ def _download_and_parse_pdf(pdf_url: str) -> Optional[str]:
         "Sec-Fetch-User": "?1",
     }
     
+    tmp_path = None
     try:
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp_file:
+            tmp_path = tmp_file.name
             with httpx.Client(timeout=30.0, follow_redirects=True, headers=headers) as client:
                 response = client.get(pdf_url)
                 response.raise_for_status()
                 tmp_file.write(response.content)
-                tmp_path = tmp_file.name
         
         loader = PyMuPDFLoader(tmp_path)
         docs = loader.load()
-        
-        # Clean up temp file
-        Path(tmp_path).unlink(missing_ok=True)
         
         if docs:
             return "\n\n".join([doc.page_content for doc in docs])
@@ -148,6 +146,9 @@ def _download_and_parse_pdf(pdf_url: str) -> Optional[str]:
     except Exception as e:
         logger.error(f"PDF download/parse failed: {e}")
         return None
+    finally:
+        if tmp_path:
+            Path(tmp_path).unlink(missing_ok=True)
 
 
 def _search_arxiv(query: str, count: int) -> List[Dict[str, Any]]:

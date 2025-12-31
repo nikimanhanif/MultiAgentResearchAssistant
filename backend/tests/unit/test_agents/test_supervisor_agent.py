@@ -237,15 +237,16 @@ class TestSupervisorNode:
         """Test that supervisor correctly increments iteration counter."""
         mock_llm = MagicMock()
         mock_get_llm.return_value = mock_llm
-        gap_output = GapAnalysisOutput(
-            has_gaps=False,
-            is_complete=False,
-            gaps_identified=[],
-            new_tasks=[],
-            reasoning="Test reasoning"
-        )
+        mock_response = MagicMock()
+        mock_response.content = """{
+            "has_gaps": false,
+            "is_complete": false,
+            "gaps_identified": [],
+            "new_tasks": [],
+            "reasoning": "Test reasoning"
+        }"""
         mock_chain = MagicMock()
-        mock_chain.invoke.return_value = gap_output
+        mock_chain.invoke.return_value = mock_response
         mock_template.__or__.return_value = mock_chain
 
         state: ResearchState = {

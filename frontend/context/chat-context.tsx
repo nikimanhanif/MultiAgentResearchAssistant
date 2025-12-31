@@ -94,7 +94,7 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
     case 'ADD_MESSAGE':
       return { ...state, messages: [...state.messages, action.payload] }
     
-    case 'UPDATE_LAST_MESSAGE':
+    case 'UPDATE_LAST_MESSAGE': {
       const messages = [...state.messages]
       if (messages.length > 0) {
         messages[messages.length - 1] = {
@@ -103,6 +103,7 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         }
       }
       return { ...state, messages }
+    }
     
     case 'SET_STREAMING':
       return { ...state, isStreaming: action.payload }
@@ -116,7 +117,7 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         currentStreamingContent: state.currentStreamingContent + action.payload 
       }
     
-    case 'FINALIZE_STREAMING_MESSAGE':
+    case 'FINALIZE_STREAMING_MESSAGE': {
       if (!state.currentStreamingContent) return state
       const newMessage: Message = {
         id: `msg_${Date.now()}`,
@@ -130,6 +131,7 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         currentStreamingContent: '',
         isStreaming: false
       }
+    }
     
     case 'SET_PROGRESS':
       return { 
@@ -165,7 +167,7 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
     case 'SET_REPORT_STREAMING':
       return { ...state, isReportStreaming: action.payload }
     
-    case 'FINALIZE_AND_SWITCH_TO_REPORT':
+    case 'FINALIZE_AND_SWITCH_TO_REPORT': {
       if (state.currentStreamingContent) {
         const scopeMessage: Message = {
           id: `msg_${Date.now()}`,
@@ -181,6 +183,7 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         }
       }
       return { ...state, isReportStreaming: true }
+    }
     
     case 'OPEN_REPORT':
       return { 
@@ -201,7 +204,7 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
     case 'TOGGLE_FOCUS_MODE':
       return { ...state, focusMode: !state.focusMode }
     
-    case 'SET_THINKING':
+    case 'SET_THINKING': {
       const newEntry: ThoughtEntry = {
         id: `thought_${Date.now()}`,
         agent: action.payload.agent,
@@ -221,6 +224,7 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
           history: [...state.thinking.history.slice(-9), newEntry] // Keep last 10
         }
       }
+    }
     
     case 'STOP_THINKING':
       return {
@@ -304,7 +308,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         })
         break
       
-      case 'brief_created':
+      case 'brief_created': {
         dispatch({ type: 'FINALIZE_STREAMING_MESSAGE' })
         dispatch({ 
           type: 'SET_BRIEF', 
@@ -319,8 +323,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         }
         dispatch({ type: 'ADD_MESSAGE', payload: briefMessage })
         break
+      }
       
-      case 'clarification_request':
+      case 'clarification_request': {
         const clarificationMessage: Message = {
           id: `msg_${Date.now()}`,
           role: 'assistant',
@@ -332,6 +337,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'SET_STREAMING', payload: false })
         dispatch({ type: 'SET_STREAMING_CONTENT', payload: '' })
         break
+      }
       
       case 'review_request':
         isReportStreamingRef.current = false
@@ -705,7 +711,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'SET_ERROR', payload: 'Could not restore previous session' })
       }
     }
-  }, [state.userId])
+  }, [state.userId, parseSSEEvent, handleStreamEvent])
 
   // Start new chat
   const startNewChat = useCallback(() => {

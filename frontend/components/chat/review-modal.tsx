@@ -51,19 +51,13 @@ export function ReviewModal() {
     }
   }
 
-  const handleClose = () => {
-    if (!isSubmitting) {
-      resumeReview('approve')
-    }
-  }
-
   const handleCancel = () => {
     setSelectedAction(null)
     setFeedback('')
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
+    <Dialog open={isOpen} onOpenChange={() => {/* Prevent dismissal - user must take explicit action */}}>
       <DialogContent className="max-w-3xl h-[80vh] flex flex-col bg-card border-subtle">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">

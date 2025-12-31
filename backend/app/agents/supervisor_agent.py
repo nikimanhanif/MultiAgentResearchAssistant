@@ -258,7 +258,6 @@ def aggregate_findings(state: ResearchState) -> List[Finding]:
         List[Finding]: Filtered and ranked list of findings.
     """
     findings = state.get("findings", [])
-    brief = state["research_brief"]
     
     if not findings:
         return []

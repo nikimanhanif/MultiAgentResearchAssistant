@@ -176,7 +176,7 @@ async def sub_agent_node(state: SubAgentState) -> Dict[str, Any]:
                 
                 result = await agent.ainvoke(
                     initial_state,
-                    {"recursion_limit": 25}  # Max 15 steps (~5-7 tool calls)
+                    {"recursion_limit": 25}  # Max 25 steps
                 )
             except GraphRecursionError as e:
                 logger.warning(f"Sub-agent {task.task_id} hit recursion limit, extracting partial results")

@@ -206,7 +206,7 @@ class TestGenerateReport:
                     mock_chain = AsyncMock()
                     mock_chain.ainvoke = AsyncMock(return_value=type('Response', (), {'content': mock_content})())
                     
-                    mock_prompt.return_value.__or__ = lambda self, other: mock_chain
+                    mock_prompt.return_value.__or__ = lambda self, other, mc=mock_chain: mc
                     mock_llm_factory.return_value = AsyncMock()
 
                     result = await generate_report(brief, sample_findings)

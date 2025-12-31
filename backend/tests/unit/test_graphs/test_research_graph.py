@@ -255,8 +255,8 @@ class TestRouteFromScope:
         result = route_from_scope(state)
         assert result == "supervisor"
 
-    def test_route_from_scope_without_brief_routes_to_end(self):
-        """Test that missing research_brief routes to END."""
+    def test_route_from_scope_without_brief_routes_to_scope_wait(self):
+        """Test that missing research_brief routes to scope_wait for clarification."""
         state = ResearchState(
             research_brief=None,
             findings=[],
@@ -273,4 +273,4 @@ class TestRouteFromScope:
         )
         
         result = route_from_scope(state)
-        assert result == END
+        assert result == "scope_wait"

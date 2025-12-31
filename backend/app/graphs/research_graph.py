@@ -86,7 +86,7 @@ def route_from_supervisor(state: ResearchState) -> List[Send] | Literal["report_
     if state.get("is_complete", False):
         return "report_agent"
     
-    budget = state["budget"]
+    budget = state.get("budget", {})
     iterations = budget.get("iterations", 0)
     max_iterations = budget.get("max_iterations", 20)
     findings_count = len(state.get("findings", []))

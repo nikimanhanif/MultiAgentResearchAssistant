@@ -162,7 +162,7 @@ class TestSubAgentNode:
     
     @pytest.mark.asyncio
     @patch("app.agents.sub_agent._extract_citations")
-    @patch("app.agents.sub_agent.create_react_agent")
+    @patch("app.agents.sub_agent.create_agent")
     @patch("app.agents.sub_agent.get_research_tools")
     @patch("app.agents.sub_agent.get_deepseek_chat")
     async def test_sub_agent_node_successful_execution_returns_findings(
@@ -253,7 +253,7 @@ class TestSubAgentNode:
     @pytest.mark.asyncio
     @patch("app.agents.sub_agent._extract_citations")
     @patch("app.agents.sub_agent._parse_delegation_request")
-    @patch("app.agents.sub_agent.create_react_agent")
+    @patch("app.agents.sub_agent.create_agent")
     @patch("app.agents.sub_agent.get_research_tools")
     @patch("app.agents.sub_agent.get_deepseek_chat")
     async def test_sub_agent_node_delegation_adds_task_to_history(
@@ -339,7 +339,7 @@ class TestSubAgentNode:
     @pytest.mark.asyncio
     @patch("app.agents.sub_agent.get_research_tools")
     @patch("app.agents.sub_agent.get_deepseek_chat")
-    @patch("app.agents.sub_agent.create_react_agent")
+    @patch("app.agents.sub_agent.create_agent")
     async def test_sub_agent_node_agent_failure_marks_failed(
         self, mock_create_agent, mock_get_llm, mock_get_tools
     ):

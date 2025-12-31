@@ -325,23 +325,29 @@ async def scope_node(state: ResearchState) -> Dict[str, Any]:
         }
     
     except Exception as e:
-        logger.error(f"Scope Node Error: {e}")
+        logger.exception(f"Scope Node process failed: {e}")
+        
         if current_round >= 1:
             try:
+                # Attempt emergency brief generation if we have some history
                 brief = await generate_research_brief(user_query, conversation_history)
                 return {
                     "research_brief": brief,
                     "pending_clarification_questions": None,
-                    "messages": [{"role": "assistant", "content": f"Research brief created: {brief.scope}"}]
+                    "messages": [{
+                        "role": "assistant", 
+                        "content": f"I encountered an issue, but I've generated a research brief based on our conversation: {brief.scope}"
+                    }]
                 }
-            except Exception: pass
+            except Exception as fallback_error:
+                logger.error(f"Fallback brief generation also failed: {fallback_error}")
         
         return {
             "scope_clarification_rounds": current_round + 1,
             "pending_clarification_questions": None,
             "messages": [{
                 "role": "assistant",
-                "content": "I encountered an issue processing your request. Let me proceed with what I understand so far."
+                "content": "I encountered an error while defining the research scope. Let me proceed with what I have so far."
             }],
             "error": [str(e)]
         }
