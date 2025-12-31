@@ -1,6 +1,6 @@
 'use client'
 
-import React, { createContext, useContext, useReducer, useCallback, useEffect, ReactNode } from 'react'
+import React, { createContext, useContext, useReducer, useCallback, useEffect, useRef, ReactNode } from 'react'
 import type { 
   Message, 
   ChatState, 
@@ -9,7 +9,9 @@ import type {
   ResearchBrief,
   ReviewRequest,
   ConversationSummary,
-  ReviewAction
+  ReviewAction,
+  ThinkingState,
+  ThoughtEntry
 } from '@/types/chat'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'
@@ -21,6 +23,16 @@ const initialProgress: ResearchProgress = {
   findingsCount: 0,
   iterations: 0,
   phaseDurationMs: 0
+}
+
+const initialThinking: ThinkingState = {
+  isThinking: false,
+  agent: '',
+  thought: '',
+  step: '',
+  startTime: 0,
+  elapsedMs: 0,
+  history: []
 }
 
 const initialState: ChatState = {
@@ -38,7 +50,8 @@ const initialState: ChatState = {
   isReportStreaming: false,
   reportPanelOpen: false,
   focusMode: false,
-  activeReportContent: null
+  activeReportContent: null,
+  thinking: initialThinking
 }
 
 // Action types
@@ -63,6 +76,8 @@ type ChatAction =
   | { type: 'OPEN_REPORT'; payload: string }
   | { type: 'CLOSE_REPORT' }
   | { type: 'TOGGLE_FOCUS_MODE' }
+  | { type: 'SET_THINKING'; payload: { agent: string; thought: string; step: string; elapsedMs: number } }
+  | { type: 'STOP_THINKING' }
 
 // Reducer
 function chatReducer(state: ChatState, action: ChatAction): ChatState {
@@ -151,7 +166,6 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return { ...state, isReportStreaming: action.payload }
     
     case 'FINALIZE_AND_SWITCH_TO_REPORT':
-      // Finalize current scope message (if any) and prepare for report streaming
       if (state.currentStreamingContent) {
         const scopeMessage: Message = {
           id: `msg_${Date.now()}`,
@@ -187,6 +201,36 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
     case 'TOGGLE_FOCUS_MODE':
       return { ...state, focusMode: !state.focusMode }
     
+    case 'SET_THINKING':
+      const newEntry: ThoughtEntry = {
+        id: `thought_${Date.now()}`,
+        agent: action.payload.agent,
+        thought: action.payload.thought,
+        step: action.payload.step,
+        timestamp: new Date()
+      }
+      return {
+        ...state,
+        thinking: {
+          isThinking: true,
+          agent: action.payload.agent,
+          thought: action.payload.thought,
+          step: action.payload.step,
+          startTime: state.thinking.startTime || Date.now(),
+          elapsedMs: action.payload.elapsedMs,
+          history: [...state.thinking.history.slice(-9), newEntry] // Keep last 10
+        }
+      }
+    
+    case 'STOP_THINKING':
+      return {
+        ...state,
+        thinking: {
+          ...state.thinking,
+          isThinking: false
+        }
+      }
+    
     default:
       return state
   }
@@ -210,12 +254,13 @@ const ChatContext = createContext<ChatContextType | undefined>(undefined)
 // Provider component
 export function ChatProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(chatReducer, initialState)
+  
+  // Ref to track report streaming state (avoids stale closure issues in handleStreamEvent)
+  const isReportStreamingRef = useRef(false)
 
-  // Use static user ID for single-user scenario
   useEffect(() => {
     const userId = 'test_user'
     dispatch({ type: 'SET_USER_ID', payload: userId })
-    
   }, [])
 
 
@@ -238,9 +283,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         break
       
       case 'report_token':
-        // On first report token, finalize any prior scope message and switch to report mode
-        if (!state.isReportStreaming) {
+        if (!isReportStreamingRef.current) {
+          isReportStreamingRef.current = true
           dispatch({ type: 'FINALIZE_AND_SWITCH_TO_REPORT' })
+          dispatch({ type: 'SET_PROGRESS', payload: { phase: 'generating_report' } })
         }
         dispatch({ type: 'APPEND_STREAMING_CONTENT', payload: event.content })
         break
@@ -259,14 +305,22 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         break
       
       case 'brief_created':
+        dispatch({ type: 'FINALIZE_STREAMING_MESSAGE' })
         dispatch({ 
           type: 'SET_BRIEF', 
           payload: { scope: event.scope, subTopics: event.sub_topics }
         })
+        
+        const briefMessage: Message = {
+          id: `msg_brief_${Date.now()}`,
+          role: 'assistant',
+          content: `### Research Brief Created\n\n**Scope:** ${event.scope}\n\n**Sub-topics:**\n${event.sub_topics ? event.sub_topics.map((t: string) => `- ${t}`).join('\n') : ''}`,
+          timestamp: new Date()
+        }
+        dispatch({ type: 'ADD_MESSAGE', payload: briefMessage })
         break
       
       case 'clarification_request':
-        // Add the clarification questions as an assistant message
         const clarificationMessage: Message = {
           id: `msg_${Date.now()}`,
           role: 'assistant',
@@ -288,23 +342,37 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       
       case 'state_update':
         dispatch({ type: 'SET_ACTIVE_NODE', payload: event.node })
-        if (event.is_complete) {
-          dispatch({ type: 'SET_PROGRESS', payload: { phase: 'complete' } })
-          dispatch({ type: 'SET_ACTIVE_NODE', payload: null })
-        }
+        // Don't stop thinking here - let 'complete' event handle final state reset
+        break
+      
+      case 'thought':
+        dispatch({ 
+          type: 'SET_THINKING', 
+          payload: {
+            agent: event.agent,
+            thought: event.thought,
+            step: event.step,
+            elapsedMs: event.elapsed_ms
+          }
+        })
         break
       
       case 'complete':
+        isReportStreamingRef.current = false  // Reset ref
         dispatch({ type: 'FINALIZE_STREAMING_MESSAGE' })
         dispatch({ type: 'SET_REPORT_STREAMING', payload: false }) // Reset for next conversation
+        dispatch({ type: 'SET_PROGRESS', payload: { phase: 'complete' } }) // Signal research is complete
+        dispatch({ type: 'STOP_THINKING' })
         break
       
       case 'error':
+        isReportStreamingRef.current = false  // Reset ref
         dispatch({ type: 'SET_ERROR', payload: event.error })
         dispatch({ type: 'SET_REPORT_STREAMING', payload: false }) // Reset on error
+        dispatch({ type: 'STOP_THINKING' })
         break
     }
-  }, [state.isReportStreaming])
+  }, [])  // No dependency on state.isReportStreaming - using ref instead
 
   // Send a message
   const sendMessage = useCallback(async (content: string) => {
@@ -322,8 +390,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'SET_ERROR', payload: null })
 
     try {
-      // Build messages array from current state (before adding new message)
-      // This sends the full conversation history to the backend
       const messagesHistory = state.messages.map(msg => ({
         role: msg.role,
         content: msg.content
@@ -346,7 +412,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
       // Get thread ID from header
       const threadId = response.headers.get('X-Thread-ID')
-      if (threadId && !state.threadId) {
+      if (threadId && threadId !== state.threadId) {
         dispatch({ type: 'SET_THREAD_ID', payload: threadId })
       }
 
@@ -373,9 +439,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           if (line.startsWith('data: ')) {
             const data = line.slice(6)
             const event = parseSSEEvent(data)
-            if (event) {
-              handleStreamEvent(event)
-            }
+            if (event) handleStreamEvent(event)
           }
         }
       }
@@ -406,6 +470,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
 
     dispatch({ type: 'SET_STREAMING', payload: true })
+    dispatch({ type: 'FINALIZE_STREAMING_MESSAGE' })
     dispatch({ type: 'SET_STREAMING_CONTENT', payload: '' })
     dispatch({ type: 'SET_REVIEW_REQUEST', payload: null })
 
@@ -452,8 +517,20 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     } finally {
       // Ensure streaming state is reset even if no complete event was received
       dispatch({ type: 'SET_STREAMING', payload: false })
+      // Refresh conversation list to show updated status
+      if (state.userId) {
+        try {
+          const refreshResponse = await fetch(`${API_URL}/conversations/${state.userId}`)
+          if (refreshResponse.ok) {
+            const conversations = await refreshResponse.json()
+            dispatch({ type: 'SET_CONVERSATIONS', payload: conversations })
+          }
+        } catch (refreshError) {
+          console.error('Error refreshing conversations:', refreshError)
+        }
+      }
     }
-  }, [state.threadId, parseSSEEvent, handleStreamEvent])
+  }, [state.threadId, state.userId, parseSSEEvent, handleStreamEvent])
 
   // Load conversation list
   const loadConversations = useCallback(async () => {
@@ -480,8 +557,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       )
       if (response.ok) {
         const data = await response.json()
-        
-        // Reset current state and populate from saved conversation
         dispatch({ type: 'RESET_CHAT' })
         dispatch({ type: 'SET_THREAD_ID', payload: conversationId })
         
@@ -510,7 +585,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           }
         }
         
-        // Handle different conversation statuses
         const status = data.status || 'complete'
         
         if (status === 'waiting_review') {
@@ -522,16 +596,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             if (stateResponse.ok) {
               const stateData = await stateResponse.json()
               
-              // If there's a pending interrupt with a report, show review modal
-              if (stateData.has_pending_interrupt && stateData.report_content) {
+              if (stateData.report_content) {
                 dispatch({ 
                   type: 'SET_REVIEW_REQUEST', 
                   payload: { report: stateData.report_content, pending: true }
                 })
                 dispatch({ type: 'SET_PROGRESS', payload: { phase: 'review' } })
-              } else if (stateData.report_content) {
-                // No pending interrupt but has report - might be resumable
-                // Only add if not already added via messages list
+                
                 const hasReportMessage = data.messages?.some((m: any) => m.content === stateData.report_content);
                 if (!hasReportMessage) {
                   const reportMessage: Message = {
@@ -542,17 +613,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                   }
                   dispatch({ type: 'ADD_MESSAGE', payload: reportMessage })
                 }
-                dispatch({ type: 'SET_PROGRESS', payload: { phase: 'review' } })
               }
             }
           } catch (stateError) {
             console.error('Error fetching conversation state:', stateError)
           }
         } else if (status === 'in_progress') {
-          // In-progress conversation
           dispatch({ type: 'SET_PROGRESS', payload: { phase: data.phase || 'scoping' } })
           
-          // Determine if we need to continue execution
           const messages = data.messages || []
           const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null
           const shouldContinue = lastMessage && lastMessage.role === 'user'

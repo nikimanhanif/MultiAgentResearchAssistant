@@ -277,6 +277,9 @@ async def scope_node(state: ResearchState) -> Dict[str, Any]:
     Uses interrupt pattern to pause and wait for user clarification responses.
     This keeps the graph paused (not exited) so checkpoints persist properly.
     
+    Implements a max clarification round limit to prevent infinite loops.
+    After 3 rounds of clarification, forces brief generation.
+    
     Args:
         state: Current research state.
         
@@ -285,6 +288,9 @@ async def scope_node(state: ResearchState) -> Dict[str, Any]:
     """
     from langgraph.types import interrupt
     
+    MAX_CLARIFICATION_ROUNDS = 3
+    
+    # Skip if we already have a research brief
     if state.get("research_brief"):
         return {}
     
@@ -298,16 +304,32 @@ async def scope_node(state: ResearchState) -> Dict[str, Any]:
             }]
         }
     
+    # Get current clarification round count
+    current_round = state.get("scope_clarification_rounds", 0)
+    
     # Get original query (first user message)
     user_query = user_messages[0].get("content", "")
     
-    # Build conversation history from all messages after the first
+    # Build conversation history from all messages
     conversation_history = [
         {"role": msg.get("role"), "content": msg.get("content")}
         for msg in messages
     ] if messages else None
     
     try:
+        # Check if we've exceeded max clarification rounds - force brief generation
+        if current_round >= MAX_CLARIFICATION_ROUNDS:
+            logger.info(f"Max clarification rounds ({MAX_CLARIFICATION_ROUNDS}) reached. Forcing brief generation.")
+            brief = await generate_research_brief(user_query, conversation_history)
+            return {
+                "research_brief": brief,
+                "messages": [{
+                    "role": "assistant",
+                    "content": f"Research brief created. Proceeding with research on: {brief.scope}"
+                }]
+            }
+        
+        # Check if scope is complete
         completion_check = await check_scope_completion(user_query, conversation_history)
         
         if completion_check.is_complete:
@@ -320,19 +342,46 @@ async def scope_node(state: ResearchState) -> Dict[str, Any]:
                 }]
             }
         else:
-            # Generate clarification questions (now returns formatted string)
+            # Generate clarification questions
             message_content = await generate_clarification_questions(user_query, conversation_history)
             
+            # Increment clarification round counter
+            new_round = current_round + 1
+            
             # Use interrupt to pause and wait for user response
-            # The graph will pause here until resumed with user input
             user_response = interrupt(value={
                 "type": "clarification_request",
                 "questions": message_content
             })
             
-            # When resumed, user_response contains the user's answer
-            # Add both the questions and user response to messages
+            # --- After interrupt resumes ---
+            # User has responded, re-check completion immediately
+            updated_history = conversation_history.copy() if conversation_history else []
+            updated_history.append({"role": "assistant", "content": message_content})
+            updated_history.append({"role": "user", "content": user_response})
+            
+            # Immediately check if scope is now complete
+            try:
+                post_response_check = await check_scope_completion(user_query, updated_history)
+                
+                if post_response_check.is_complete:
+                    # User's answer was sufficient - generate brief now
+                    brief = await generate_research_brief(user_query, updated_history)
+                    return {
+                        "research_brief": brief,
+                        "scope_clarification_rounds": new_round,
+                        "messages": [
+                            {"role": "assistant", "content": message_content},
+                            {"role": "user", "content": user_response},
+                            {"role": "assistant", "content": f"Research brief created. Proceeding with research on: {brief.scope}"}
+                        ]
+                    }
+            except Exception as recheck_error:
+                logger.warning(f"Scope completion recheck failed: {recheck_error}. Proceeding with next round.")
+            
+            # Scope still not complete, add messages and let graph loop back
             return {
+                "scope_clarification_rounds": new_round,
                 "messages": [
                     {"role": "assistant", "content": message_content},
                     {"role": "user", "content": user_response}
@@ -340,16 +389,33 @@ async def scope_node(state: ResearchState) -> Dict[str, Any]:
             }
     
     except Exception as e:
-        # Check if it's a GraphInterrupt (which inherits from Exception in some versions or is raised as such)
-        # LangGraph uses a special exception for interrupts
+        # Check if it's a GraphInterrupt (which should be re-raised)
         if "Interrupt" in type(e).__name__:
             raise e
-            
+        
         logger.error(f"Scope Node: Error processing - {e}")
+        
+        # On persistent errors, force brief generation to prevent infinite loops
+        if current_round >= 1:
+            logger.warning(f"Error after {current_round} clarification rounds. Forcing brief generation.")
+            try:
+                brief = await generate_research_brief(user_query, conversation_history)
+                return {
+                    "research_brief": brief,
+                    "messages": [{
+                        "role": "assistant",
+                        "content": f"Research brief created. Proceeding with research on: {brief.scope}"
+                    }]
+                }
+            except Exception as brief_error:
+                logger.error(f"Could not generate brief: {brief_error}")
+        
         return {
+            "scope_clarification_rounds": current_round + 1,
             "messages": [{
                 "role": "assistant",
-                "content": f"Error processing your request: {str(e)}"
+                "content": f"I encountered an issue processing your request. Let me proceed with what I understand so far."
             }],
             "error": [str(e)]
         }
+

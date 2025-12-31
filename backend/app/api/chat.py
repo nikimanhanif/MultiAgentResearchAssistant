@@ -26,6 +26,7 @@ from app.api.streaming import (
     create_progress_event,
     create_error_event,
     create_complete_event,
+    create_thought_event,
 )
 
 logger = logging.getLogger(__name__)
@@ -72,32 +73,50 @@ async def stream_graph_with_tokens(
     phase_start_time = time.time()
     tasks_count = 0
     findings_count = 0
+    supervisor_round = 0
     
-    # Track state for persistence
     research_brief = None
     findings_list = []
     report_content = ""
     is_research_complete = False
     
+    if isinstance(input_data, Command):
+        try:
+            existing_state = await graph.aget_state(config)
+            if existing_state and existing_state.values:
+                if existing_state.values.get("research_brief"):
+                    research_brief = existing_state.values["research_brief"]
+                if existing_state.values.get("report_content"):
+                    report_content = existing_state.values["report_content"]
+                if existing_state.values.get("findings"):
+                    findings_list = existing_state.values["findings"]
+        except Exception as state_fetch_error:
+            logger.warning(f"Could not fetch existing state for resume: {state_fetch_error}")
+    
+    yield create_progress_event(
+        phase="scoping",
+        tasks_count=0,
+        findings_count=0,
+        iterations=0,
+        phase_duration_ms=0
+    )
+
     try:
-        # Stream with multiple modes: messages for tokens, updates for state
+        logger.info(f"Starting stream for thread_id: {thread_id}")
+        
         async for chunk in graph.astream(
             input_data, 
             config, 
-            stream_mode=["messages", "updates"]
+            stream_mode=["messages", "updates"],
+            recursion_limit=50
         ):
-            # Check the type of chunk
             if isinstance(chunk, tuple) and len(chunk) == 2:
                 mode, data = chunk
                 
                 if mode == "messages":
-                    # Token streaming from LLM
                     message, metadata = data
                     if hasattr(message, 'content') and message.content:
-                        # Determine which node is streaming
                         node_name = metadata.get('langgraph_node', 'assistant')
-                        
-                        # Stream tokens for report_agent OR user-visible scope messages
                         tags = metadata.get('tags', [])
                         
                         if node_name == "report_agent":
@@ -111,38 +130,93 @@ async def stream_graph_with_tokens(
                             })
                 
                 elif mode == "updates":
-                    # State updates from nodes
                     for node_name, node_output in data.items():
                         if not isinstance(node_output, dict):
                             continue
                         
-                        # Track phase based on node
                         previous_phase = current_phase
                         if node_name == "scope":
                             current_phase = "scoping"
-                            # For scope node, send the formatted message content instead of raw tokens
-                            if "messages" in node_output and node_output["messages"]:
-                                for msg in node_output["messages"]:
-                                    if msg.get("role") == "assistant":
-                                        content = msg.get("content", "")
-                                        if content:
-                                            # Send as complete message, not tokens
-                                            yield create_sse_event(StreamEventType.TOKEN, {
-                                                "content": content,
-                                                "node": "scope"
-                                            })
+                            pass
                         elif node_name == "supervisor":
                             current_phase = "researching"
+                            supervisor_round += 1
+                            
+                            all_tasks = node_output.get("task_history", [])
+                            if all_tasks:
+                                recent_tasks = all_tasks[-3:] if len(all_tasks) > 3 else all_tasks
+                                task_topics = []
+                                for t in recent_tasks:
+                                    if hasattr(t, 'topic'):
+                                        topic = t.topic
+                                    elif isinstance(t, dict):
+                                        topic = t.get("topic", "task")
+                                    else:
+                                        topic = "task"
+                                    task_topics.append(topic[:50])
+                                
+                                topics_str = ', '.join(task_topics)
+                                if supervisor_round == 1:
+                                    thought = f"Investigating: {topics_str}"
+                                else:
+                                    thought = f"Deepening analysis: {topics_str}"
+                                
+                                yield create_thought_event(
+                                    agent="supervisor",
+                                    thought=thought,
+                                    step="planning",
+                                    elapsed_ms=int((time.time() - phase_start_time) * 1000)
+                                )
+                            else:
+                                gaps = node_output.get("gaps", {})
+                                reasoning = gaps.get("reasoning", "Analyzing research progress...") if isinstance(gaps, dict) else getattr(gaps, 'reasoning', "Analyzing research progress...")
+                                if len(reasoning) > 100:
+                                    reasoning = reasoning[:100].rsplit(' ', 1)[0] + "..."
+                                yield create_thought_event(
+                                    agent="supervisor",
+                                    thought=reasoning,
+                                    step="analyzing",
+                                    elapsed_ms=int((time.time() - phase_start_time) * 1000)
+                                )
+                        elif node_name == "sub_agent":
+                            summaries = node_output.get("sub_agent_summaries", [])
+                            if summaries:
+                                summary = summaries[0]
+                                if hasattr(summary, 'key_insights'):
+                                    insights = summary.key_insights
+                                elif isinstance(summary, dict):
+                                    insights = summary.get("key_insights", [])
+                                else:
+                                    insights = []
+                                
+                                if insights:
+                                    first_insight = insights[0]
+                                    if len(first_insight) > 80:
+                                        first_insight = first_insight[:80].rsplit(' ', 1)[0] + "..."
+                                    thought = f"Found: {first_insight}"
+                                else:
+                                    if hasattr(summary, 'finding_count'):
+                                        finding_count = summary.finding_count
+                                    elif isinstance(summary, dict):
+                                        finding_count = summary.get("finding_count", 0)
+                                    else:
+                                        finding_count = 0
+                                    thought = f"Completed: {finding_count} sources analyzed"
+                                
+                                yield create_thought_event(
+                                    agent="sub_agent",
+                                    thought=thought,
+                                    step="researching",
+                                    elapsed_ms=int((time.time() - phase_start_time) * 1000)
+                                )
                         elif node_name == "report_agent":
                             current_phase = "generating_report"
                         elif node_name == "reviewer":
                             current_phase = "review"
                         
-                        # Reset timer on phase change
                         if current_phase != previous_phase:
                             phase_start_time = time.time()
                         
-                        # Track progress metrics
                         if "task_history" in node_output:
                             tasks = node_output.get("task_history", [])
                             if tasks:
@@ -153,10 +227,8 @@ async def stream_graph_with_tokens(
                             if findings:
                                 findings_count = len(findings)
                         
-                        # Calculate phase duration in milliseconds
                         phase_duration_ms = int((time.time() - phase_start_time) * 1000)
                         
-                        # Emit progress event
                         iterations = node_output.get("budget", {}).get("iterations", 0)
                         yield create_progress_event(
                             phase=current_phase,
@@ -166,41 +238,50 @@ async def stream_graph_with_tokens(
                             phase_duration_ms=phase_duration_ms
                         )
                         
-                        # Check for research brief creation
                         if "research_brief" in node_output and node_output["research_brief"]:
                             brief = node_output["research_brief"]
-                            research_brief = brief  # Track for persistence
+                            research_brief = brief
                             yield create_sse_event(StreamEventType.BRIEF_CREATED, {
                                 "scope": brief.scope if hasattr(brief, 'scope') else str(brief),
                                 "sub_topics": brief.sub_topics if hasattr(brief, 'sub_topics') else []
                             })
+                            current_phase = "researching"
+                            phase_start_time = time.time()
+                            yield create_progress_event(
+                                phase="researching",
+                                tasks_count=0,
+                                findings_count=0,
+                                iterations=0,
+                                phase_duration_ms=0
+                            )
                         
-                        # Track findings for persistence
                         if "findings" in node_output and node_output["findings"]:
                             findings_list = node_output["findings"]
                         
-                        # Track report content from report_agent
                         if "report_content" in node_output and node_output["report_content"]:
                             report_content = node_output["report_content"]
                         
-                        # Track completion status
                         if node_output.get("is_complete", False):
                             is_research_complete = True
+                            await update_conversation_status(
+                                user_id=user_id,
+                                conversation_id=thread_id,
+                                status="complete",
+                                phase="complete"
+                            )
                         
-                        # State update event
                         yield create_sse_event(StreamEventType.STATE_UPDATE, {
                             "node": node_name,
                             "is_complete": node_output.get("is_complete", False)
                         })
             else:
-                # Fallback for simple stream mode
                 if isinstance(chunk, dict):
                     for node_name, node_output in chunk.items():
                         yield create_sse_event(StreamEventType.STATE_UPDATE, {
                             "node": node_name
                         })
         
-        # Check for pending interrupts (e.g., reviewer waiting for HITL input)
+        # Check for pending interrupts
         try:
             graph_state = await graph.aget_state(config)
             if graph_state and graph_state.tasks:
@@ -209,14 +290,12 @@ async def stream_graph_with_tokens(
                         for interrupt_data in task.interrupts:
                             interrupt_value = interrupt_data.value if hasattr(interrupt_data, 'value') else interrupt_data
                             if isinstance(interrupt_value, dict) and interrupt_value.get("type") == "clarification_request":
-                                # Update conversation status - still in scoping phase
                                 await update_conversation_status(
                                     user_id=user_id,
                                     conversation_id=thread_id,
                                     status="in_progress",
                                     phase="scoping"
                                 )
-                                # Surface the clarification request to the frontend
                                 yield create_sse_event(StreamEventType.CLARIFICATION_REQUEST, {
                                     "questions": interrupt_value.get("questions", "")
                                 })
@@ -227,10 +306,8 @@ async def stream_graph_with_tokens(
                                     iterations=0,
                                     phase_duration_ms=0
                                 )
-                                # Don't send complete event - waiting for user input
                                 return
                             elif isinstance(interrupt_value, dict) and interrupt_value.get("type") == "review_request":
-                                # Update conversation status to waiting_review
                                 await update_conversation_status(
                                     user_id=user_id,
                                     conversation_id=thread_id,
@@ -238,7 +315,6 @@ async def stream_graph_with_tokens(
                                     phase="review",
                                     report_content=interrupt_value.get("report", report_content)
                                 )
-                                # Surface the interrupt to the frontend
                                 yield create_sse_event(StreamEventType.REVIEW_REQUEST, {
                                     "report": interrupt_value.get("report", report_content)
                                 })
@@ -249,12 +325,10 @@ async def stream_graph_with_tokens(
                                     iterations=0,
                                     phase_duration_ms=0
                                 )
-                                # Don't send complete event - waiting for user input
                                 return
         except Exception as state_error:
             logger.warning(f"Could not check graph state for interrupts: {state_error}")
         
-        # Save completed conversation to persistence
         if is_research_complete and research_brief and report_content:
             try:
                 await save_conversation(
@@ -265,7 +339,7 @@ async def stream_graph_with_tokens(
                     findings=findings_list,
                     report_content=report_content
                 )
-                logger.info(f"Saved conversation {thread_id} for user {user_id}")
+                logger.info(f"Saved conversation {thread_id}")
             except Exception as save_error:
                 logger.error(f"Failed to save conversation: {save_error}")
         
@@ -295,6 +369,9 @@ async def chat(request: ChatRequest):
     thread_id = request.thread_id or f"thread_{uuid.uuid4().hex[:12]}"
     user_id = request.user_id or "default_user"
     
+    logger.info(f"[CHAT] Received request - thread_id: {request.thread_id}, user_id: {user_id}")
+    logger.info(f"[CHAT] Using thread_id: {thread_id}")
+    
     try:
         graph = build_research_graph()
     except Exception as e:
@@ -311,28 +388,21 @@ async def chat(request: ChatRequest):
         }
     }
     
-    # Build messages list - use full history if provided, otherwise just the new message
     if request.messages:
-        # Frontend sent full conversation history
         conversation_messages = [
             {"role": msg.role, "content": msg.content}
             for msg in request.messages
         ]
-        # Add the new message at the end
         conversation_messages.append({
             "role": "user",
             "content": request.message
         })
-        logger.info(f"Thread {thread_id}: Received {len(request.messages)} history messages + 1 new message")
     else:
-        # First message - no history
         conversation_messages = [{
             "role": "user",
             "content": request.message
         }]
-        logger.info(f"Thread {thread_id}: First message, no history")
     
-    # Build input state with full conversation
     input_data = {
         "messages": conversation_messages,
         "budget": {
@@ -351,7 +421,6 @@ async def chat(request: ChatRequest):
         if first_msg.get("role") == "user":
             original_query = first_msg.get("content", "")
 
-    # Check for pending interrupts (resume flow)
     try:
         graph_state = await graph.aget_state(config)
         if graph_state and graph_state.tasks:
@@ -359,15 +428,13 @@ async def chat(request: ChatRequest):
                 if hasattr(task, 'interrupts') and task.interrupts:
                     for interrupt_data in task.interrupts:
                         interrupt_value = interrupt_data.value if hasattr(interrupt_data, 'value') else interrupt_data
-                        # If waiting for clarification, resume with the new message
                         if isinstance(interrupt_value, dict) and interrupt_value.get("type") == "clarification_request":
-                            logger.info(f"Resuming conversation {thread_id} with clarification response")
                             return StreamingResponse(
                                 stream_graph_with_tokens(
                                     graph, 
-                                    Command(resume=request.message), # Resume with just the new user message
+                                    Command(resume=request.message),
                                     config,
-                                    user_query=original_query, # Pass original for logging/persistence updates
+                                    user_query=original_query,
                                     user_id=user_id,
                                     thread_id=thread_id
                                 ),
@@ -380,11 +447,11 @@ async def chat(request: ChatRequest):
                                     "X-User-ID": user_id
                                 }
                             )
+        logger.info(f"[CHAT] No pending clarification interrupt found, starting fresh")
     except Exception as state_error:
         logger.warning(f"Error checking state for resume: {state_error}")
     
 
-    # Save as in-progress conversation immediately for crash recovery
     await save_in_progress_conversation(
         user_id=user_id,
         conversation_id=thread_id,
@@ -442,25 +509,62 @@ async def resume_review(thread_id: str, action: ReviewAction):
         }
     }
     
-    # Retrieve user_id and original query from persisted state
-    user_id = "default_user"
+    user_id = "test_user"
     user_query = ""
+    is_complete = False
+    
     try:
         graph_state = await graph.aget_state(config)
+        
         if graph_state and graph_state.values:
-            # Try to get user_id from config or state
-            user_id = graph_state.config.get("configurable", {}).get("user_id", "default_user")
-            # Get original query from first message
+            is_complete = graph_state.values.get("is_complete", False)
+            
+            config_user_id = graph_state.config.get("configurable", {}).get("user_id")
+            if config_user_id:
+                user_id = config_user_id
             messages = graph_state.values.get("messages", [])
             if messages:
                 for msg in messages:
                     if isinstance(msg, dict) and msg.get("role") == "user":
                         user_query = msg.get("content", "")
                         break
+            
+            if is_complete and not graph_state.next and not graph_state.tasks:
+                try:
+                    await update_conversation_status(
+                        user_id=user_id,
+                        conversation_id=thread_id,
+                        status="complete",
+                        phase="complete"
+                    )
+                except Exception as update_error:
+                    logger.error(f"Failed to update conversation status: {update_error}")
+                
+                # Return a success SSE stream
+                async def already_complete_stream():
+                    yield create_sse_event(StreamEventType.STATE_UPDATE, {
+                        "node": "reviewer",
+                        "is_complete": True,
+                        "message": "Report approved successfully"
+                    })
+                    yield create_sse_event(StreamEventType.COMPLETE, {
+                        "success": True
+                    })
+                
+                return StreamingResponse(
+                    already_complete_stream(),
+                    media_type="text/event-stream",
+                    headers={
+                        "Cache-Control": "no-cache",
+                        "Connection": "keep-alive",
+                        "X-Accel-Buffering": "no",
+                        "X-Thread-ID": thread_id
+                    }
+                )
+                
     except Exception as state_error:
         logger.warning(f"Could not retrieve state for resume: {state_error}")
     
-    # Use Command(resume=...) pattern per LangGraph docs
     resume_value = {
         "action": action.action,
         "feedback": action.feedback
@@ -524,7 +628,6 @@ async def continue_conversation(thread_id: str):
         }
     }
     
-    # Retrieve user_id and original query from persisted state
     user_id = "default_user"
     user_query = ""
     try:
@@ -540,7 +643,6 @@ async def continue_conversation(thread_id: str):
     except Exception as state_error:
         logger.warning(f"Could not retrieve state for continue: {state_error}")
     
-    # Continue graph execution with None input (lets graph proceed from checkpoint)
     return StreamingResponse(
         stream_graph_with_tokens(
             graph, 

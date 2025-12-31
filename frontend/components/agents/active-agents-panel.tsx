@@ -31,9 +31,9 @@ const agents: AgentConfig[] = [
   },
   {
     id: 'supervisor',
-    name: 'Supervisor',
+    name: 'Research',
     icon: Brain,
-    description: 'Coordinating research tasks',
+    description: 'Analyzing and researching topics',
     phases: ['researching']
   },
   {
@@ -56,8 +56,18 @@ export function ActiveAgentsPanel() {
   const { researchProgress, isStreaming, activeNode } = useChatContext()
   const { phase, tasksCount, findingsCount, iterations } = researchProgress
 
+  // Use phase-based detection for research phase (supervisor loop transitions rapidly)
   const isAgentActive = (agent: AgentConfig) => {
     if (!isStreaming) return false
+    // Research phase uses phase-based detection - supervisor loop has rapid transitions
+    if (phase === 'researching' && agent.id === 'supervisor') {
+      return true
+    }
+    // For other phases, use activeNode or phase-based inference
+    if (activeNode) {
+      return agent.id === activeNode || 
+             (activeNode === 'sub_agent' && agent.id === 'supervisor')
+    }
     return agent.phases.includes(phase)
   }
 
@@ -125,7 +135,7 @@ export function ActiveAgentsPanel() {
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5 font-mono">
-                      {isActive ? agent.description : isComplete ? 'Completed' : 'Pending'}
+                      {isActive ? 'In Progress' : isComplete ? 'Completed' : 'Pending'}
                     </p>
                   </div>
                 </div>

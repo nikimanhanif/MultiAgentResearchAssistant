@@ -24,9 +24,13 @@ export function ChatMessages() {
 
   const hasMessages = messages.length > 0 || currentStreamingContent
   
-  // Show ReasoningBlock during active research phases
-  const showReasoning = isStreaming && 
-    ['researching', 'generating_report', 'scoping'].includes(researchProgress.phase)
+  const isResearchingPhase = researchProgress.phase === 'researching'
+  const isGeneratingReport = researchProgress.phase === 'generating_report'
+  
+  const showReasoning = (isResearchingPhase && researchProgress.tasksCount > 0) || 
+                        (isStreaming && researchProgress.phase === 'scoping')
+  
+  const showStreamingMessage = currentStreamingContent && (isGeneratingReport || !showReasoning)
 
   return (
     <ScrollArea className="h-full">
@@ -70,7 +74,7 @@ export function ChatMessages() {
               {showReasoning && (
                 <ReasoningBlock 
                   phase={researchProgress.phase}
-                  isActive={isStreaming}
+                  isActive={isStreaming || isResearchingPhase}
                   findingsCount={researchProgress.findingsCount}
                   tasksCount={researchProgress.tasksCount}
                   durationMs={researchProgress.phaseDurationMs}
@@ -78,9 +82,9 @@ export function ChatMessages() {
               )}
             </AnimatePresence>
             
-            {/* Streaming message */}
+            {/* Streaming message - for report generation and other streaming content */}
             <AnimatePresence>
-              {currentStreamingContent && !showReasoning && (
+              {showStreamingMessage && (
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
@@ -99,7 +103,7 @@ export function ChatMessages() {
               )}
             </AnimatePresence>
             
-            {/* Typing indicator */}
+            {/* Typing indicator - only when streaming with no content */}
             <AnimatePresence>
               {isStreaming && !currentStreamingContent && !showReasoning && (
                 <motion.div 
@@ -127,3 +131,4 @@ export function ChatMessages() {
     </ScrollArea>
   )
 }
+

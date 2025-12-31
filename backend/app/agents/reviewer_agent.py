@@ -34,8 +34,9 @@ def reviewer_node(state: ResearchState) -> Command[Literal["__end__", "report_ag
         "report": state["report_content"]
     })
     
-    action = user_input.get("action")
-    feedback = user_input.get("feedback")
+    action = user_input.get("action") if isinstance(user_input, dict) else None
+    feedback = user_input.get("feedback") if isinstance(user_input, dict) else None
+    
     
     if action == "approve":
         return Command(goto=END, update={"is_complete": True})

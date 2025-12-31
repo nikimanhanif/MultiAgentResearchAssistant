@@ -143,6 +143,7 @@ class ResearchState(TypedDict, total=False):
     messages: Annotated[List[Dict[str, Any]], operator.add]
     report_content: str
     reviewer_feedback: Optional[str]
+    scope_clarification_rounds: int 
 
 
 class SubAgentState(ResearchState):

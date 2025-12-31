@@ -21,6 +21,7 @@ class StreamEventType(str, Enum):
     - BRIEF_CREATED: Research brief has been created
     - CLARIFICATION_REQUEST: Scope agent needs user input
     - REVIEW_REQUEST: Report ready for human review
+    - THOUGHT: High-level internal monologue (agent thinking status)
     - COMPLETE: Stream has completed successfully
     - ERROR: An error occurred during processing
     """
@@ -31,6 +32,7 @@ class StreamEventType(str, Enum):
     REPORT_TOKEN = "report_token"
     CLARIFICATION_REQUEST = "clarification_request"
     REVIEW_REQUEST = "review_request"
+    THOUGHT = "thought"
     COMPLETE = "complete"
     ERROR = "error"
 
@@ -84,3 +86,29 @@ def create_error_event(error: str) -> str:
 def create_complete_event(message: str = "Stream complete") -> str:
     """Create an SSE event for stream completion."""
     return create_sse_event(StreamEventType.COMPLETE, {"message": message})
+
+
+def create_thought_event(
+    agent: str,
+    thought: str,
+    step: str = "",
+    elapsed_ms: int = 0
+) -> str:
+    """
+    Create an SSE event for internal monologue/thinking indicator.
+    
+    Args:
+        agent: The agent emitting the thought (e.g., 'supervisor', 'sub_agent').
+        thought: High-level description of what the AI is doing.
+        step: Optional step identifier (e.g., 'searching', 'extracting').
+        elapsed_ms: Time elapsed since thinking started.
+        
+    Returns:
+        str: Formatted SSE event string.
+    """
+    return create_sse_event(StreamEventType.THOUGHT, {
+        "agent": agent,
+        "thought": thought,
+        "step": step,
+        "elapsed_ms": elapsed_ms
+    })

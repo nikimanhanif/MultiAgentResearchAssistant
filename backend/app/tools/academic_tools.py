@@ -429,10 +429,14 @@ def search_papers(
         if source in ["arxiv", "all"]:
             arxiv_papers = _search_arxiv(query, count)
             all_papers.extend(arxiv_papers)
-            
-        if source in ["semantic_scholar", "all"]:
-            ss_papers = _search_semantic_scholar(query, count)
-            all_papers.extend(ss_papers)
+        
+        # TEMPORARILY DISABLED: Semantic Scholar frequently times out
+        # if source in ["semantic_scholar", "all"]:
+        #     ss_papers = _search_semantic_scholar(query, count)
+        #     all_papers.extend(ss_papers)
+        if source == "semantic_scholar":
+            logger.warning("Semantic Scholar is temporarily disabled due to timeout issues")
+            return ("Semantic Scholar is temporarily disabled. Please use 'arxiv' or 'pubmed'.", None)
             
         if source in ["pubmed", "all"]:
             pubmed_papers = _search_pubmed(query, count)
@@ -503,6 +507,10 @@ def fetch_paper_content(
     """
     try:
         logger.info(f"Fetching paper content: {source}/{paper_id}")
+        
+        # TEMPORARILY DISABLED: Semantic Scholar frequently times out
+        if source == "semantic_scholar":
+            return ("Semantic Scholar is temporarily disabled due to timeout issues. Please use ArXiv papers.", None)
         
         full_text = None
         metadata_prefix = ""

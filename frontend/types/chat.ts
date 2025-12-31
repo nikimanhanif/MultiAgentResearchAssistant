@@ -25,6 +25,7 @@ export type StreamEventType =
   | "report_token"
   | "clarification_request"
   | "review_request"
+  | "thought"
   | "complete"
   | "error";
 
@@ -84,6 +85,14 @@ export interface ErrorEvent extends BaseStreamEvent {
   error: string;
 }
 
+export interface ThoughtEvent extends BaseStreamEvent {
+  type: "thought";
+  agent: string;
+  thought: string;
+  step: string;
+  elapsed_ms: number;
+}
+
 export type StreamEvent =
   | TokenEvent
   | ProgressEvent
@@ -92,6 +101,7 @@ export type StreamEvent =
   | ReportTokenEvent
   | ClarificationRequestEvent
   | ReviewRequestEvent
+  | ThoughtEvent
   | CompleteEvent
   | ErrorEvent;
 
@@ -146,6 +156,25 @@ export interface ConversationDetail {
   phase?: string;
 }
 
+// Thinking/Internal Monologue State
+export interface ThinkingState {
+  isThinking: boolean;
+  agent: string;
+  thought: string;
+  step: string;
+  startTime: number;
+  elapsedMs: number;
+  history: ThoughtEntry[];
+}
+
+export interface ThoughtEntry {
+  id: string;
+  agent: string;
+  thought: string;
+  step: string;
+  timestamp: Date;
+}
+
 // Chat Context State
 export interface ChatState {
   messages: Message[];
@@ -163,4 +192,6 @@ export interface ChatState {
   reportPanelOpen: boolean;
   focusMode: boolean;
   activeReportContent: string | null;
+  thinking: ThinkingState;
 }
+
