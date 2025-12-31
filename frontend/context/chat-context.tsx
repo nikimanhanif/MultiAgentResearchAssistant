@@ -334,6 +334,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         break
       
       case 'review_request':
+        isReportStreamingRef.current = false
+        dispatch({ type: 'FINALIZE_STREAMING_MESSAGE' })
+        dispatch({ type: 'SET_STREAMING', payload: false })
+        dispatch({ type: 'SET_REPORT_STREAMING', payload: false })
         dispatch({ 
           type: 'SET_REVIEW_REQUEST', 
           payload: { report: event.report, pending: true }

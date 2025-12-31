@@ -53,12 +53,15 @@ const agents: AgentConfig[] = [
 ]
 
 export function ActiveAgentsPanel() {
-  const { researchProgress, isStreaming, activeNode } = useChatContext()
+  const { researchProgress, isStreaming, activeNode, isReportStreaming } = useChatContext()
   const { phase, tasksCount, findingsCount, iterations } = researchProgress
 
-  // Use phase-based detection for research phase (supervisor loop transitions rapidly)
   const isAgentActive = (agent: AgentConfig) => {
-    if (!isStreaming) return false
+    // Report streaming override
+    if (isReportStreaming && agent.id === 'report_agent') return true
+
+    // Relaxed check: Active status depends on phase/node, not strictly on streaming
+    // if (!isStreaming) return false
     // Research phase uses phase-based detection - supervisor loop has rapid transitions
     if (phase === 'researching' && agent.id === 'supervisor') {
       return true
@@ -73,6 +76,12 @@ export function ActiveAgentsPanel() {
 
   const isAgentComplete = (agent: AgentConfig) => {
     if (phase === 'idle') return false
+    
+    // If reporting is active, previous stages are done
+    if (isReportStreaming && (agent.id === 'scope' || agent.id === 'supervisor')) {
+      return true
+    }
+
     const agentPhaseIndex = agents.findIndex(a => a.id === agent.id)
     const currentPhaseIndex = agents.findIndex(a => a.phases.includes(phase))
     return agentPhaseIndex < currentPhaseIndex || phase === 'complete'

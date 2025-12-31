@@ -8,13 +8,6 @@ export interface Message {
   node?: string; // Which node generated this message (scope, supervisor, report_agent, etc.)
 }
 
-export interface Chat {
-  id: string;
-  title: string;
-  messages: Message[];
-  createdAt: Date;
-  updatedAt: Date;
-}
 
 // SSE Stream Event Types
 export type StreamEventType =
