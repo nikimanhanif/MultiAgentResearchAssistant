@@ -89,13 +89,8 @@ def _build_question_generation_chain() -> Any:
     """
     parser = StrOutputParser()
     llm = get_deepseek_chat(temperature=0.7)
-    
-    # Prompt now expects Markdown output, no format instructions needed
     prompt = SCOPE_QUESTION_GENERATION_TEMPLATE
-    
-    # Add tag for streaming identification
-    chain = prompt | llm.with_config(tags=["user_visible"]) | parser
-    return chain
+    return prompt | llm.with_config(tags=["user_visible"]) | parser
 
 
 def _build_completion_detection_chain() -> Any:
@@ -106,15 +101,11 @@ def _build_completion_detection_chain() -> Any:
         Runnable: Chain of prompt | LLM | parser.
     """
     parser = PydanticOutputParser(pydantic_object=ScopeCompletionCheck)
-    llm = get_deepseek_chat(temperature=0.3)  # Lower temperature for consistent decisions
-    
-    # Add format instructions to the prompt
+    llm = get_deepseek_chat(temperature=0.3)
     prompt = SCOPE_COMPLETION_DETECTION_TEMPLATE.partial(
         format_instructions=parser.get_format_instructions()
     )
-    
-    chain = prompt | llm | parser
-    return chain
+    return prompt | llm | parser
 
 
 def _build_brief_generation_chain() -> Any:
@@ -126,14 +117,10 @@ def _build_brief_generation_chain() -> Any:
     """
     parser = PydanticOutputParser(pydantic_object=ResearchBrief)
     llm = get_deepseek_chat(temperature=0.5)
-    
-    # Add format instructions to the prompt
     prompt = SCOPE_BRIEF_GENERATION_TEMPLATE.partial(
         format_instructions=parser.get_format_instructions()
     )
-    
-    chain = prompt | llm | parser
-    return chain
+    return prompt | llm | parser
 
 
 async def generate_clarification_questions(
@@ -154,15 +141,13 @@ async def generate_clarification_questions(
         Exception: If generation fails.
     """
     chain = _build_question_generation_chain()
-    
     formatted_history = _format_conversation_history(conversation_history)
     
     try:
-        result = await chain.ainvoke({
+        return await chain.ainvoke({
             "user_query": user_query,
             "conversation_history": formatted_history
         })
-        return result
     except Exception as e:
         raise Exception(f"Failed to generate clarification questions: {e}")
 
@@ -185,15 +170,13 @@ async def check_scope_completion(
         Exception: If check fails.
     """
     chain = _build_completion_detection_chain()
-    
     formatted_history = _format_conversation_history(conversation_history)
     
     try:
-        result = await chain.ainvoke({
+        return await chain.ainvoke({
             "user_query": user_query,
             "conversation_history": formatted_history
         })
-        return result
     except Exception as e:
         raise Exception(f"Failed to check scope completion: {e}")
 
@@ -216,7 +199,6 @@ async def generate_research_brief(
         Exception: If generation fails.
     """
     chain = _build_brief_generation_chain()
-    
     formatted_history = _format_conversation_history(conversation_history)
     
     try:
@@ -225,7 +207,6 @@ async def generate_research_brief(
             "conversation_history": formatted_history
         })
         
-        # Update metadata with actual turn count
         if conversation_history:
             clarification_turns = len([
                 turn for turn in conversation_history 
@@ -262,32 +243,29 @@ async def clarify_scope(
     # Check if we have enough information
     completion_check = await check_scope_completion(user_query, conversation_history)
     
-    # If scope is complete, generate research brief
     if completion_check.is_complete:
         return await generate_research_brief(user_query, conversation_history)
     
-    # Otherwise, generate more clarifying questions
     return await generate_clarification_questions(user_query, conversation_history)
 
 
 async def scope_node(state: ResearchState) -> Dict[str, Any]:
     """
-    LangGraph node for the Scope Agent.
+    LangGraph node for the Scope Agent - Generates clarifying questions.
     
-    Uses interrupt pattern to pause and wait for user clarification responses.
-    This keeps the graph paused (not exited) so checkpoints persist properly.
+    This node checks if scope is complete and either:
+    1. Generates a research brief if scope is clear
+    2. Generates clarifying questions and stores them in state
     
-    Implements a max clarification round limit to prevent infinite loops.
-    After 3 rounds of clarification, forces brief generation.
+    Does NOT call interrupt - that's handled by scope_wait_node.
+    This ensures questions are persisted to state before the graph pauses.
     
     Args:
         state: Current research state.
         
     Returns:
-        Dict[str, Any]: State update with new messages or research_brief.
+        Dict[str, Any]: State update with research_brief or pending_clarification_questions.
     """
-    from langgraph.types import interrupt
-    
     MAX_CLARIFICATION_ROUNDS = 3
     
     # Skip if we already have a research brief
@@ -304,118 +282,125 @@ async def scope_node(state: ResearchState) -> Dict[str, Any]:
             }]
         }
     
-    # Get current clarification round count
     current_round = state.get("scope_clarification_rounds", 0)
-    
-    # Get original query (first user message)
     user_query = user_messages[0].get("content", "")
-    
-    # Build conversation history from all messages
     conversation_history = [
         {"role": msg.get("role"), "content": msg.get("content")}
         for msg in messages
     ] if messages else None
     
+    if state.get("pending_clarification_questions"):
+        return {}
+    
     try:
-        # Check if we've exceeded max clarification rounds - force brief generation
         if current_round >= MAX_CLARIFICATION_ROUNDS:
-            logger.info(f"Max clarification rounds ({MAX_CLARIFICATION_ROUNDS}) reached. Forcing brief generation.")
+            logger.info("Max rounds reached. Forcing brief generation.")
             brief = await generate_research_brief(user_query, conversation_history)
             return {
                 "research_brief": brief,
+                "pending_clarification_questions": None,
                 "messages": [{
                     "role": "assistant",
                     "content": f"Research brief created. Proceeding with research on: {brief.scope}"
                 }]
             }
         
-        # Check if scope is complete
         completion_check = await check_scope_completion(user_query, conversation_history)
         
         if completion_check.is_complete:
             brief = await generate_research_brief(user_query, conversation_history)
             return {
                 "research_brief": brief,
+                "pending_clarification_questions": None,
                 "messages": [{
                     "role": "assistant",
                     "content": f"Research brief created. Proceeding with research on: {brief.scope}"
                 }]
             }
-        else:
-            # Generate clarification questions
-            message_content = await generate_clarification_questions(user_query, conversation_history)
-            
-            # Increment clarification round counter
-            new_round = current_round + 1
-            
-            # Use interrupt to pause and wait for user response
-            user_response = interrupt(value={
-                "type": "clarification_request",
-                "questions": message_content
-            })
-            
-            # --- After interrupt resumes ---
-            # User has responded, re-check completion immediately
-            updated_history = conversation_history.copy() if conversation_history else []
-            updated_history.append({"role": "assistant", "content": message_content})
-            updated_history.append({"role": "user", "content": user_response})
-            
-            # Immediately check if scope is now complete
-            try:
-                post_response_check = await check_scope_completion(user_query, updated_history)
-                
-                if post_response_check.is_complete:
-                    # User's answer was sufficient - generate brief now
-                    brief = await generate_research_brief(user_query, updated_history)
-                    return {
-                        "research_brief": brief,
-                        "scope_clarification_rounds": new_round,
-                        "messages": [
-                            {"role": "assistant", "content": message_content},
-                            {"role": "user", "content": user_response},
-                            {"role": "assistant", "content": f"Research brief created. Proceeding with research on: {brief.scope}"}
-                        ]
-                    }
-            except Exception as recheck_error:
-                logger.warning(f"Scope completion recheck failed: {recheck_error}. Proceeding with next round.")
-            
-            # Scope still not complete, add messages and let graph loop back
-            return {
-                "scope_clarification_rounds": new_round,
-                "messages": [
-                    {"role": "assistant", "content": message_content},
-                    {"role": "user", "content": user_response}
-                ]
-            }
+        
+        questions = await generate_clarification_questions(user_query, conversation_history)
+        return {
+            "scope_clarification_rounds": current_round + 1,
+            "pending_clarification_questions": questions
+        }
     
     except Exception as e:
-        # Check if it's a GraphInterrupt (which should be re-raised)
-        if "Interrupt" in type(e).__name__:
-            raise e
-        
-        logger.error(f"Scope Node: Error processing - {e}")
-        
-        # On persistent errors, force brief generation to prevent infinite loops
+        logger.error(f"Scope Node Error: {e}")
         if current_round >= 1:
-            logger.warning(f"Error after {current_round} clarification rounds. Forcing brief generation.")
             try:
                 brief = await generate_research_brief(user_query, conversation_history)
                 return {
                     "research_brief": brief,
-                    "messages": [{
-                        "role": "assistant",
-                        "content": f"Research brief created. Proceeding with research on: {brief.scope}"
-                    }]
+                    "pending_clarification_questions": None,
+                    "messages": [{"role": "assistant", "content": f"Research brief created: {brief.scope}"}]
                 }
-            except Exception as brief_error:
-                logger.error(f"Could not generate brief: {brief_error}")
+            except Exception: pass
         
         return {
             "scope_clarification_rounds": current_round + 1,
+            "pending_clarification_questions": None,
             "messages": [{
                 "role": "assistant",
-                "content": f"I encountered an issue processing your request. Let me proceed with what I understand so far."
+                "content": "I encountered an issue processing your request. Let me proceed with what I understand so far."
             }],
             "error": [str(e)]
         }
+
+
+async def scope_wait_node(state: ResearchState) -> Dict[str, Any]:
+    """
+    LangGraph node that handles waiting for user clarification responses.
+    
+    This node is called AFTER scope_node has generated and stored questions.
+    It calls interrupt to pause the graph and wait for user input.
+    When resumed, it processes the user's response and updates state.
+    
+    Args:
+        state: Current research state (should contain pending_clarification_questions).
+        
+    Returns:
+        Dict[str, Any]: State update with messages and cleared pending questions.
+    """
+    from langgraph.types import interrupt
+    
+    questions = state.get("pending_clarification_questions")
+    if not questions:
+        return {}
+    
+    messages = state.get("messages", [])
+    user_messages = [msg for msg in messages if msg.get("role") == "user"]
+    user_query = user_messages[0].get("content", "") if user_messages else ""
+    conversation_history = [{"role": msg.get("role"), "content": msg.get("content")} for msg in messages] if messages else []
+    
+    user_response = interrupt(value={"type": "clarification_request", "questions": questions})
+    
+    updated_history = conversation_history + [
+        {"role": "assistant", "content": questions},
+        {"role": "user", "content": user_response}
+    ]
+    
+    try:
+        check = await check_scope_completion(user_query, updated_history)
+        if check.is_complete:
+            brief = await generate_research_brief(user_query, updated_history)
+            return {
+                "research_brief": brief,
+                "pending_clarification_questions": None,
+                "messages": [
+                    {"role": "assistant", "content": questions},
+                    {"role": "user", "content": user_response},
+                    {"role": "assistant", "content": f"Research brief created: {brief.scope}"}
+                ]
+            }
+    except Exception as e:
+        logger.warning(f"Recheck failed: {e}")
+    
+    return {
+        "pending_clarification_questions": None,
+        "messages": [
+            {"role": "assistant", "content": questions},
+            {"role": "user", "content": user_response}
+        ]
+    }
+
 

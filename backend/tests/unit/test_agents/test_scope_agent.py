@@ -15,6 +15,7 @@ from app.agents.scope_agent import (
     _build_completion_detection_chain,
     _build_brief_generation_chain,
     scope_node,
+    scope_wait_node,
 )
 from app.models.schemas import (
     ClarificationQuestion,
@@ -822,3 +823,78 @@ class TestScopeNode:
         assert "messages" in result
         # New error message is user-friendly
         assert "issue" in result["messages"][0]["content"].lower() or "proceed" in result["messages"][0]["content"].lower()
+
+    @pytest.mark.asyncio
+    async def test_scope_node_skips_if_pending_questions_exist(self):
+        """Test that scope_node returns empty if pending_clarification_questions exist."""
+        # Arrange
+        state = ResearchState(
+            messages=[{"role": "user", "content": "Research AI"}],
+            pending_clarification_questions="What aspect of AI?"
+        )
+        
+        # Act
+        result = await scope_node(state)
+        
+        # Assert - Should skip and let router send to scope_wait_node
+        assert result == {}
+
+    @pytest.mark.asyncio
+    @patch("app.agents.scope_agent.check_scope_completion")
+    @patch("app.agents.scope_agent.generate_clarification_questions")
+    async def test_scope_node_stores_pending_questions(
+        self, mock_gen_questions, mock_check_completion
+    ):
+        """Test that scope_node stores pending_clarification_questions in return value."""
+        # Arrange
+        state = ResearchState(
+            messages=[{"role": "user", "content": "Research AI"}]
+        )
+        
+        mock_check_completion.return_value = ScopeCompletionCheck(
+            is_complete=False, reasoning="Need info", missing_info=["aspect"]
+        )
+        
+        expected_questions = "What aspect of AI are you interested in?"
+        mock_gen_questions.return_value = expected_questions
+        
+        # Act
+        result = await scope_node(state)
+        
+        # Assert - Should store questions in pending field
+        assert "pending_clarification_questions" in result
+        assert result["pending_clarification_questions"] == expected_questions
+        assert result["scope_clarification_rounds"] == 1
+
+
+class TestScopeWaitNode:
+    """Test cases for scope_wait_node LangGraph integration."""
+
+    @pytest.mark.asyncio
+    async def test_scope_wait_node_skips_if_no_pending_questions(self):
+        """Test that scope_wait_node returns empty if no pending questions."""
+        # Arrange
+        state = ResearchState(
+            messages=[{"role": "user", "content": "Research AI"}],
+            pending_clarification_questions=None
+        )
+        
+        # Act
+        result = await scope_wait_node(state)
+        
+        # Assert
+        assert result == {}
+
+    @pytest.mark.asyncio
+    async def test_scope_wait_node_requires_pending_questions(self):
+        """Test that scope_wait_node handles missing pending_clarification_questions."""
+        # Arrange
+        state = ResearchState(
+            messages=[{"role": "user", "content": "Research AI"}]
+        )
+        
+        # Act
+        result = await scope_wait_node(state)
+        
+        # Assert
+        assert result == {}

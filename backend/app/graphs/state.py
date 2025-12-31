@@ -62,7 +62,6 @@ def merge_findings_with_dedup(left: List[Finding], right: List[Finding]) -> List
     if not right:
         return left
     
-    # Build lookup indices from existing findings
     seen_dois: Dict[str, Finding] = {}
     seen_urls: Dict[str, Finding] = {}
     seen_titles: Dict[tuple, Finding] = {}
@@ -79,29 +78,24 @@ def merge_findings_with_dedup(left: List[Finding], right: List[Finding]) -> List
             seen_titles[key] = finding
         result.append(finding)
     
-    # Add new findings, checking for duplicates
     for finding in right:
         citation = finding.citation
         existing = None
         
-        # Check DOI
         if citation.doi and citation.doi in seen_dois:
             existing = seen_dois[citation.doi]
-        # Check URL
         elif citation.url and citation.url in seen_urls:
             existing = seen_urls[citation.url]
-        # Check title+author
         elif citation.title and citation.authors:
             key = (citation.title, citation.authors[0] if citation.authors else "")
             if key in seen_titles:
                 existing = seen_titles[key]
         
         if existing:
-            # Keep higher credibility finding
+            # Keep finding with higher credibility
             if finding.credibility_score > existing.credibility_score:
                 result.remove(existing)
                 result.append(finding)
-                # Update indices
                 if citation.doi:
                     seen_dois[citation.doi] = finding
                 if citation.url:
@@ -111,7 +105,6 @@ def merge_findings_with_dedup(left: List[Finding], right: List[Finding]) -> List
                     seen_titles[key] = finding
         else:
             result.append(finding)
-            # Add to indices
             if citation.doi:
                 seen_dois[citation.doi] = finding
             if citation.url:
@@ -143,11 +136,12 @@ class ResearchState(TypedDict, total=False):
     messages: Annotated[List[Dict[str, Any]], operator.add]
     report_content: str
     reviewer_feedback: Optional[str]
-    scope_clarification_rounds: int 
+    scope_clarification_rounds: int
+    pending_clarification_questions: Optional[str]
 
 
 class SubAgentState(ResearchState):
-    """State schema for individual sub-agent execution with task assignment."""
+    """Sub-agent execution state with specific task assignment."""
     task: ResearchTask
 
 
@@ -182,3 +176,4 @@ def create_initial_state(research_brief: ResearchBrief) -> ResearchState:
         report_content="",
         reviewer_feedback=None
     )
+

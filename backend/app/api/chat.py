@@ -123,7 +123,7 @@ async def stream_graph_with_tokens(
                             yield create_sse_event(StreamEventType.REPORT_TOKEN, {
                                 "content": message.content
                             })
-                        elif node_name == "scope" and "user_visible" in tags:
+                        elif node_name in ("scope", "scope_wait") and "user_visible" in tags:
                             yield create_sse_event(StreamEventType.TOKEN, {
                                 "content": message.content,
                                 "node": "scope"
@@ -135,9 +135,8 @@ async def stream_graph_with_tokens(
                             continue
                         
                         previous_phase = current_phase
-                        if node_name == "scope":
+                        if node_name in ("scope", "scope_wait"):
                             current_phase = "scoping"
-                            pass
                         elif node_name == "supervisor":
                             current_phase = "researching"
                             supervisor_round += 1
