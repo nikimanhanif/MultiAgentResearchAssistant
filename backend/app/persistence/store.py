@@ -98,6 +98,7 @@ async def save_in_progress_conversation(
         "research_brief": None,
         "findings": [],
         "report_content": "",
+        "thinking_state": existing.value.get("thinking_state") if existing else None,
         "created_at": existing.value.get("created_at") if existing else datetime.now().isoformat(),
         "updated_at": datetime.now().isoformat(),
     }
@@ -162,6 +163,7 @@ async def save_conversation(
     
     This updates an existing in-progress conversation to complete status,
     or creates a new complete conversation if it doesn't exist.
+    Preserves existing thinking_state if present.
     
     Args:
         user_id: User identifier.
@@ -185,6 +187,7 @@ async def save_conversation(
         "research_brief": research_brief.model_dump(mode='json'),
         "findings": [f.model_dump(mode='json') for f in findings],
         "report_content": report_content,
+        "thinking_state": existing.value.get("thinking_state") if existing else None,
         "created_at": existing.value.get("created_at") if existing else datetime.now().isoformat(),
         "updated_at": datetime.now().isoformat(),
     }
@@ -246,3 +249,36 @@ async def list_conversations(
         }
         for item in results
     ]
+
+
+async def update_thinking_state(
+    user_id: str,
+    conversation_id: str,
+    thinking_state: Dict[str, Any]
+) -> bool:
+    """
+    Update just the thinking_state field of a conversation.
+    
+    Called by frontend to persist the thinking block state.
+    
+    Args:
+        user_id: User identifier.
+        conversation_id: Conversation UUID.
+        thinking_state: The thinking state object from frontend.
+        
+    Returns:
+        bool: True if update succeeded, False if conversation not found.
+    """
+    store = get_store()
+    namespace = (user_id, "conversations")
+    
+    existing = await store.aget(namespace, conversation_id)
+    if not existing:
+        return False
+    
+    data = existing.value.copy()
+    data["thinking_state"] = thinking_state
+    data["updated_at"] = datetime.now().isoformat()
+    
+    await store.aput(namespace, conversation_id, data)
+    return True

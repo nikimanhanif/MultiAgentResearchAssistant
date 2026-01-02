@@ -59,7 +59,10 @@ export function ChatMessages() {
           <div className="space-y-1 max-w-4xl mx-auto">
             <AnimatePresence mode="popLayout">
               {messages.map((message, index) => {
-                const isBriefMessage = message.content.includes('### Research Brief Created')
+                // Detect brief message - multiple formats for live vs restored
+                const isBriefMessage = message.content.includes('### Research Brief Created') ||
+                                       message.content.includes('Research brief created') ||
+                                       message.content.toLowerCase().includes('proceeding with research on:')
                 
                 return (
                   <div key={message.id}>
@@ -91,8 +94,13 @@ export function ChatMessages() {
               })}
             </AnimatePresence>
             
+            
             {/* Fallback: Show reasoning block at end if no brief message yet (e.g., during scoping) */}
-            {showReasoning && !messages.some(m => m.content.includes('### Research Brief Created')) && (
+            {showReasoning && !messages.some(m => 
+              m.content.includes('### Research Brief Created') ||
+              m.content.includes('Research brief created') ||
+              m.content.toLowerCase().includes('proceeding with research on:')
+            ) && (
               <ReasoningBlock 
                 phase={researchProgress.phase}
                 isActive={isStreaming && (isResearchingPhase || researchProgress.phase === 'scoping')}

@@ -92,6 +92,7 @@ type ChatAction =
   | { type: 'TOGGLE_FOCUS_MODE' }
   | { type: 'SET_THINKING'; payload: { agent: string; thought: string; step: string; elapsedMs: number; phase: string } }
   | { type: 'STOP_THINKING' }
+  | { type: 'RESTORE_THINKING'; payload: ThinkingState }
 
 // Reducer
 function chatReducer(state: ChatState, action: ChatAction): ChatState {
@@ -276,6 +277,12 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         }
       }
     
+    case 'RESTORE_THINKING':
+      return {
+        ...state,
+        thinking: action.payload
+      }
+    
     default:
       return state
   }
@@ -302,6 +309,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   
   // Ref to track report streaming state (avoids stale closure issues in handleStreamEvent)
   const isReportStreamingRef = useRef(false)
+  
+  // Ref to track thinking state (avoids stale closure issues when saving after streaming)
+  const thinkingStateRef = useRef<ThinkingState>(initialThinking)
+  
+  // Keep thinking ref in sync with state
+  useEffect(() => {
+    thinkingStateRef.current = state.thinking
+  }, [state.thinking])
 
   useEffect(() => {
     const userId = 'test_user'
@@ -426,6 +441,21 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
   }, [])  // No dependency on state.isReportStreaming - using ref instead
 
+  // Save thinking state to backend
+  const saveThinkingState = useCallback(async (threadId: string, userId: string, thinking: ThinkingState) => {
+    if (!threadId || !userId || thinking.phases.length === 0) return
+    
+    try {
+      await fetch(`${API_URL}/conversations/${userId}/${threadId}/thinking`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ thinking_state: thinking })
+      })
+    } catch (error) {
+      console.error('Failed to save thinking state:', error)
+    }
+  }, [])
+
   // Send a message
   const sendMessage = useCallback(async (content: string) => {
     // Add user message immediately
@@ -504,6 +534,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           handleStreamEvent(event)
         }
       }
+      
+      // Save thinking state after stream completes
+      // Small delay ensures React has committed and useEffect has synced the ref
+      if (thinkingStateRef.current.phases.length > 0 && state.threadId && state.userId) {
+        await new Promise(resolve => setTimeout(resolve, 50))
+        await saveThinkingState(state.threadId, state.userId, thinkingStateRef.current)
+      }
 
     } catch (error) {
       console.error('Error sending message:', error)
@@ -512,7 +549,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         payload: error instanceof Error ? error.message : 'Unknown error'
       })
     }
-  }, [state.messages, state.threadId, state.userId, parseSSEEvent, handleStreamEvent])
+  }, [state.messages, state.threadId, state.userId, parseSSEEvent, handleStreamEvent, saveThinkingState])
 
   // Resume review with action
   const resumeReview = useCallback(async (action: ReviewAction, feedback?: string) => {
@@ -569,6 +606,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     } finally {
       // Ensure streaming state is reset even if no complete event was received
       dispatch({ type: 'SET_STREAMING', payload: false })
+      
+      // Save thinking state after approval with small delay for network latency
+      // Using ref to get the latest thinking state (avoids stale closure issues)
+      if (action === 'approve' && thinkingStateRef.current.phases.length > 0 && state.threadId && state.userId) {
+        await new Promise(resolve => setTimeout(resolve, 100))
+        await saveThinkingState(state.threadId, state.userId, thinkingStateRef.current)
+      }
+      
       // Refresh conversation list to show updated status
       if (state.userId) {
         try {
@@ -582,7 +627,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         }
       }
     }
-  }, [state.threadId, state.userId, parseSSEEvent, handleStreamEvent])
+  }, [state.threadId, state.userId, parseSSEEvent, handleStreamEvent, saveThinkingState])
 
   // Load conversation list
   const loadConversations = useCallback(async () => {
@@ -743,6 +788,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
              }
           }
           dispatch({ type: 'SET_PROGRESS', payload: { phase: 'complete' } })
+          
+          if (data.thinking_state) {
+            dispatch({ type: 'RESTORE_THINKING', payload: data.thinking_state })
+          }
         }
       }
     } catch (error) {

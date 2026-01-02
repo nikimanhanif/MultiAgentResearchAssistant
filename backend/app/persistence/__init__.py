@@ -20,6 +20,7 @@ from app.persistence.store import (
     list_conversations,
     save_in_progress_conversation,
     update_conversation_status,
+    update_thinking_state,
     ConversationStatus,
 )
 
@@ -35,6 +36,7 @@ __all__ = [
     "list_conversations",
     "save_in_progress_conversation",
     "update_conversation_status",
+    "update_thinking_state",
     "ConversationStatus",
 ]
 

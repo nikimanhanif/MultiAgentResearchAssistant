@@ -6,14 +6,15 @@ stored in the persistence layer, including in-progress conversations.
 """
 
 from fastapi import APIRouter, HTTPException
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
 import logging
 from app.persistence import (
     get_checkpointer, 
     get_store, 
     get_conversation, 
-    list_conversations
+    list_conversations,
+    update_thinking_state
 )
 from app.graphs.research_graph import build_research_graph
 
@@ -41,6 +42,7 @@ class ConversationDetail(BaseModel):
     status: str = "complete"
     phase: Optional[str] = None
     messages: List[Dict[str, str]] = []
+    thinking_state: Optional[Dict[str, Any]] = None
 
 
 class ConversationState(BaseModel):
@@ -51,6 +53,11 @@ class ConversationState(BaseModel):
     report_content: Optional[str] = None
     has_pending_interrupt: bool = False
     interrupt_type: Optional[str] = None
+
+
+class ThinkingStateUpdate(BaseModel):
+    """Request model for updating thinking state from frontend."""
+    thinking_state: Dict[str, Any]
 
 
 @router.get("/{user_id}", response_model=List[ConversationSummary])
@@ -159,7 +166,8 @@ async def get_conversation_detail(user_id: str, conversation_id: str):
         created_at=conversation["created_at"],
         status=conversation.get("status", "complete"),
         phase=conversation.get("phase"),
-        messages=messages
+        messages=messages,
+        thinking_state=conversation.get("thinking_state")
     )
 
 
@@ -265,4 +273,39 @@ async def delete_conversation(user_id: str, conversation_id: str):
         )
     
     return {"message": "Conversation deleted successfully"}
+
+
+@router.patch("/{user_id}/{conversation_id}/thinking")
+async def update_conversation_thinking(
+    user_id: str, 
+    conversation_id: str, 
+    body: ThinkingStateUpdate
+):
+    """
+    Update thinking state for a conversation.
+    
+    Called by frontend to persist thinking block state so it survives
+    conversation switching and page refreshes.
+    
+    Args:
+        user_id: The ID of the user.
+        conversation_id: The ID of the conversation.
+        body: ThinkingStateUpdate containing the thinking_state object.
+        
+    Returns:
+        dict: Success message.
+        
+    Raises:
+        HTTPException: If the conversation is not found.
+    """
+    success = await update_thinking_state(
+        user_id=user_id,
+        conversation_id=conversation_id,
+        thinking_state=body.thinking_state
+    )
+    
+    if not success:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    
+    return {"success": True}
 
