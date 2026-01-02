@@ -11,7 +11,8 @@ import type {
   ConversationSummary,
   ReviewAction,
   ThinkingState,
-  ThoughtEntry
+  ThoughtEntry,
+  ThinkingPhase
 } from '@/types/chat'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'
@@ -32,7 +33,20 @@ const initialThinking: ThinkingState = {
   step: '',
   startTime: 0,
   elapsedMs: 0,
-  history: []
+  history: [],
+  phases: [],
+  currentPhase: ''
+}
+
+// Helper to get human-readable phase labels
+function getPhaseLabel(phase: string): string {
+  switch (phase) {
+    case 'investigating': return 'Initial Investigation'
+    case 'findings': return 'Research Findings'
+    case 'deepening': return 'Deepening Analysis'
+    case 'analyzing': return 'Gap Analysis'
+    default: return phase.charAt(0).toUpperCase() + phase.slice(1)
+  }
 }
 
 const initialState: ChatState = {
@@ -76,7 +90,7 @@ type ChatAction =
   | { type: 'OPEN_REPORT'; payload: string }
   | { type: 'CLOSE_REPORT' }
   | { type: 'TOGGLE_FOCUS_MODE' }
-  | { type: 'SET_THINKING'; payload: { agent: string; thought: string; step: string; elapsedMs: number } }
+  | { type: 'SET_THINKING'; payload: { agent: string; thought: string; step: string; elapsedMs: number; phase: string } }
   | { type: 'STOP_THINKING' }
 
 // Reducer
@@ -205,23 +219,50 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return { ...state, focusMode: !state.focusMode }
     
     case 'SET_THINKING': {
+      const { agent, thought, step, elapsedMs, phase } = action.payload
       const newEntry: ThoughtEntry = {
         id: `thought_${Date.now()}`,
-        agent: action.payload.agent,
-        thought: action.payload.thought,
-        step: action.payload.step,
+        agent,
+        thought,
+        step,
+        phase,
         timestamp: new Date()
       }
+      
+      // Group thoughts by phase
+      let phases = [...state.thinking.phases]
+      const phaseLabel = getPhaseLabel(phase)
+      
+      const phaseIdx = phases.findIndex(p => p.phase === phase)
+      if (phaseIdx === -1 && phase) {
+        // New phase - add it
+        phases.push({
+          id: `phase_${Date.now()}`,
+          phase,
+          label: phaseLabel,
+          thoughts: [newEntry],
+          startTime: Date.now()
+        })
+      } else if (phaseIdx !== -1) {
+        // Existing phase - append thought
+        phases[phaseIdx] = {
+          ...phases[phaseIdx],
+          thoughts: [...phases[phaseIdx].thoughts, newEntry]
+        }
+      }
+      
       return {
         ...state,
         thinking: {
           isThinking: true,
-          agent: action.payload.agent,
-          thought: action.payload.thought,
-          step: action.payload.step,
+          agent,
+          thought,
+          step,
           startTime: state.thinking.startTime || Date.now(),
-          elapsedMs: action.payload.elapsedMs,
-          history: [...state.thinking.history.slice(-9), newEntry] // Keep last 10
+          elapsedMs,
+          history: [...state.thinking.history, newEntry],
+          phases,
+          currentPhase: phase
         }
       }
     }
@@ -362,7 +403,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             agent: event.agent,
             thought: event.thought,
             step: event.step,
-            elapsedMs: event.elapsed_ms
+            elapsedMs: event.elapsed_ms,
+            phase: event.phase || ''
           }
         })
         break

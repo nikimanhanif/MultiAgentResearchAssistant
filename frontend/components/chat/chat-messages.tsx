@@ -14,7 +14,8 @@ export function ChatMessages() {
     isStreaming, 
     currentStreamingContent, 
     researchProgress,
-    activeNode 
+    activeNode,
+    thinking
   } = useChatContext()
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -26,8 +27,12 @@ export function ChatMessages() {
   
   const isResearchingPhase = researchProgress.phase === 'researching'
   const isGeneratingReport = researchProgress.phase === 'generating_report'
+  const isCompletePhase = researchProgress.phase === 'complete' || researchProgress.phase === 'review'
   
-  const showReasoning = (isResearchingPhase && researchProgress.tasksCount > 0) || 
+  // Show reasoning block if we have phases history, or are actively researching
+  const hasThinkingHistory = thinking.phases.length > 0
+  const showReasoning = hasThinkingHistory || 
+                        (isResearchingPhase && researchProgress.tasksCount > 0) || 
                         (isStreaming && researchProgress.phase === 'scoping')
   
   const showStreamingMessage = currentStreamingContent && (isGeneratingReport || !showReasoning)
@@ -53,34 +58,50 @@ export function ChatMessages() {
         ) : (
           <div className="space-y-1 max-w-4xl mx-auto">
             <AnimatePresence mode="popLayout">
-              {messages.map((message, index) => (
-                <motion.div
-                  key={message.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  transition={{ 
-                    duration: 0.3, 
-                    delay: Math.min(index * 0.05, 0.2) 
-                  }}
-                >
-                  <Message message={message} />
-                </motion.div>
-              ))}
+              {messages.map((message, index) => {
+                const isBriefMessage = message.content.includes('### Research Brief Created')
+                
+                return (
+                  <div key={message.id}>
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ 
+                        duration: 0.3, 
+                        delay: Math.min(index * 0.05, 0.2) 
+                      }}
+                    >
+                      <Message message={message} />
+                    </motion.div>
+                    
+                    {/* Insert ReasoningBlock after Research Brief message */}
+                    {isBriefMessage && showReasoning && (
+                      <ReasoningBlock 
+                        phase={researchProgress.phase}
+                        isActive={isStreaming && (isResearchingPhase || researchProgress.phase === 'scoping')}
+                        isComplete={isCompletePhase}
+                        findingsCount={researchProgress.findingsCount}
+                        tasksCount={researchProgress.tasksCount}
+                        durationMs={researchProgress.phaseDurationMs}
+                      />
+                    )}
+                  </div>
+                )
+              })}
             </AnimatePresence>
             
-            {/* ReasoningBlock - Internal Monologue (during active research) */}
-            <AnimatePresence>
-              {showReasoning && (
-                <ReasoningBlock 
-                  phase={researchProgress.phase}
-                  isActive={isStreaming || isResearchingPhase}
-                  findingsCount={researchProgress.findingsCount}
-                  tasksCount={researchProgress.tasksCount}
-                  durationMs={researchProgress.phaseDurationMs}
-                />
-              )}
-            </AnimatePresence>
+            {/* Fallback: Show reasoning block at end if no brief message yet (e.g., during scoping) */}
+            {showReasoning && !messages.some(m => m.content.includes('### Research Brief Created')) && (
+              <ReasoningBlock 
+                phase={researchProgress.phase}
+                isActive={isStreaming && (isResearchingPhase || researchProgress.phase === 'scoping')}
+                isComplete={isCompletePhase}
+                findingsCount={researchProgress.findingsCount}
+                tasksCount={researchProgress.tasksCount}
+                durationMs={researchProgress.phaseDurationMs}
+              />
+            )}
             
             {/* Streaming message - for report generation and other streaming content */}
             <AnimatePresence>

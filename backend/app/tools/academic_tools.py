@@ -9,9 +9,12 @@ import logging
 import re
 import json
 import tempfile
+import time
+import random
+import functools
 import httpx
 import concurrent.futures
-from typing import Literal, List, Optional, Tuple, Any, Dict
+from typing import Literal, List, Optional, Tuple, Any, Dict, Callable, TypeVar
 from pathlib import Path
 
 from langchain_core.tools import tool, BaseTool
@@ -20,6 +23,96 @@ from langchain_community.utilities import ArxivAPIWrapper
 from langchain_community.utilities.pubmed import PubMedAPIWrapper
 
 logger = logging.getLogger(__name__)
+
+T = TypeVar('T')
+
+
+def _is_rate_limit_error(error: Exception) -> bool:
+    """
+    Check if an exception is a rate limit error.
+    
+    Uses a multi-layer detection approach:
+    1. Check HTTP status code (429) from known exception types
+    2. Fall back to string pattern matching for wrapped/unknown errors
+    """
+    # Layer 1: Check HTTP status codes from known exception types
+    status_code = None
+    
+    # httpx exceptions (used by our PDF downloader)
+    if hasattr(error, 'response') and hasattr(error.response, 'status_code'):
+        status_code = error.response.status_code
+    
+    # urllib.error.HTTPError (used by arxiv library)
+    elif hasattr(error, 'code'):
+        status_code = error.code
+    
+    # Check for 429 Too Many Requests
+    if status_code == 429:
+        return True
+    
+    # Layer 2: String pattern matching for wrapped errors or custom messages
+    error_str = str(error).lower()
+    rate_limit_patterns = [
+        "rate limit",
+        "ratelimit", 
+        "429",
+        "too many requests",
+        "quota exceeded",
+        "throttl",
+        "retry after",
+    ]
+    return any(pattern in error_str for pattern in rate_limit_patterns)
+
+
+def retry_on_rate_limit(
+    max_retries: int = 3,
+    base_delay: float = 3.0,
+    backoff_multiplier: float = 1.5,
+    jitter_max: float = 1.5
+) -> Callable[[Callable[..., T]], Callable[..., T]]:
+    """
+    Decorator to retry a function on rate limit errors with exponential backoff.
+    
+    Includes random jitter to prevent thundering herd when multiple sub-agents
+    hit rate limits simultaneously.
+    
+    Args:
+        max_retries: Maximum number of retry attempts (default: 3)
+        base_delay: Initial delay in seconds (default: 3.0, matches ArXiv guideline)
+        backoff_multiplier: Multiplier for exponential backoff (default: 2.0)
+        jitter_max: Maximum random jitter to add to each delay (default: 2.0)
+        
+    Returns:
+        Decorated function that retries on rate limit errors.
+    """
+    def decorator(func: Callable[..., T]) -> Callable[..., T]:
+        @functools.wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> T:
+            last_error: Optional[Exception] = None
+            
+            for attempt in range(max_retries + 1):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    if _is_rate_limit_error(e):
+                        last_error = e
+                        if attempt < max_retries:
+                            delay = base_delay * (backoff_multiplier ** attempt)
+                            jitter = random.uniform(0, jitter_max)
+                            total_delay = delay + jitter
+                            logger.warning(
+                                f"Rate limit hit in {func.__name__}, "
+                                f"retrying in {total_delay:.1f}s (attempt {attempt + 1}/{max_retries})"
+                            )
+                            time.sleep(total_delay)
+                            continue
+                    raise
+
+            if last_error:
+                raise last_error
+        
+        return wrapper
+    return decorator
 
 # Initialize API wrappers lazily to avoid uvloop conflicts
 _arxiv_api = ArxivAPIWrapper(
@@ -151,6 +244,7 @@ def _download_and_parse_pdf(pdf_url: str) -> Optional[str]:
             Path(tmp_path).unlink(missing_ok=True)
 
 
+@retry_on_rate_limit()
 def _search_arxiv(query: str, count: int) -> List[Dict[str, Any]]:
     """Search ArXiv and return structured paper list."""
     try:
@@ -178,10 +272,13 @@ def _search_arxiv(query: str, count: int) -> List[Dict[str, Any]]:
         return papers
         
     except Exception as e:
+        if _is_rate_limit_error(e):
+            raise
         logger.error(f"ArXiv search failed: {e}")
         return []
 
 
+@retry_on_rate_limit()
 def _search_semantic_scholar_sync(query: str, count: int) -> List[Dict[str, Any]]:
     """
     Synchronous Semantic Scholar search (runs in thread pool).
@@ -251,9 +348,16 @@ def _search_semantic_scholar_sync(query: str, count: int) -> List[Dict[str, Any]
                 "arxiv_id": arxiv_id,
             })
         return papers
+    except Exception as e:
+        if _is_rate_limit_error(e):
+            raise
+        logger.error(f"Semantic Scholar sync search failed: {e}")
+        return []
     finally:
-        # Cleanup
-        loop.close()
+        try:
+            loop.close()
+        except Exception as e:
+            logger.debug(f"Failed to close event loop: {e}")
         nest_asyncio.apply = original_apply
 
 
@@ -330,6 +434,7 @@ def _get_semantic_scholar_paper(paper_id: str, fields: List[str]) -> Optional[An
         return None
 
 
+@retry_on_rate_limit()
 def _search_pubmed(query: str, count: int) -> List[Dict[str, Any]]:
     """Search PubMed and return structured paper list."""
     try:
@@ -365,6 +470,8 @@ def _search_pubmed(query: str, count: int) -> List[Dict[str, Any]]:
         return papers
         
     except Exception as e:
+        if _is_rate_limit_error(e):
+            raise
         logger.error(f"PubMed search failed: {e}")
         return []
 

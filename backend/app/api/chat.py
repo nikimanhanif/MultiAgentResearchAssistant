@@ -157,25 +157,27 @@ async def stream_graph_with_tokens(
                                 topics_str = ', '.join(task_topics)
                                 if supervisor_round == 1:
                                     thought = f"Investigating: {topics_str}"
+                                    phase = "investigating"
                                 else:
                                     thought = f"Deepening analysis: {topics_str}"
+                                    phase = "deepening"
                                 
                                 yield create_thought_event(
                                     agent="supervisor",
                                     thought=thought,
                                     step="planning",
-                                    elapsed_ms=int((time.time() - phase_start_time) * 1000)
+                                    elapsed_ms=int((time.time() - phase_start_time) * 1000),
+                                    phase=phase
                                 )
                             else:
                                 gaps = node_output.get("gaps", {})
                                 reasoning = gaps.get("reasoning", "Analyzing research progress...") if isinstance(gaps, dict) else getattr(gaps, 'reasoning', "Analyzing research progress...")
-                                if len(reasoning) > 100:
-                                    reasoning = reasoning[:100].rsplit(' ', 1)[0] + "..."
                                 yield create_thought_event(
                                     agent="supervisor",
                                     thought=reasoning,
                                     step="analyzing",
-                                    elapsed_ms=int((time.time() - phase_start_time) * 1000)
+                                    elapsed_ms=int((time.time() - phase_start_time) * 1000),
+                                    phase="analyzing"
                                 )
                         elif node_name == "sub_agent":
                             summaries = node_output.get("sub_agent_summaries", [])
@@ -190,8 +192,6 @@ async def stream_graph_with_tokens(
                                 
                                 if insights:
                                     first_insight = insights[0]
-                                    if len(first_insight) > 80:
-                                        first_insight = first_insight[:80].rsplit(' ', 1)[0] + "..."
                                     thought = f"Found: {first_insight}"
                                 else:
                                     if hasattr(summary, 'finding_count'):
@@ -206,7 +206,8 @@ async def stream_graph_with_tokens(
                                     agent="sub_agent",
                                     thought=thought,
                                     step="researching",
-                                    elapsed_ms=int((time.time() - phase_start_time) * 1000)
+                                    elapsed_ms=int((time.time() - phase_start_time) * 1000),
+                                    phase="findings"
                                 )
                         elif node_name == "report_agent":
                             current_phase = "generating_report"

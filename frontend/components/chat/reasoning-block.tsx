@@ -2,13 +2,14 @@
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronDown, ChevronRight, Brain, Search, FileText, Sparkles } from 'lucide-react'
+import { ChevronDown, ChevronRight, Brain, Search, FileText, Sparkles, CheckCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useChatContext } from '@/context/chat-context'
 
 interface ReasoningBlockProps {
   phase: string
   isActive: boolean
+  isComplete?: boolean
   findingsCount: number
   tasksCount: number
   durationMs: number
@@ -17,6 +18,7 @@ interface ReasoningBlockProps {
 export function ReasoningBlock({
   phase,
   isActive,
+  isComplete = false,
   findingsCount,
   tasksCount,
   durationMs
@@ -25,35 +27,44 @@ export function ReasoningBlock({
   const [isExpanded, setIsExpanded] = useState(true)
   const [displayDuration, setDisplayDuration] = useState(durationMs)
 
-  // Update duration in real-time when active
+  // Update duration in real-time when active using thinking.startTime
   useEffect(() => {
-    if (!isActive) {
-      setDisplayDuration(durationMs)
+    if (!isActive || !thinking.startTime) {
+      // When not active, use the last known duration from props or thinking elapsed
+      setDisplayDuration(thinking.elapsedMs || durationMs)
       return
     }
     
-    const interval = setInterval(() => {
-      setDisplayDuration(prev => prev + 100)
-    }, 100)
+    // Calculate elapsed from startTime for live updates
+    const updateDuration = () => {
+      setDisplayDuration(Date.now() - thinking.startTime)
+    }
+    
+    // Update immediately
+    updateDuration()
+    
+    // Then update every 100ms
+    const interval = setInterval(updateDuration, 100)
     
     return () => clearInterval(interval)
-  }, [isActive, durationMs])
+  }, [isActive, thinking.startTime, thinking.elapsedMs, durationMs])
 
-  // Auto-collapse when phase completes
+  // Auto-collapse when complete (but not immediately)
   useEffect(() => {
-    if (!isActive && findingsCount > 0) {
+    if (isComplete && thinking.phases.length > 0) {
       const timeout = setTimeout(() => {
         setIsExpanded(false)
-      }, 1000)
+      }, 2000)
       return () => clearTimeout(timeout)
     }
-  }, [isActive, findingsCount])
+  }, [isComplete, thinking.phases.length])
 
   const phaseLabel = {
     scoping: 'Understanding Query',
     researching: 'Analyzing Sources',
     generating_report: 'Generating Report',
-    review: 'Preparing Review'
+    review: 'Preparing Review',
+    complete: 'Research Complete'
   }[phase] || phase
 
   const formatDuration = (ms: number) => {
@@ -76,7 +87,25 @@ export function ReasoningBlock({
     }
   }
 
+  const getPhaseIcon = (phaseName: string) => {
+    switch (phaseName) {
+      case 'investigating':
+        return <Sparkles className="h-3 w-3" />
+      case 'findings':
+        return <Search className="h-3 w-3" />
+      case 'deepening':
+        return <Brain className="h-3 w-3" />
+      case 'analyzing':
+        return <Brain className="h-3 w-3" />
+      default:
+        return <Sparkles className="h-3 w-3" />
+    }
+  }
+
   const getSummary = () => {
+    if (isComplete) {
+      return `Completed research with ${findingsCount} sources`
+    }
     if (phase === 'researching' && findingsCount > 0) {
       return `Analyzed ${findingsCount} sources in ${formatDuration(displayDuration)}`
     }
@@ -90,6 +119,7 @@ export function ReasoningBlock({
   }
 
   const summary = getSummary()
+  const hasPhases = thinking.phases.length > 0
 
   return (
     <motion.div
@@ -102,7 +132,8 @@ export function ReasoningBlock({
         className={cn(
           'rounded-lg border overflow-hidden transition-all duration-300',
           'bg-zinc-800/40 border-white/10',
-          isActive && 'border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.1)]'
+          isActive && 'border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.1)]',
+          isComplete && 'border-green-500/20'
         )}
       >
         {/* Header */}
@@ -115,16 +146,18 @@ export function ReasoningBlock({
             'p-2 rounded-lg transition-all duration-300',
             isActive 
               ? 'bg-blue-500/20 text-blue-400 animate-pulse' 
-              : 'bg-zinc-700/50 text-zinc-400'
+              : isComplete
+                ? 'bg-green-500/20 text-green-400'
+                : 'bg-zinc-700/50 text-zinc-400'
           )}>
-            <Brain className="h-4 w-4" />
+            {isComplete ? <CheckCircle className="h-4 w-4" /> : <Brain className="h-4 w-4" />}
           </div>
 
           <div className="flex flex-col items-start min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <span className={cn(
                 'text-sm font-medium transition-colors',
-                isActive ? 'text-white' : 'text-zinc-400'
+                isActive ? 'text-white' : isComplete ? 'text-green-400' : 'text-zinc-400'
               )}>
                 {phaseLabel}
               </span>
@@ -139,7 +172,7 @@ export function ReasoningBlock({
             {/* Current thought preview (when collapsed) */}
             {!isExpanded && thinking.isThinking && thinking.thought && (
               <span className="text-xs text-zinc-500 font-mono mt-0.5 truncate max-w-full">
-                {thinking.thought.slice(0, 60)}...
+                {thinking.thought}
               </span>
             )}
             
@@ -175,7 +208,7 @@ export function ReasoningBlock({
                   'p-3 rounded-md bg-black/40 text-sm font-mono leading-relaxed',
                   'text-zinc-400 space-y-3'
                 )}>
-                  {/* Current Thought - the internal monologue */}
+                  {/* Current Thought - the internal monologue (only when active) */}
                   {thinking.isThinking && thinking.thought && (
                     <div className="flex items-start gap-2">
                       <div className="flex-shrink-0 mt-0.5 text-blue-400">
@@ -187,28 +220,35 @@ export function ReasoningBlock({
                     </div>
                   )}
 
-                  {/* Thought History */}
-                  {thinking.history.length > 1 && (
-                    <div className="space-y-1.5 border-t border-white/5 pt-2">
-                      <span className="text-[10px] uppercase tracking-wider text-zinc-600">
-                        Recent Activity
-                      </span>
-                      <ul className="space-y-1">
-                        {thinking.history.slice(-3).reverse().map((entry, idx) => (
-                          <li 
-                            key={entry.id}
-                            className={cn(
-                              "flex items-start gap-2 text-xs",
-                              idx === 0 ? "text-zinc-400" : "text-zinc-500"
-                            )}
-                          >
-                            <span className="flex-shrink-0 mt-0.5">
-                              {getStepIcon(entry.step)}
-                            </span>
-                            <span className="line-clamp-1">{entry.thought}</span>
-                          </li>
-                        ))}
-                      </ul>
+                  {/* Phase-grouped thoughts */}
+                  {hasPhases && (
+                    <div className="space-y-3">
+                      {thinking.phases.map((phaseGroup, phaseIdx) => (
+                        <div key={phaseGroup.id} className="space-y-1.5">
+                          <div className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-zinc-500">
+                            {getPhaseIcon(phaseGroup.phase)}
+                            <span>{phaseGroup.label}</span>
+                          </div>
+                          <ul className="space-y-1 pl-5">
+                            {phaseGroup.thoughts.map((entry, idx) => (
+                              <li 
+                                key={entry.id}
+                                className={cn(
+                                  "flex items-start gap-2 text-xs",
+                                  idx === phaseGroup.thoughts.length - 1 && phaseIdx === thinking.phases.length - 1
+                                    ? "text-zinc-300" 
+                                    : "text-zinc-500"
+                                )}
+                              >
+                                <span className="flex-shrink-0 mt-0.5">
+                                  {getStepIcon(entry.step)}
+                                </span>
+                                <span>{entry.thought}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ))}
                     </div>
                   )}
 
@@ -249,4 +289,3 @@ export function ReasoningBlock({
     </motion.div>
   )
 }
-

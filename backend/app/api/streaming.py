@@ -92,7 +92,8 @@ def create_thought_event(
     agent: str,
     thought: str,
     step: str = "",
-    elapsed_ms: int = 0
+    elapsed_ms: int = 0,
+    phase: str = ""
 ) -> str:
     """
     Create an SSE event for internal monologue/thinking indicator.
@@ -102,6 +103,7 @@ def create_thought_event(
         thought: High-level description of what the AI is doing.
         step: Optional step identifier (e.g., 'searching', 'extracting').
         elapsed_ms: Time elapsed since thinking started.
+        phase: Research phase identifier (e.g., 'investigating', 'findings', 'deepening').
         
     Returns:
         str: Formatted SSE event string.
@@ -110,5 +112,6 @@ def create_thought_event(
         "agent": agent,
         "thought": thought,
         "step": step,
-        "elapsed_ms": elapsed_ms
+        "elapsed_ms": elapsed_ms,
+        "phase": phase
     })

@@ -84,6 +84,7 @@ export interface ThoughtEvent extends BaseStreamEvent {
   thought: string;
   step: string;
   elapsed_ms: number;
+  phase: string;
 }
 
 export type StreamEvent =
@@ -149,7 +150,6 @@ export interface ConversationDetail {
   phase?: string;
 }
 
-// Thinking/Internal Monologue State
 export interface ThinkingState {
   isThinking: boolean;
   agent: string;
@@ -158,6 +158,8 @@ export interface ThinkingState {
   startTime: number;
   elapsedMs: number;
   history: ThoughtEntry[];
+  phases: ThinkingPhase[];
+  currentPhase: string;
 }
 
 export interface ThoughtEntry {
@@ -166,6 +168,16 @@ export interface ThoughtEntry {
   thought: string;
   step: string;
   timestamp: Date;
+  phase: string;
+}
+
+export interface ThinkingPhase {
+  id: string;
+  phase: string;
+  label: string;
+  thoughts: ThoughtEntry[];
+  startTime: number;
+  endTime?: number;
 }
 
 // Chat Context State
