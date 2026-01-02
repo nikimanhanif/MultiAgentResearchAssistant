@@ -42,12 +42,16 @@ def reviewer_node(state: ResearchState) -> Command[Literal["__end__", "report_ag
         return Command(goto=END, update={"is_complete": True})
     
     elif action == "refine":
+        if not feedback or not str(feedback).strip():
+            feedback = "Refine the report to have better clarity and flow"       
         return Command(
             goto="report_agent",
             update={"reviewer_feedback": feedback}
         )
     
     elif action == "re_research":
+        if not feedback or not str(feedback).strip():
+            feedback = "Additional research requested by reviewer"            
         new_task = create_new_task(feedback)
         return Command(
             goto="supervisor",
