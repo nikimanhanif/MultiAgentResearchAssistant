@@ -8,6 +8,8 @@ the DeepSeek Reasoner model.
 
 from typing import List, Any, Dict
 import logging
+from langsmith import traceable
+import langsmith as ls
 from langchain_core.runnables import Runnable
 from langchain_core.prompts import ChatPromptTemplate
 
@@ -40,6 +42,7 @@ def _build_report_generation_chain() -> Runnable:
     return chain
 
 
+@traceable(name="Generate Report", metadata={"agent": "report", "operation": "report_generation"})
 async def generate_report(
     brief: ResearchBrief,
     findings: List[Finding],
@@ -157,6 +160,7 @@ Unable to complete research due to lack of findings. Please expand the research 
 """
 
 
+@traceable(name="Report Agent Node", metadata={"agent": "report", "phase": "reporting"})
 async def report_agent_node(state: ResearchState) -> Dict[str, Any]:
     """
     LangGraph node for the Report Agent.

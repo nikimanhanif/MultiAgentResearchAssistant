@@ -8,6 +8,8 @@ and produces a structured ResearchBrief once the scope is clear.
 
 from typing import Optional, List, Dict, Any, Union
 import logging
+from langsmith import traceable
+import langsmith as ls
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser, StrOutputParser
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
@@ -123,6 +125,7 @@ def _build_brief_generation_chain() -> Any:
     return prompt | llm | parser
 
 
+@traceable(name="Generate Clarification Questions", metadata={"agent": "scope", "operation": "question_generation"})
 async def generate_clarification_questions(
     user_query: str,
     conversation_history: Optional[List[Dict[str, str]]] = None
@@ -152,6 +155,7 @@ async def generate_clarification_questions(
         raise Exception(f"Failed to generate clarification questions: {e}")
 
 
+@traceable(name="Check Scope Completion", metadata={"agent": "scope", "operation": "completion_check"})
 async def check_scope_completion(
     user_query: str,
     conversation_history: Optional[List[Dict[str, str]]] = None
@@ -181,6 +185,7 @@ async def check_scope_completion(
         raise Exception(f"Failed to check scope completion: {e}")
 
 
+@traceable(name="Generate Research Brief", metadata={"agent": "scope", "operation": "brief_generation"})
 async def generate_research_brief(
     user_query: str,
     conversation_history: Optional[List[Dict[str, str]]] = None
@@ -249,6 +254,7 @@ async def clarify_scope(
     return await generate_clarification_questions(user_query, conversation_history)
 
 
+@traceable(name="Scope Node", metadata={"agent": "scope", "phase": "scoping"})
 async def scope_node(state: ResearchState) -> Dict[str, Any]:
     """
     LangGraph node for the Scope Agent - Generates clarifying questions.

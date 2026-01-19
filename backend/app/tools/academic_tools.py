@@ -16,6 +16,7 @@ import httpx
 import concurrent.futures
 from typing import Literal, List, Optional, Tuple, Any, Dict, Callable, TypeVar
 from pathlib import Path
+from langsmith import traceable
 
 from langchain_core.tools import tool, BaseTool
 from langchain_community.document_loaders import ArxivLoader, PyMuPDFLoader
@@ -196,6 +197,7 @@ def _extract_paper_sections(full_text: str, metadata_prefix: str = "") -> str:
     return result
 
 
+@traceable(run_type="retriever", name="Download and Parse PDF", metadata={"tool": "pdf_parser"})
 def _download_and_parse_pdf(pdf_url: str) -> Optional[str]:
     """
     Download PDF from URL and parse using PyMuPDF.
@@ -244,6 +246,7 @@ def _download_and_parse_pdf(pdf_url: str) -> Optional[str]:
             Path(tmp_path).unlink(missing_ok=True)
 
 
+@traceable(run_type="tool", name="Search ArXiv", metadata={"tool": "arxiv_search"})
 @retry_on_rate_limit()
 def _search_arxiv(query: str, count: int) -> List[Dict[str, Any]]:
     """Search ArXiv and return structured paper list."""
@@ -434,6 +437,7 @@ def _get_semantic_scholar_paper(paper_id: str, fields: List[str]) -> Optional[An
         return None
 
 
+@traceable(run_type="tool", name="Search PubMed", metadata={"tool": "pubmed_search"})
 @retry_on_rate_limit()
 def _search_pubmed(query: str, count: int) -> List[Dict[str, Any]]:
     """Search PubMed and return structured paper list."""

@@ -12,6 +12,8 @@ import logging
 from typing import Dict, List, Optional, Any
 from collections import defaultdict
 from pydantic import BaseModel, Field
+from langsmith import traceable
+import langsmith as ls
 
 from app.graphs.state import ResearchState
 from app.models.schemas import ResearchTask, Finding, SubAgentSummary
@@ -116,6 +118,7 @@ def _format_summaries_for_supervisor(summaries: List[SubAgentSummary]) -> str:
     return "\n=== SUB-AGENT SUMMARIES ===\n" + "".join(formatted_parts)
 
 
+@traceable(name="Supervisor Node", metadata={"agent": "supervisor", "phase": "orchestration"})
 def supervisor_node(state: ResearchState) -> Dict[str, Any]:
     """
     LangGraph node for the Supervisor Agent.
@@ -139,6 +142,13 @@ def supervisor_node(state: ResearchState) -> Dict[str, Any]:
         return {"is_complete": True}
     
     current_iteration = budget["iterations"] + 1
+    
+    # Add dynamic metadata for observability
+    rt = ls.get_current_run_tree()
+    if rt:
+        rt.metadata["iteration"] = current_iteration
+        rt.metadata["findings_count"] = len(findings)
+        rt.metadata["completed_tasks"] = len(completed_tasks)
     
     budget_exhausted = (
         current_iteration >= budget["max_iterations"] or
@@ -244,6 +254,7 @@ def supervisor_node(state: ResearchState) -> Dict[str, Any]:
         }
 
 
+@traceable(name="Aggregate Findings", metadata={"agent": "supervisor", "operation": "aggregation"})
 def aggregate_findings(state: ResearchState) -> List[Finding]:
     """
     Aggregate and filter findings for report generation.

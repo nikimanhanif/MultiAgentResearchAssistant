@@ -18,12 +18,13 @@ from pathlib import Path
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
     
+    # Server settings
     API_HOST: str = "0.0.0.0"
     API_PORT: int = 8000
     API_RELOAD: bool = True
-    
     CORS_ORIGINS: str = "http://localhost:3000"
     
+    # LLM Providers
     DEEPSEEK_API_KEY: str = ""
     DEEPSEEK_MODEL: str = "deepseek-chat"
     DEEPSEEK_REASONER_MODEL: str = "deepseek-reasoner"
@@ -31,19 +32,22 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     OPENAI_EVAL_MODEL: str = "gpt-5-nano"
     
-    # Deprecated API Keys (kept for backwards compatibility)
-    GOOGLE_GEMINI_API_KEY: str = ""
-    
+    # Tool API
     TAVILY_API_KEY: str = ""
     CORE_API_KEY: str = ""
+    SEMANTIC_SCHOLAR_API_KEY: str = ""
+    SCOPUS_API_KEY: str = ""
+    SCOPUS_INST_TOKEN: str = ""
     
+    # Evaluation
     LANGSMITH_API_KEY: str = ""
     LANGSMITH_TRACING: str = "true"
     LANGSMITH_PROJECT: str = "multi-agent-research-assistant-eval"
     LANGSMITH_ENDPOINT: str = "https://api.smith.langchain.com"
     DEEPEVAL_TELEMETRY_OPT_OUT: str = "true"
     
-    # Database Settings (Deprecated)
+    # Deprecated 
+    GOOGLE_GEMINI_API_KEY: str = ""
     DATABASE_URL: str = "" 
     
     @property

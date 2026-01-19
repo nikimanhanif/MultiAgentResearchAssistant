@@ -12,6 +12,8 @@ import logging
 import re
 from typing import Dict, List, Any, Optional
 from pydantic import BaseModel, Field
+from langsmith import traceable
+import langsmith as ls
 
 from app.graphs.state import SubAgentState
 from app.models.schemas import Finding, ResearchTask, SubAgentSummary
@@ -87,6 +89,7 @@ def _parse_delegation_request(agent_output: str) -> Optional[ResearchTask]:
 MAX_AGENT_CONTEXT_TOKENS = 64000
 
 
+@traceable(name="Sub Agent Node", metadata={"agent": "sub_agent", "phase": "research"})
 async def sub_agent_node(state: SubAgentState) -> Dict[str, Any]:
     """
     LangGraph node for the Sub-Agent.
@@ -108,6 +111,13 @@ async def sub_agent_node(state: SubAgentState) -> Dict[str, Any]:
     
     if task.task_id in state.get("failed_tasks", []):
         return {}
+    
+    # Add dynamic metadata for task-level observability
+    rt = ls.get_current_run_tree()
+    if rt:
+        rt.metadata["task_id"] = task.task_id
+        rt.metadata["topic"] = task.topic
+        rt.metadata["priority"] = task.priority
     
     max_searches = budget.get("max_searches_per_agent", 2)
     total_searches = budget.get("total_searches", 0)
@@ -260,6 +270,7 @@ async def sub_agent_node(state: SubAgentState) -> Dict[str, Any]:
                 "error": [f"Task {task.task_id} failed: {str(e)}"]
             }
 
+@traceable(name="Extract Citations", metadata={"agent": "sub_agent", "operation": "citation_extraction"})
 async def _extract_citations(
     raw_results: str,
     topic: str,

@@ -6,6 +6,7 @@ to pause execution and allow user feedback on generated reports.
 """
 
 from typing import Literal
+from langsmith import traceable
 from langgraph.types import interrupt, Command
 from langgraph.graph import END
 
@@ -13,6 +14,7 @@ from app.graphs.state import ResearchState
 from app.models.schemas import ResearchTask
 
 
+@traceable(name="Reviewer Node", metadata={"agent": "reviewer", "phase": "review", "hitl": True})
 def reviewer_node(state: ResearchState) -> Command[Literal["__end__", "report_agent", "supervisor"]]:
     """
     Node that pauses execution to let the user review the report.
