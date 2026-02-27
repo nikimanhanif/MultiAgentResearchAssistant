@@ -8,6 +8,7 @@ This agent acts as the central coordinator in the Supervisor Loop:
 - Aggregates and filters final findings for the report.
 """
 
+import json
 import logging
 from typing import Dict, List, Optional, Any
 from collections import defaultdict
@@ -16,11 +17,11 @@ from langsmith import traceable
 import langsmith as ls
 
 from app.graphs.state import ResearchState
-from app.models.schemas import ResearchTask, Finding, SubAgentSummary
 from app.config import get_deepseek_reasoner_json
+from app.models.schemas import ResearchBrief, ResearchTask, Finding, SubAgentSummary
 from app.prompts.research_prompts import (
     SUPERVISOR_GAP_ANALYSIS_TEMPLATE,
-    SUPERVISOR_FINDINGS_AGGREGATION_TEMPLATE,
+    RESEARCH_TASK_DECOMPOSITION_TEMPLATE,
 )
 
 logger = logging.getLogger(__name__)
@@ -118,8 +119,55 @@ def _format_summaries_for_supervisor(summaries: List[SubAgentSummary]) -> str:
     return "\n=== SUB-AGENT SUMMARIES ===\n" + "".join(formatted_parts)
 
 
+async def _decompose_initial_tasks(
+    brief: ResearchBrief, budget: Dict[str, int]
+) -> GapAnalysisOutput:
+    """
+    Generate initial research tasks from the brief on the first iteration.
+    Uses the task decomposition template to create non-overlapping tasks.
+    """
+    llm = get_deepseek_reasoner_json(temperature=0.5)
+    chain = RESEARCH_TASK_DECOMPOSITION_TEMPLATE | llm
+
+    response = await chain.ainvoke({
+        "research_brief": (
+            f"Scope: {brief.scope}\n"
+            f"Sub-topics: {', '.join(brief.sub_topics)}\n"
+            f"Constraints: {brief.constraints}"
+        ),
+        "strategy": "FLAT",
+    })
+
+    response_text = response.content if hasattr(response, 'content') else str(response)
+    tasks_raw = json.loads(response_text)
+
+    max_tasks = min(len(brief.sub_topics) + 2, budget.get("max_sub_agents", 20))
+    tasks = []
+    for t in tasks_raw[:max_tasks]:
+        query = (
+            t.get("query_variants", [t.get("description", "")])[0]
+            if t.get("query_variants")
+            else t.get("description", "")
+        )
+        tasks.append(ResearchTask(
+            task_id=t["task_id"],
+            topic=t.get("description", t["task_id"]),
+            query=query,
+            priority=1,
+            requested_by="supervisor",
+        ))
+
+    return GapAnalysisOutput(
+        has_gaps=True,
+        is_complete=False,
+        gaps_identified=[f"Initial decomposition: {brief.scope}"],
+        new_tasks=tasks,
+        reasoning="First iteration — decomposing research brief into initial tasks.",
+    )
+
+
 @traceable(name="Supervisor Node", metadata={"agent": "supervisor", "phase": "orchestration"})
-def supervisor_node(state: ResearchState) -> Dict[str, Any]:
+async def supervisor_node(state: ResearchState) -> Dict[str, Any]:
     """
     LangGraph node for the Supervisor Agent.
     
@@ -161,6 +209,23 @@ def supervisor_node(state: ResearchState) -> Dict[str, Any]:
             "is_complete": True
         }
     
+    # First iteration with no findings: decompose brief into initial tasks
+    if current_iteration == 1 and not findings:
+        try:
+            result = await _decompose_initial_tasks(brief, budget)
+            return {
+                "budget": {**budget, "iterations": current_iteration},
+                "task_history": result.new_tasks,
+                "is_complete": False,
+                "gaps": {
+                    "has_gaps": True,
+                    "gaps_identified": result.gaps_identified,
+                    "reasoning": result.reasoning,
+                },
+            }
+        except Exception as e:
+            logger.error(f"Initial decomposition failed: {e}, falling through to gap analysis")
+    
     findings_by_topic = defaultdict(list)
     for finding in findings:
         findings_by_topic[finding.topic].append(finding)
@@ -189,7 +254,7 @@ def supervisor_node(state: ResearchState) -> Dict[str, Any]:
         "avg_credibility": avg_credibility,
         "iterations": current_iteration,
         "max_iterations": budget["max_iterations"],
-        "total_sub_agents": len(findings),
+        "total_sub_agents": len(completed_tasks),
         "max_sub_agents": budget["max_sub_agents"],
         "total_searches": budget.get("total_searches", 0),
         "completed_count": len(completed_tasks),
@@ -203,8 +268,7 @@ def supervisor_node(state: ResearchState) -> Dict[str, Any]:
     chain = SUPERVISOR_GAP_ANALYSIS_TEMPLATE | llm
     
     try:
-        import json
-        response = chain.invoke(prompt_inputs)
+        response = await chain.ainvoke(prompt_inputs)
 
         response_text = response.content if hasattr(response, 'content') else str(response)
         

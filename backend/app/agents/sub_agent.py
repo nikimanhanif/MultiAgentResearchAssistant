@@ -53,38 +53,6 @@ class CitationExtractionOutput(BaseModel):
     )
 
 
-def _parse_delegation_request(agent_output: str) -> Optional[ResearchTask]:
-    """
-    Parse a delegation request from the agent's output.
-    
-    Format: DELEGATION_REQUEST: topic='[subtopic]', reason='[why needed]'
-    
-    Args:
-        agent_output: Raw text output from the agent.
-        
-    Returns:
-        ResearchTask: A new task if delegation is requested, else None.
-    """
-    pattern = r"DELEGATION_REQUEST:\s*topic='([^']+)',\s*reason='([^']+)'"
-    match = re.search(pattern, agent_output)
-    
-    if match:
-        topic = match.group(1)
-        reason = match.group(2)
-        
-        # Generate task from delegation request
-        task_id = f"delegated_{topic.lower().replace(' ', '_')}"
-        return ResearchTask(
-            task_id=task_id,
-            topic=topic,
-            query=f"{topic} - {reason}",
-            priority=2,  # Delegated tasks get medium priority
-            requested_by="sub_agent"
-        )
-    
-    return None
-
-
 # Max tokens to keep in agent context (leaving room for next LLM response)
 MAX_AGENT_CONTEXT_TOKENS = 64000
 
@@ -200,9 +168,7 @@ async def sub_agent_node(state: SubAgentState) -> Dict[str, Any]:
                         "error": [f"Task {task.task_id} hit recursion limit with no results"]
                     }
             
-            # Process results (same logic as before)
-            agent_output = result["messages"][-1].content if result.get("messages") else ""
-            delegation_task = _parse_delegation_request(agent_output)
+            # Process results
             
             tool_results = []
             for msg in result.get("messages", []):
@@ -231,7 +197,7 @@ async def sub_agent_node(state: SubAgentState) -> Dict[str, Any]:
                 }
             
             combined_results = "\n\n".join([
-                f"[Source: {r['tool']}]\n{r['result']}"
+                f"[Source Tool: {r['tool']}]\n{r['result']}\n[End Source: {r['tool']}]"
                 for r in tool_results
             ])
             
@@ -257,9 +223,6 @@ async def sub_agent_node(state: SubAgentState) -> Dict[str, Any]:
                 "completed_tasks": [task.task_id],
                 "budget": {**budget, "total_searches": total_searches + searches_used}
             }
-            
-            if delegation_task:
-                state_update["task_history"] = [delegation_task]
             
             return state_update
             
@@ -290,11 +253,11 @@ async def _extract_citations(
     Returns:
         CitationExtractionOutput: Findings with credibility scores and task summary.
     """
-    primary_tool = source_tools[0] if source_tools else "unknown"
+    all_source_tools = ", ".join(source_tools) if source_tools else "unknown"
     
     prompt_inputs = {
         "credibility_heuristics": CREDIBILITY_HEURISTICS,
-        "source_tool": primary_tool,
+        "source_tool": all_source_tools,
         "topic": topic,
         "task_query": task_query,
         "raw_results": raw_results[:40000]

@@ -6,53 +6,12 @@ from unittest.mock import MagicMock, AsyncMock, patch
 from app.models.schemas import ResearchTask, Finding, Citation, SourceType
 from app.agents.sub_agent import (
     sub_agent_node,
-    _parse_delegation_request,
     _extract_citations,
     CitationExtractionOutput
 )
 from langchain_core.messages import ToolMessage, AIMessage
 from app.graphs.state import SubAgentState
 from app.models.schemas import ResearchBrief
-
-
-class TestParseDelegationRequest:
-    """Test cases for _parse_delegation_request function."""
-    
-    def test_parse_delegation_request_valid_format(self):
-        """Test parsing valid delegation request."""
-        output = "DELEGATION_REQUEST: topic='quantum error correction', reason='Need deeper analysis of stabilizer codes'"
-        
-        result = _parse_delegation_request(output)
-        
-        assert result is not None
-        assert result.topic == "quantum error correction"
-        assert "stabilizer codes" in result.query
-        assert result.priority == 2
-        assert result.requested_by == "sub_agent"
-    
-    def test_parse_delegation_request_no_match(self):
-        """Test parsing when no delegation request present."""
-        output = "This is a normal research output with findings."
-        
-        result = _parse_delegation_request(output)
-        
-        assert result is None
-    
-    def test_parse_delegation_request_malformed_returns_none(self):
-        """Test that malformed delegation request returns None."""
-        output = "DELEGATION_REQUEST: topic="
-        
-        result = _parse_delegation_request(output)
-        
-        assert result is None
-    
-    def test_parse_delegation_request_missing_reason_returns_none(self):
-        """Test that incomplete delegation request returns None."""
-        output = "DELEGATION_REQUEST: topic='quantum computing'"
-        
-        result = _parse_delegation_request(output)
-        
-        assert result is None
 
 
 class TestSubAgentNode:
@@ -249,92 +208,6 @@ class TestSubAgentNode:
         assert len(result["sub_agent_summaries"]) == 1
         assert result["sub_agent_summaries"][0].task_id == "task_004"
         assert "budget" in result
-    
-    @pytest.mark.asyncio
-    @patch("app.agents.sub_agent._extract_citations")
-    @patch("app.agents.sub_agent._parse_delegation_request")
-    @patch("app.agents.sub_agent.create_agent")
-    @patch("app.agents.sub_agent.get_research_tools")
-    @patch("app.agents.sub_agent.get_deepseek_chat")
-    async def test_sub_agent_node_delegation_adds_task_to_history(
-        self, mock_get_llm, mock_get_tools, mock_create_agent, mock_parse_delegation, mock_extract
-    ):
-        """Test that delegation requests are parsed and added to task_history."""
-        # Mock tools and LLM
-        mock_tool = MagicMock()
-        mock_tool.name = "tavily_search"
-        
-        # Mock context manager
-        mock_ctx = AsyncMock()
-        mock_ctx.__aenter__.return_value = [mock_tool]
-        mock_ctx.__aexit__.return_value = None
-        mock_get_tools.return_value = mock_ctx
-        mock_llm = MagicMock()
-        mock_get_llm.return_value = mock_llm
-        
-        mock_agent = AsyncMock()
-        
-        mock_ai_msg = MagicMock(spec=AIMessage)
-        mock_ai_msg.tool_calls = [{"name": "tavily_search", "args": {}, "id": "call_1"}]
-        
-        mock_tool_msg = MagicMock(spec=ToolMessage)
-        mock_tool_msg.name = "tavily_search"
-        mock_tool_msg.content = "Search results"
-        mock_tool_msg.tool_call_id = "call_1"
-        
-        mock_final_msg = MagicMock()
-        mock_final_msg.content = "DELEGATION_REQUEST: topic='subtopic', reason='deeper research needed'"
-        
-        mock_agent.ainvoke.return_value = {
-            "messages": [mock_ai_msg, mock_tool_msg, mock_final_msg]
-        }
-        mock_create_agent.return_value = mock_agent
-        
-        delegated_task = ResearchTask(
-            task_id="delegated_subtopic",
-            topic="subtopic",
-            query="subtopic - deeper research needed",
-            priority=2,
-            requested_by="sub_agent"
-        )
-        mock_parse_delegation.return_value = delegated_task
-        
-        mock_extract.return_value = CitationExtractionOutput(
-            findings=[],
-            task_answered=True,
-            key_insights=[],
-            gaps_noted=None
-        )
-        
-        state: SubAgentState = {
-            "task": ResearchTask(
-                task_id="task_005",
-                topic="main topic",
-                query="Research main topic",
-                priority=1
-            ),
-            "research_brief": ResearchBrief(
-                scope="Test",
-                sub_topics=["main topic"],
-                constraints={},
-                deliverables="Test"
-            ),
-            "completed_tasks": [],
-            "failed_tasks": [],
-            "budget": {
-                "iterations": 1,
-                "max_iterations": 20,
-                "max_sub_agents": 20,
-                "max_searches_per_agent": 2,
-                "total_searches": 0
-            }
-        }
-        
-        result = await sub_agent_node(state)
-        
-        assert "task_history" in result
-        assert len(result["task_history"]) == 1
-        assert result["task_history"][0].task_id == "delegated_subtopic"
     
     @pytest.mark.asyncio
     @patch("app.agents.sub_agent.get_research_tools")

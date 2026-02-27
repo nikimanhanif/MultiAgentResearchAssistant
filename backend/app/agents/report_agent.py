@@ -8,6 +8,7 @@ the DeepSeek Reasoner model.
 
 from typing import List, Any, Dict
 import logging
+import re
 from langsmith import traceable
 import langsmith as ls
 from langchain_core.runnables import Runnable
@@ -100,8 +101,11 @@ async def generate_report(
         })
         
         if hasattr(response, 'content'):
-            return response.content
-        return str(response)
+            report_text = response.content
+        else:
+            report_text = str(response)
+        
+        return _validate_citation_indices(report_text, len(findings))
             
     except Exception as e:
         raise Exception(f"Failed to generate report: {str(e)}")
@@ -127,6 +131,26 @@ def _get_format_instructions(format_type: ReportFormat) -> str:
     
     instruction_func = format_map.get(format_type, get_deep_research_instructions)
     return instruction_func()
+
+
+def _validate_citation_indices(report: str, findings_count: int) -> str:
+    """
+    Validate that citation indices in the report match the findings list.
+    Appends a warning if any indices are out of range (likely hallucinated).
+    """
+    used_indices = set(int(m) for m in re.findall(r'\[(\d+)\]', report))
+    valid_range = set(range(findings_count))
+    
+    invalid = used_indices - valid_range
+    if invalid:
+        warning = (
+            f"\n\n> **Citation Warning**: The following citation indices "
+            f"do not correspond to any finding: {sorted(invalid)}. "
+            f"These may be hallucinated references.\n"
+        )
+        report += warning
+    
+    return report
 
 
 def _generate_no_findings_report(brief: ResearchBrief) -> str:

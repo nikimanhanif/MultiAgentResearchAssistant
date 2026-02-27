@@ -11,7 +11,8 @@ from app.models.schemas import ResearchBrief, Finding, ResearchTask, Citation
 class TestSupervisorNode:
     """Test cases for supervisor_node function."""
 
-    def test_supervisor_node_budget_exhausted_iterations(self):
+    @pytest.mark.asyncio
+    async def test_supervisor_node_budget_exhausted_iterations(self):
         """Test that supervisor completes when max_iterations reached."""
         state: ResearchState = {
             "research_brief": ResearchBrief(
@@ -32,12 +33,13 @@ class TestSupervisorNode:
             }
         }
         
-        result = supervisor_node(state)
+        result = await supervisor_node(state)
         
         assert result["is_complete"] is True
         assert result["budget"]["iterations"] == 20
     
-    def test_supervisor_node_budget_exhausted_sub_agents(self):
+    @pytest.mark.asyncio
+    async def test_supervisor_node_budget_exhausted_sub_agents(self):
         """Test that supervisor completes when max_sub_agents reached."""
         findings = [
             Finding(
@@ -68,20 +70,20 @@ class TestSupervisorNode:
             }
         }
         
-        result = supervisor_node(state)
+        result = await supervisor_node(state)
         
         assert result["is_complete"] is True
     
+    @pytest.mark.asyncio
     @patch("app.agents.supervisor_agent.SUPERVISOR_GAP_ANALYSIS_TEMPLATE")
     @patch("app.agents.supervisor_agent.get_deepseek_reasoner_json")
-    def test_supervisor_node_llm_error_marks_complete(self, mock_get_llm, mock_template):
+    async def test_supervisor_node_llm_error_marks_complete(self, mock_get_llm, mock_template):
         """Test that LLM errors are handled gracefully and mark research complete."""
         mock_llm = MagicMock()
         mock_get_llm.return_value = mock_llm
         
-        # Mock the chain to raise exception
         mock_chain = MagicMock()
-        mock_chain.invoke.side_effect = Exception("LLM API error")
+        mock_chain.ainvoke = AsyncMock(side_effect=Exception("LLM API error"))
         mock_template.__or__.return_value = mock_chain
         
         state: ResearchState = {
@@ -103,16 +105,17 @@ class TestSupervisorNode:
             }
         }
         
-        result = supervisor_node(state)
+        result = await supervisor_node(state)
         
         assert result["is_complete"] is True
         assert "error" in result
         assert any("Supervisor analysis failed" in err for err in result["error"])
         assert result["budget"]["iterations"] == 2
     
+    @pytest.mark.asyncio
     @patch("app.agents.supervisor_agent.SUPERVISOR_GAP_ANALYSIS_TEMPLATE")
     @patch("app.agents.supervisor_agent.get_deepseek_reasoner_json")
-    def test_supervisor_node_generates_tasks_for_gaps(self, mock_get_llm, mock_template):
+    async def test_supervisor_node_generates_tasks_for_gaps(self, mock_get_llm, mock_template):
         """Test that supervisor generates new tasks when gaps exist."""
         mock_response = MagicMock()
         mock_response.content = """{
@@ -129,9 +132,8 @@ class TestSupervisorNode:
             "reasoning": "Topic2 has no findings"
         }"""
         
-        # Mock the chain
         mock_chain = MagicMock()
-        mock_chain.invoke.return_value = mock_response
+        mock_chain.ainvoke = AsyncMock(return_value=mock_response)
         mock_template.__or__.return_value = mock_chain
         
         # Mock the LLM
@@ -164,7 +166,7 @@ class TestSupervisorNode:
             }
         }
         
-        result = supervisor_node(state)
+        result = await supervisor_node(state)
         
         assert "task_history" in result
         assert len(result["task_history"]) == 1
@@ -172,9 +174,10 @@ class TestSupervisorNode:
         assert result["is_complete"] is False
         assert result["gaps"]["has_gaps"] is True
     
+    @pytest.mark.asyncio
     @patch("app.agents.supervisor_agent.SUPERVISOR_GAP_ANALYSIS_TEMPLATE")
     @patch("app.agents.supervisor_agent.get_deepseek_reasoner_json")
-    def test_supervisor_node_marks_complete_when_no_gaps(self, mock_get_llm, mock_template):
+    async def test_supervisor_node_marks_complete_when_no_gaps(self, mock_get_llm, mock_template):
         """Test that supervisor marks complete when no gaps exist."""
         mock_response = MagicMock()
         mock_response.content = """{
@@ -185,9 +188,8 @@ class TestSupervisorNode:
             "reasoning": "All topics sufficiently covered"
         }"""
         
-        # Mock the chain
         mock_chain = MagicMock()
-        mock_chain.invoke.return_value = mock_response
+        mock_chain.ainvoke = AsyncMock(return_value=mock_response)
         mock_template.__or__.return_value = mock_chain
         
         # Mock the LLM
@@ -226,14 +228,15 @@ class TestSupervisorNode:
             }
         }
         
-        result = supervisor_node(state)
+        result = await supervisor_node(state)
         
         assert result["is_complete"] is True
         assert result["gaps"]["has_gaps"] is False
     
+    @pytest.mark.asyncio
     @patch("app.agents.supervisor_agent.SUPERVISOR_GAP_ANALYSIS_TEMPLATE")
     @patch("app.agents.supervisor_agent.get_deepseek_reasoner_json")
-    def test_supervisor_node_increments_iterations(self, mock_get_llm, mock_template):
+    async def test_supervisor_node_increments_iterations(self, mock_get_llm, mock_template):
         """Test that supervisor correctly increments iteration counter."""
         mock_llm = MagicMock()
         mock_get_llm.return_value = mock_llm
@@ -246,7 +249,7 @@ class TestSupervisorNode:
             "reasoning": "Test reasoning"
         }"""
         mock_chain = MagicMock()
-        mock_chain.invoke.return_value = mock_response
+        mock_chain.ainvoke = AsyncMock(return_value=mock_response)
         mock_template.__or__.return_value = mock_chain
 
         state: ResearchState = {
@@ -268,7 +271,7 @@ class TestSupervisorNode:
             }
         }
         
-        result = supervisor_node(state)
+        result = await supervisor_node(state)
         
         assert result["budget"]["iterations"] == 6
 

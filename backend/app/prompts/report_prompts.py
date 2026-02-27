@@ -28,9 +28,14 @@ def format_findings_for_prompt(findings: List[Finding]) -> str:
     for idx, finding in enumerate(findings):
         citation = finding.citation
         
-        authors_str = "Unknown Author"
         if citation.authors:
             authors_str = ", ".join(citation.authors)
+        elif citation.venue:
+            authors_str = citation.venue
+        elif citation.source:
+            authors_str = citation.source
+        else:
+            authors_str = "Unattributed Source"
         
         credibility_warning = ""
         if finding.credibility_score < 0.5:
@@ -90,8 +95,8 @@ Your task is to generate a comprehensive, well-structured markdown report from t
      [0] Smith, J., Doe, A. (2023). "Title of Paper". Nature. DOI: 10.1038/example
          https://nature.com/article (Credibility: 0.95 - High)
      
-     [1] Unknown Author. "Blog Post Title". Personal Blog. https://example.com
-         ⚠️ (Credibility: 0.35 - Low Quality Source)
+     [1] MIT Technology Review. "Blog Post Title". MIT Technology Review.
+         https://technologyreview.com/article (Credibility: 0.70 - Established Tech Blog)
      ```
 
 3. **Credibility Warnings**:

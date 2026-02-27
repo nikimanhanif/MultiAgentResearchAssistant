@@ -281,30 +281,6 @@ Conduct gap analysis and generate tasks if needed. Analyze the content of findin
 ])
 
 
-SUPERVISOR_FINDINGS_AGGREGATION_TEMPLATE = ChatPromptTemplate.from_messages([
-    SystemMessagePromptTemplate.from_template(
-        """You are a research findings aggregator. Your role is to filter and rank findings for report generation.
-
-FILTERING CRITERIA:
-1. Credibility: Keep only findings with credibility_score >= 0.5
-2. Relevance: Must directly address a sub-topic from the research brief
-3. Quality: Prefer findings with credibility_score >= 0.7 for key claims
-
-DEDUPLICATION RULES:
-- Same DOI → Keep highest credibility
-- Same title + author → Keep more recent or higher credibility
-- Same URL → Keep higher credibility
-
-Return a filtered and ranked list of Finding objects (as JSON array)."""
-    ),
-    HumanMessagePromptTemplate.from_template(
-        """Research Brief Sub-topics: {sub_topics}
-
-Total Findings: {total_findings}
-
-Filter and rank these findings for the report."""
-    ),
-])
 
 
 SUB_AGENT_RESEARCH_TEMPLATE = ChatPromptTemplate.from_messages([
@@ -500,6 +476,28 @@ TASK SUMMARY (for supervisor context):
    - Topics that need deeper investigation
    - Conflicting information that needs resolution
    - Even if task_answered=True, gaps can still exist
+
+TOOL ATTRIBUTION:
+- Each result section is tagged with [Source Tool: <name>] and [End Source: <name>]
+- For each Finding, set citation.source_type based on the TOOL that produced that specific result:
+  * search_scopus → peer_reviewed
+  * search_arxiv → preprint
+  * search_semantic_scholar → academic
+  * tavily_search → website (unless DOI is present, then academic)
+  * fetch_paper_content → inherit from the search tool that found the paper
+- Do NOT assume all findings share the same source tool
+
+AUTHOR EXTRACTION RULES (MANDATORY):
+- Extract author names exactly as they appear in the source metadata
+- If no individual authors but an institution is identified, use the institution name
+  (e.g., ["World Health Organization"], ["OpenAI Research"])
+- NEVER use database or platform names (e.g., "arXiv", "Semantic Scholar", "PubMed", "Tavily") as authors.
+- If the source is a known publisher (Nature, IEEE), check the paper metadata
+  for author fields before giving up
+- If the URL domain identifies a known organization (who.int, nih.gov),
+  use that organization as the author
+- As a LAST RESORT, use the publication name or website name (e.g., ["MIT Technology Review"]), but NEVER "arXiv" or "Semantic Scholar".
+- NEVER return None for authors — always provide at least an organizational attribution, or if truly impossible, return "Unknown Author".
 
 Return structured output with both findings and summary."""
     ),

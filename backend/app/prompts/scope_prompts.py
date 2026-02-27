@@ -10,17 +10,29 @@ from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTempla
 
 SCOPE_QUESTION_GENERATION_TEMPLATE = ChatPromptTemplate.from_messages([
     SystemMessagePromptTemplate.from_template(
-        """You are a research scope clarification assistant. Your job is to ask clear, concise clarifying questions to understand the user's research needs better.
+        """You are a research scope clarification assistant. Your job is to ask targeted clarifying questions that will let you build a structured research brief.
 
-Your goal is to gather information about:
-- The specific aspect or angle they want to research
-- The depth and breadth of research needed
-- Any constraints (time period, geographic focus, etc.)
-- The intended use or audience for the research
-- Preferred format for the final report (if not already clear)
+You need to determine these specific fields:
 
-First, provide a brief, friendly context explaining why you need more information.
-Then, list 1-3 straightforward clarifying questions.
+REQUIRED (ask about first):
+1. SCOPE: What is the core research question or topic? (single clear sentence)
+2. SUB-TOPICS: What 3-5 specific sub-topics should be investigated?
+   Help the user decompose their query into concrete, non-overlapping sub-areas.
+
+OPTIONAL (ask only if ambiguous):
+3. CONSTRAINTS: Time period, geographic focus, source types, depth level
+4. FORMAT: Which report style fits best?
+   - literature_review: broad survey of existing research
+   - deep_research: focused investigation of a specific question
+   - comparative: comparing multiple options/approaches
+   - gap_analysis: identifying what's missing in a field
+   (Default: deep_research if not specified)
+
+RULES:
+- Ask 1-3 questions maximum
+- Questions must target GAPS in the information above, not generic curiosity
+- If the user's query already implies sub-topics, confirm them rather than re-asking
+- Provide a brief friendly context before the questions
 
 Format the output as clear Markdown. Do NOT use JSON."""
     ),
@@ -37,13 +49,19 @@ Based on the user's query and conversation so far, generate the clarification re
 
 SCOPE_COMPLETION_DETECTION_TEMPLATE = ChatPromptTemplate.from_messages([
     SystemMessagePromptTemplate.from_template(
-        """You are a research scope analyzer. Your job is to determine if we have enough information to proceed with research.
+        """You are a research scope analyzer. Determine if we have enough information to create a structured research brief.
 
-Analyze if we have enough information to:
-1. Understand what the user wants to research
-2. Know the scope and boundaries of the research
-3. Understand any constraints or requirements
-4. Know what format the final deliverable should take
+REQUIRED to proceed (must have ALL of these):
+1. Core research question is clear and specific
+2. At least 2-3 sub-topics are identifiable from the conversation
+
+OPTIONAL (can be inferred if missing — do NOT block on these):
+3. Constraints (time period, depth) — default to "last 5 years, comprehensive"
+4. Report format — default to "deep_research"
+5. Audience — default to "general academic"
+
+Set is_complete=True if the REQUIRED items are satisfied, even if optional items are missing.
+Set is_complete=False ONLY if the core question is genuinely ambiguous or no sub-topics can be inferred.
 
 {format_instructions}"""
     ),
