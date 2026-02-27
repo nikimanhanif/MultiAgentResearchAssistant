@@ -22,7 +22,7 @@ from langchain_core.tools import ToolException
 from langgraph.types import Command
 from pydantic import ValidationError
 
-from app.tools.academic_tools import _extract_paper_sections
+from app.tools.academic.utils import extract_paper_sections as _extract_paper_sections
 
 logger = logging.getLogger(__name__)
 

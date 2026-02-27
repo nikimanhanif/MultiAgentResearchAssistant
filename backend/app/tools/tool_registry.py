@@ -13,7 +13,7 @@ from typing import List, Optional, AsyncGenerator
 from langchain_core.tools import BaseTool
 
 from app.tools.tavily_tools import get_tavily_tools
-from app.tools.academic_tools import get_academic_tools
+from app.tools.academic import get_academic_tools
 
 logger = logging.getLogger(__name__)
 

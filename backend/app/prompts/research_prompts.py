@@ -91,7 +91,7 @@ Return response as JSON array:
         "task_id": "task_1",
         "description": "Research sub-topic X focusing on aspect Y",
         "query_variants": ["query 1", "query 2", "query 3"],
-        "preferred_tools": ["tavily_search", "arxiv", "pubmed"],
+        "preferred_tools": ["tavily_search", "search_arxiv", "search_scopus"],
         "context_budget": 4000
     }},
     ...
@@ -357,17 +357,22 @@ Goal: Build a candidate pool WITHOUT reading papers yet.
 1. For DEEP_RESEARCH: Start with tavily_search for quick answers
    For other strategies: Use tavily_search to understand key terminology
 
-2. Run search_papers with 2-3 QUERY VARIATIONS:
+2. Use the APPROPRIATE search tool(s) with 2-3 QUERY VARIATIONS:
    - Original query: "{query}"
    - Variation with synonyms or related terms
    - More specific or different angle
    
-   Parameters:
-   • source: "all" (default) or choose by domain
-   • count: 5 per query
-   • sortBy: "relevance" (default) or "citations" for foundational papers
+   Choose the right tool by domain:
+   • search_arxiv: CS/ML/Physics preprints (best PDF availability)
+   • search_semantic_scholar: Broad academic with citation counts
+   • search_scopus: Peer-reviewed journals (highest credibility)
+   
+   Each tool accepts: query (str), count (int, default 5)
 
 3. Collect ALL returned paper metadata (titles, authors, dates, IDs)
+
+4. If you find a foundational paper, use get_citation_graph(paper_id)
+   to snowball and discover the research landscape around it
 
 PHASE 2: TRIAGE (Rank & Select)
 ───────────────────────────────────────
@@ -438,8 +443,11 @@ When stopping, output a summary of findings WITHOUT calling any more tools.
 
 TOOL REFERENCE:
 - tavily_search: Web search - good for quick facts, terminology, context
-- search_papers: Academic search - returns metadata only (no full text)
-- fetch_paper_content: Get paper sections (prefer ArXiv for reliability)"""
+- search_arxiv: ArXiv preprints (CS/ML/Physics) - returns metadata
+- search_semantic_scholar: Broad academic with citation counts - returns metadata
+- search_scopus: Peer-reviewed journals (Elsevier) - returns metadata
+- get_citation_graph: Snowball a paper's citations/references via Semantic Scholar
+- fetch_paper_content: Get paper full text sections (prefer ArXiv for reliability)"""
     ),
     HumanMessagePromptTemplate.from_template(
         """YOUR TASK:

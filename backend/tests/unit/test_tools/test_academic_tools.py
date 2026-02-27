@@ -1,4 +1,4 @@
-"""Unit tests for academic_tools module.
+"""Unit tests for modular academic tools package.
 
 Tests search and content fetching tools with mocked API responses
 to avoid external network calls during testing.
@@ -8,15 +8,14 @@ import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
 from langchain_core.documents import Document
 
-from app.tools.academic_tools import (
-    search_papers,
-    fetch_paper_content,
+from app.tools.academic import (
     get_academic_tools,
-    _extract_paper_sections,
-    _search_arxiv,
-    _search_semantic_scholar,
-    _search_pubmed,
+    fetch_paper_content,
 )
+from app.tools.academic.arxiv import search_arxiv, _search_arxiv_internal
+from app.tools.academic.semantic_scholar import search_semantic_scholar, get_citation_graph
+from app.tools.academic.scopus import search_scopus
+from app.tools.academic.utils import extract_paper_sections
 
 
 class TestExtractPaperSections:
@@ -32,14 +31,13 @@ This is the abstract of the paper with important findings.
 This is the introduction section.
 """ + ("Body content. " * 100)
         
-        result = _extract_paper_sections(text)
+        result = extract_paper_sections(text)
         
         assert "ABSTRACT" in result.upper()
         assert "important findings" in result
     
     def test_extracts_conclusion_before_references(self):
         """Test that conclusion is extracted before references section."""
-        # Need enough content to trigger proper section extraction (>5000 chars beginning)
         text = "Abstract\nThis is the abstract.\n\n1. Introduction\n" + ("Body content. " * 400) + """
 
 5. Conclusion
@@ -49,12 +47,9 @@ References
 [1] First reference
 [2] Second reference
 """
-        result = _extract_paper_sections(text)
+        result = extract_paper_sections(text)
         
-        # Should extract abstract and conclusion portions
         assert "ABSTRACT" in result.upper()
-        # References section should be excluded or at end
-        # The key is that the result is shorter than original
     
     def test_handles_json_wrapped_content(self):
         """Test handling of JSON-wrapped paper content."""
@@ -66,26 +61,25 @@ References
             "text": "Abstract\nThis is the paper content."
         })
         
-        result = _extract_paper_sections(json_content)
+        result = extract_paper_sections(json_content)
         
-        # Either parse the JSON and get metadata, or process as-is
         assert "Test Paper" in result or "Abstract" in result or "paper content" in result
     
     def test_fallback_for_no_abstract(self):
         """Test fallback when no abstract section found."""
         text = "This paper discusses machine learning without a clear abstract header."
         
-        result = _extract_paper_sections(text)
+        result = extract_paper_sections(text)
         
         assert "machine learning" in result
 
 
-class TestSearchPapers:
-    """Test the search_papers tool."""
+class TestSearchArxiv:
+    """Test the search_arxiv tool."""
     
-    @patch('app.tools.academic_tools._search_arxiv')
-    def test_search_arxiv_only(self, mock_arxiv):
-        """Test searching ArXiv only."""
+    @patch('app.tools.academic.arxiv._search_arxiv_internal')
+    def test_search_arxiv(self, mock_arxiv):
+        """Test searching ArXiv."""
         mock_arxiv.return_value = [{
             "source": "arxiv",
             "paper_id": "2401.12345",
@@ -97,9 +91,8 @@ class TestSearchPapers:
             "citation_count": None,
         }]
         
-        result = search_papers.invoke({
+        result = search_arxiv.invoke({
             "query": "machine learning",
-            "source": "arxiv",
             "count": 1
         })
         
@@ -107,10 +100,27 @@ class TestSearchPapers:
         assert "Test Paper" in content
         assert "arxiv" in content.lower()
     
-    @patch('app.tools.academic_tools._search_semantic_scholar')
-    def test_search_semantic_scholar_includes_citations(self, mock_ss):
+    @patch('app.tools.academic.arxiv._search_arxiv_internal')
+    def test_handles_empty_results(self, mock_arxiv):
+        """Test handling when no papers found."""
+        mock_arxiv.return_value = []
+        
+        result = search_arxiv.invoke({
+            "query": "nonexistent topic xyz123",
+            "count": 5
+        })
+        
+        content = result[0] if isinstance(result, tuple) else result
+        assert "No papers found" in content
+
+
+class TestSearchSemanticScholar:
+    """Test the search_semantic_scholar tool."""
+    
+    @patch('app.tools.academic.semantic_scholar._run_in_thread')
+    def test_search_includes_citations(self, mock_thread):
         """Test that Semantic Scholar results include citation counts."""
-        mock_ss.return_value = [{
+        mock_thread.return_value = [{
             "source": "semantic_scholar",
             "paper_id": "abc123",
             "title": "Highly Cited Paper",
@@ -121,58 +131,90 @@ class TestSearchPapers:
             "citation_count": 5000,
         }]
         
-        result = search_papers.invoke({
+        result = search_semantic_scholar.invoke({
             "query": "deep learning",
-            "source": "semantic_scholar",
             "count": 1
         })
         
         content = result[0] if isinstance(result, tuple) else result
         assert "5000" in content
         assert "Citations" in content
+
+
+class TestSearchScopus:
+    """Test the search_scopus tool."""
     
-    @patch('app.tools.academic_tools._search_arxiv')
-    @patch('app.tools.academic_tools._search_semantic_scholar')
-    @patch('app.tools.academic_tools._search_pubmed')
-    def test_search_all_sources(self, mock_pubmed, mock_ss, mock_arxiv):
-        """Test searching all sources at once."""
-        mock_arxiv.return_value = [{"source": "arxiv", "paper_id": "1", "title": "ArXiv Paper", 
-                                     "authors": "", "abstract": "", "year": 2024, "pdf_url": None, "citation_count": None}]
-        mock_ss.return_value = [{"source": "semantic_scholar", "paper_id": "2", "title": "S2 Paper",
-                                  "authors": "", "abstract": "", "year": 2023, "pdf_url": None, "citation_count": 100}]
-        mock_pubmed.return_value = [{"source": "pubmed", "paper_id": "3", "title": "PubMed Paper",
-                                      "authors": "", "abstract": "", "year": 2022, "pdf_url": None, "citation_count": None}]
+    @patch('app.tools.academic.scopus._search_scopus')
+    @patch('app.tools.academic.scopus.settings')
+    def test_search_scopus_returns_results(self, mock_settings, mock_search):
+        """Test that Scopus search returns formatted results."""
+        mock_settings.SCOPUS_API_KEY = "test_key"
+        mock_search.return_value = [{
+            "source": "scopus",
+            "paper_id": "2-s2.0-123456",
+            "title": "Peer Reviewed Paper",
+            "authors": "Dr. Smith, Dr. Jones",
+            "abstract": "Validated research findings",
+            "year": 2023,
+            "pdf_url": "https://doi.org/10.1234/test",
+            "citation_count": 42,
+        }]
         
-        result = search_papers.invoke({
-            "query": "neural networks",
-            "source": "all",
+        result = search_scopus.invoke({
+            "query": "machine learning",
             "count": 1
         })
         
         content = result[0] if isinstance(result, tuple) else result
-        assert "ArXiv Paper" in content
-        assert "S2 Paper" in content
-        assert "PubMed Paper" in content
+        assert "Peer Reviewed Paper" in content
+
+
+class TestGetCitationGraph:
+    """Test the get_citation_graph tool."""
     
-    @patch('app.tools.academic_tools._search_arxiv')
-    def test_handles_empty_results(self, mock_arxiv):
-        """Test handling when no papers found."""
-        mock_arxiv.return_value = []
+    @patch('app.tools.academic.semantic_scholar._run_in_thread')
+    def test_citation_graph_returns_formatted_output(self, mock_thread):
+        """Test that citation graph returns both citations and references."""
+        mock_thread.return_value = {
+            "seed_paper": {
+                "paper_id": "abc123",
+                "title": "Foundational Paper",
+                "year": 2017,
+                "citation_count": 50000,
+                "influential_citation_count": 5000,
+            },
+            "top_citations": [{
+                "paper_id": "cite1",
+                "title": "Citing Paper 1",
+                "year": 2020,
+                "citation_count": 100,
+                "influential_citation_count": 10,
+                "authors": "Author X",
+            }],
+            "top_references": [{
+                "paper_id": "ref1",
+                "title": "Referenced Paper 1",
+                "year": 2015,
+                "citation_count": 200,
+                "influential_citation_count": 20,
+                "authors": "Author Y",
+            }],
+        }
         
-        result = search_papers.invoke({
-            "query": "nonexistent topic xyz123",
-            "source": "arxiv",
-            "count": 5
+        result = get_citation_graph.invoke({
+            "paper_id": "abc123",
         })
         
         content = result[0] if isinstance(result, tuple) else result
-        assert "No papers found" in content
+        assert "Foundational Paper" in content
+        assert "Citing Paper 1" in content
+        assert "Referenced Paper 1" in content
 
 
 class TestFetchPaperContent:
     """Test the fetch_paper_content tool."""
     
-    @patch('app.tools.academic_tools.ArxivLoader')
+    @patch('app.tools.academic.arxiv.ArxivLoader')
     def test_fetch_arxiv_paper(self, mock_loader_class):
         """Test fetching ArXiv paper content."""
         mock_doc = Document(
@@ -192,7 +234,7 @@ class TestFetchPaperContent:
         assert "Test Paper" in content
         assert "important findings" in content
     
-    @patch('app.tools.academic_tools.ArxivLoader')
+    @patch('app.tools.academic.arxiv.ArxivLoader')
     def test_handles_missing_paper(self, mock_loader_class):
         """Test handling when paper not found."""
         mock_loader = MagicMock()
@@ -207,32 +249,35 @@ class TestFetchPaperContent:
         content = result[0] if isinstance(result, tuple) else result
         assert "Could not load" in content or "not found" in content.lower()
     
-    def test_handles_arxiv_loader_error(self):
+    @patch('app.tools.academic.arxiv.ArxivLoader')
+    def test_handles_arxiv_loader_error(self, mock_loader_class):
         """Test handling when ArxivLoader raises an error."""
-        with patch('app.tools.academic_tools.ArxivLoader') as mock_loader_class:
-            mock_loader = MagicMock()
-            mock_loader.load.side_effect = Exception("Network error")
-            mock_loader_class.return_value = mock_loader
-            
-            result = fetch_paper_content.invoke({
-                "source": "arxiv",
-                "paper_id": "12345"
-            })
-            
-            content = result[0] if isinstance(result, tuple) else result
-            assert "Failed" in content or "error" in content.lower()
+        mock_loader = MagicMock()
+        mock_loader.load.side_effect = Exception("Network error")
+        mock_loader_class.return_value = mock_loader
+        
+        result = fetch_paper_content.invoke({
+            "source": "arxiv",
+            "paper_id": "12345"
+        })
+        
+        content = result[0] if isinstance(result, tuple) else result
+        assert "Failed" in content or "error" in content.lower()
 
 
 class TestGetAcademicTools:
     """Test the tool loader function."""
     
-    def test_returns_both_tools(self):
-        """Test that both tools are returned."""
+    def test_returns_all_tools(self):
+        """Test that all 5 tools are returned."""
         tools = get_academic_tools()
         
-        assert len(tools) == 2
+        assert len(tools) == 5
         tool_names = [t.name for t in tools]
-        assert "search_papers" in tool_names
+        assert "search_arxiv" in tool_names
+        assert "search_semantic_scholar" in tool_names
+        assert "search_scopus" in tool_names
+        assert "get_citation_graph" in tool_names
         assert "fetch_paper_content" in tool_names
     
     def test_tools_have_descriptions(self):
