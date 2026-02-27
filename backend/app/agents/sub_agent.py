@@ -162,7 +162,8 @@ async def sub_agent_node(state: SubAgentState) -> Dict[str, Any]:
             "topic": task.topic,
             "query": task.query,
             "priority": task.priority,
-            "available_tools": available_tools_str
+            "available_tools": available_tools_str,
+            "priority_context": "PRIORITY NOTE: This is a HIGH-priority task — prefer peer-reviewed sources (search_scopus) when applicable." if task.priority == 1 else "",
         }
         
         rendered_messages = SUB_AGENT_RESEARCH_TEMPLATE.format_messages(**prompt_inputs)
