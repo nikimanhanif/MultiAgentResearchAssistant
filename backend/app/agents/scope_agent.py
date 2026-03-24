@@ -1,150 +1,45 @@
-"""Scope Agent - Human-in-the-loop clarification agent.
+"""
+Scope Agent - Handles initial research scoping and clarification.
 
-This agent handles multi-turn clarification conversations with users to determine
-the research scope. It asks clarifying questions and generates a research brief
-once the scope is sufficient.
+This agent engages in a multi-turn conversation with the user to clarify
+the research intent. It generates clarifying questions if the scope is ambiguous
+and produces a structured ResearchBrief once the scope is clear.
 """
 
 from typing import Optional, List, Dict, Any, Union
-import json
+import logging
+from langsmith import traceable
+import langsmith as ls
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import StrOutputParser
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_deepseek import ChatDeepSeek
+from langchain_core.output_parsers import PydanticOutputParser, StrOutputParser
+from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 
 from app.models.schemas import (
     ClarificationQuestions,
     ResearchBrief,
     ScopeStatus,
+    ScopeCompletionCheck,
 )
-from app.config import settings
+from app.prompts.scope_prompts import (
+    SCOPE_QUESTION_GENERATION_TEMPLATE,
+    SCOPE_COMPLETION_DETECTION_TEMPLATE,
+    SCOPE_BRIEF_GENERATION_TEMPLATE,
+)
+from app.config import get_deepseek_chat
+from app.graphs.state import ResearchState
 
-
-# Prompt Templates
-
-QUESTION_GENERATION_PROMPT = """You are a research scope clarification assistant. Your job is to ask clarifying questions to understand the user's research needs better.
-
-User's Query: {user_query}
-
-Conversation History:
-{conversation_history}
-
-Based on the user's query and conversation so far, generate 1-3 clarifying questions to understand:
-- The specific aspect or angle they want to research
-- The depth and breadth of research needed
-- Any constraints (time period, geographic focus, etc.)
-- The intended use or audience for the research
-- Preferred format for the final report (if not already clear)
-
-If the scope seems sufficiently clear, return an empty list.
-
-Return your response as a JSON object with this structure:
-{{
-    "questions": ["question 1", "question 2", ...],
-    "context": "Brief explanation of why you're asking these questions"
-}}
-
-Return ONLY the JSON object, no other text."""
-
-COMPLETION_DETECTION_PROMPT = """You are a research scope analyzer. Your job is to determine if we have enough information to proceed with research.
-
-User's Original Query: {user_query}
-
-Conversation History:
-{conversation_history}
-
-Analyze if we have enough information to:
-1. Understand what the user wants to research
-2. Know the scope and boundaries of the research
-3. Understand any constraints or requirements
-4. Know what format the final deliverable should take
-
-Return your response as a JSON object:
-{{
-    "is_complete": true/false,
-    "reason": "Brief explanation of your decision",
-    "missing_info": ["list of missing information"] or []
-}}
-
-Return ONLY the JSON object, no other text."""
-
-RESEARCH_BRIEF_GENERATION_PROMPT = """You are a research brief generator. Your job is to create a comprehensive research brief from the clarification conversation.
-
-User's Original Query: {user_query}
-
-Conversation History:
-{conversation_history}
-
-Create a detailed research brief that will guide the research process. Include:
-- Clear research scope and objectives
-- Sub-topics to investigate
-- Any constraints (time, geography, depth, etc.)
-- Expected deliverables and format
-- Any other relevant context
-
-Return your response as a JSON object with this structure:
-{{
-    "scope": "Clear statement of the research scope",
-    "sub_topics": ["subtopic 1", "subtopic 2", ...],
-    "constraints": {{
-        "time_period": "...",
-        "geographic_focus": "...",
-        "depth": "...",
-        "other": "..."
-    }},
-    "deliverables": "Description of expected output",
-    "format": "summary/comparison/ranking/detailed/other",
-    "metadata": {{
-        "original_query": "{user_query}",
-        "clarification_turns": 0
-    }}
-}}
-
-Return ONLY the JSON object, no other text."""
-
-
-# Helper Functions
-
-def _get_llm(temperature: float = 0.7):
-    """Get configured LLM based on settings.
-    
-    Args:
-        temperature: Temperature for LLM generation (0.0-1.0)
-        
-    Returns:
-        Configured LLM instance (Gemini or DeepSeek)
-        
-    Raises:
-        ValueError: If no API key is configured or invalid model specified
-    """
-    if settings.DEFAULT_MODEL == "gemini":
-        if not settings.GOOGLE_GEMINI_API_KEY:
-            raise ValueError("GOOGLE_GEMINI_API_KEY not configured")
-        return ChatGoogleGenerativeAI(
-            model=settings.GEMINI_MODEL,
-            google_api_key=settings.GOOGLE_GEMINI_API_KEY,
-            temperature=temperature,
-        )
-    elif settings.DEFAULT_MODEL == "deepseek":
-        if not settings.DEEPSEEK_API_KEY:
-            raise ValueError("DEEPSEEK_API_KEY not configured")
-        return ChatDeepSeek(
-            model=settings.DEEPSEEK_MODEL,
-            api_key=settings.DEEPSEEK_API_KEY,
-            temperature=temperature,
-        )
-    else:
-        raise ValueError(f"Invalid model: {settings.DEFAULT_MODEL}")
+logger = logging.getLogger(__name__)
 
 
 def _format_conversation_history(history: Optional[List[Dict[str, str]]]) -> str:
-    """Format conversation history for prompts.
+    """
+    Format conversation history for prompt context.
     
     Args:
-        history: List of conversation turns with 'role' and 'content'
+        history: List of conversation turns (role, content).
         
     Returns:
-        Formatted string representation of conversation history
+        str: Formatted conversation string.
     """
     if not history:
         return "No previous conversation."
@@ -158,174 +53,22 @@ def _format_conversation_history(history: Optional[List[Dict[str, str]]]) -> str
     return "\n".join(formatted)
 
 
-async def _invoke_llm_with_retry(
-    llm,
-    prompt: str,
-    max_retries: int = 3
-) -> str:
-    """Invoke LLM with retry logic for transient failures.
-    
-    Args:
-        llm: LLM instance to invoke
-        prompt: Prompt string to send to LLM
-        max_retries: Maximum number of retry attempts
-        
-    Returns:
-        LLM response string
-        
-    Raises:
-        Exception: If all retry attempts fail
-    """
-    last_error = None
-    
-    for attempt in range(max_retries):
-        try:
-            response = await llm.ainvoke(prompt)
-            return response.content
-        except Exception as e:
-            last_error = e
-            if attempt < max_retries - 1:
-                # Wait briefly before retrying (exponential backoff)
-                import asyncio
-                await asyncio.sleep(2 ** attempt)
-            continue
-    
-    raise Exception(f"LLM invocation failed after {max_retries} attempts: {last_error}")
-
-
-def _parse_json_response(response: str) -> Dict[str, Any]:
-    """Parse JSON response from LLM, handling markdown code blocks.
-    
-    Args:
-        response: Raw response string from LLM
-        
-    Returns:
-        Parsed JSON as dictionary
-        
-    Raises:
-        ValueError: If JSON parsing fails
-    """
-    # Remove markdown code blocks if present
-    cleaned = response.strip()
-    if cleaned.startswith("```json"):
-        cleaned = cleaned[7:]
-    elif cleaned.startswith("```"):
-        cleaned = cleaned[3:]
-    
-    if cleaned.endswith("```"):
-        cleaned = cleaned[:-3]
-    
-    cleaned = cleaned.strip()
-    
-    try:
-        return json.loads(cleaned)
-    except json.JSONDecodeError as e:
-        raise ValueError(f"Failed to parse JSON response: {e}\nResponse: {response}")
-
-
-# Main Functions
-
-async def generate_clarification_questions(
+def _update_brief_metadata(
+    parsed: Dict[str, Any],
     user_query: str,
-    conversation_history: Optional[List[Dict[str, str]]] = None
-) -> ClarificationQuestions:
-    """Generate clarifying questions based on user query and conversation.
-    
-    Args:
-        user_query: User's original or current query
-        conversation_history: List of previous conversation turns
-        
-    Returns:
-        ClarificationQuestions object with questions and context
-        
-    Raises:
-        ValueError: If LLM configuration is invalid
-        Exception: If LLM invocation fails after retries
-    """
-    llm = _get_llm(temperature=0.7)
-    
-    formatted_history = _format_conversation_history(conversation_history)
-    
-    prompt = QUESTION_GENERATION_PROMPT.format(
-        user_query=user_query,
-        conversation_history=formatted_history
-    )
-    
-    response = await _invoke_llm_with_retry(llm, prompt)
-    parsed = _parse_json_response(response)
-    
-    return ClarificationQuestions(
-        questions=parsed.get("questions", []),
-        context=parsed.get("context")
-    )
-
-
-async def check_scope_completion(
-    user_query: str,
-    conversation_history: Optional[List[Dict[str, str]]] = None
+    conversation_history: Optional[List[Dict[str, str]]]
 ) -> Dict[str, Any]:
-    """Check if we have enough information to proceed with research.
+    """
+    Update research brief metadata with conversation stats.
     
     Args:
-        user_query: User's original query
-        conversation_history: List of conversation turns
+        parsed: Parsed brief dictionary from LLM.
+        user_query: Original user query.
+        conversation_history: List of conversation turns.
         
     Returns:
-        Dictionary with 'is_complete', 'reason', and 'missing_info' keys
-        
-    Raises:
-        ValueError: If LLM configuration is invalid
-        Exception: If LLM invocation fails after retries
+        Dict[str, Any]: Updated brief dictionary.
     """
-    llm = _get_llm(temperature=0.3)  # Lower temperature for more consistent decisions
-    
-    formatted_history = _format_conversation_history(conversation_history)
-    
-    prompt = COMPLETION_DETECTION_PROMPT.format(
-        user_query=user_query,
-        conversation_history=formatted_history
-    )
-    
-    response = await _invoke_llm_with_retry(llm, prompt)
-    parsed = _parse_json_response(response)
-    
-    return {
-        "is_complete": parsed.get("is_complete", False),
-        "reason": parsed.get("reason", ""),
-        "missing_info": parsed.get("missing_info", [])
-    }
-
-
-async def generate_research_brief(
-    user_query: str,
-    conversation_history: Optional[List[Dict[str, str]]] = None
-) -> ResearchBrief:
-    """Generate a research brief from the clarification conversation.
-    
-    Args:
-        user_query: User's original query
-        conversation_history: List of conversation turns
-        
-    Returns:
-        ResearchBrief object with complete research scope
-        
-    Raises:
-        ValueError: If LLM configuration is invalid
-        Exception: If LLM invocation fails after retries
-    """
-    llm = _get_llm(temperature=0.5)
-    
-    formatted_history = _format_conversation_history(conversation_history)
-    
-    prompt = RESEARCH_BRIEF_GENERATION_PROMPT.format(
-        user_query=user_query,
-        conversation_history=formatted_history
-    )
-    
-    response = await _invoke_llm_with_retry(llm, prompt)
-    parsed = _parse_json_response(response)
-    
-    # Update metadata with actual clarification turn count
     if conversation_history:
         clarification_turns = len([
             turn for turn in conversation_history 
@@ -336,45 +79,340 @@ async def generate_research_brief(
         parsed["metadata"]["clarification_turns"] = clarification_turns
         parsed["metadata"]["original_query"] = user_query
     
-    return ResearchBrief(
-        scope=parsed.get("scope", ""),
-        sub_topics=parsed.get("sub_topics", []),
-        constraints=parsed.get("constraints", {}),
-        deliverables=parsed.get("deliverables", ""),
-        format=parsed.get("format"),
-        metadata=parsed.get("metadata", {})
+    return parsed
+
+
+def _build_question_generation_chain() -> Any:
+    """
+    Build chain for generating clarification questions.
+    
+    Returns:
+        Runnable: Chain of prompt | LLM | parser.
+    """
+    parser = StrOutputParser()
+    llm = get_deepseek_chat(temperature=0.7)
+    prompt = SCOPE_QUESTION_GENERATION_TEMPLATE
+    return prompt | llm.with_config(tags=["user_visible"]) | parser
+
+
+def _build_completion_detection_chain() -> Any:
+    """
+    Build chain for detecting scope completion.
+    
+    Returns:
+        Runnable: Chain of prompt | LLM | parser.
+    """
+    parser = PydanticOutputParser(pydantic_object=ScopeCompletionCheck)
+    llm = get_deepseek_chat(temperature=0.3)
+    prompt = SCOPE_COMPLETION_DETECTION_TEMPLATE.partial(
+        format_instructions=parser.get_format_instructions()
     )
+    return prompt | llm | parser
+
+
+def _build_brief_generation_chain() -> Any:
+    """
+    Build chain for generating the research brief.
+    
+    Returns:
+        Runnable: Chain of prompt | LLM | parser.
+    """
+    parser = PydanticOutputParser(pydantic_object=ResearchBrief)
+    llm = get_deepseek_chat(temperature=0.5)
+    prompt = SCOPE_BRIEF_GENERATION_TEMPLATE.partial(
+        format_instructions=parser.get_format_instructions()
+    )
+    return prompt | llm | parser
+
+
+@traceable(name="Generate Clarification Questions", metadata={"agent": "scope", "operation": "question_generation"})
+async def generate_clarification_questions(
+    user_query: str,
+    conversation_history: Optional[List[Dict[str, str]]] = None
+) -> str:
+    """
+    Generate clarifying questions based on the user's query.
+    
+    Args:
+        user_query: User's original or current query.
+        conversation_history: List of previous conversation turns.
+        
+    Returns:
+        str: Clarification questions and context as a string.
+        
+    Raises:
+        Exception: If generation fails.
+    """
+    chain = _build_question_generation_chain()
+    formatted_history = _format_conversation_history(conversation_history)
+    
+    try:
+        return await chain.ainvoke({
+            "user_query": user_query,
+            "conversation_history": formatted_history
+        })
+    except Exception as e:
+        raise Exception(f"Failed to generate clarification questions: {e}")
+
+
+@traceable(name="Check Scope Completion", metadata={"agent": "scope", "operation": "completion_check"})
+async def check_scope_completion(
+    user_query: str,
+    conversation_history: Optional[List[Dict[str, str]]] = None
+) -> ScopeCompletionCheck:
+    """
+    Check if the research scope is sufficiently defined.
+    
+    Args:
+        user_query: User's original query.
+        conversation_history: List of conversation turns.
+        
+    Returns:
+        ScopeCompletionCheck: Status and reasoning.
+        
+    Raises:
+        Exception: If check fails.
+    """
+    chain = _build_completion_detection_chain()
+    formatted_history = _format_conversation_history(conversation_history)
+    
+    try:
+        return await chain.ainvoke({
+            "user_query": user_query,
+            "conversation_history": formatted_history
+        })
+    except Exception as e:
+        raise Exception(f"Failed to check scope completion: {e}")
+
+
+@traceable(name="Generate Research Brief", metadata={"agent": "scope", "operation": "brief_generation"})
+async def generate_research_brief(
+    user_query: str,
+    conversation_history: Optional[List[Dict[str, str]]] = None
+) -> ResearchBrief:
+    """
+    Generate a formal research brief from the conversation.
+    
+    Args:
+        user_query: User's original query.
+        conversation_history: List of conversation turns.
+        
+    Returns:
+        ResearchBrief: The defined research scope.
+        
+    Raises:
+        Exception: If generation fails.
+    """
+    chain = _build_brief_generation_chain()
+    formatted_history = _format_conversation_history(conversation_history)
+    
+    try:
+        result = await chain.ainvoke({
+            "user_query": user_query,
+            "conversation_history": formatted_history
+        })
+        
+        if conversation_history:
+            clarification_turns = len([
+                turn for turn in conversation_history 
+                if turn.get("role") == "assistant"
+            ])
+            if result.metadata is None:
+                result.metadata = {}
+            result.metadata["clarification_turns"] = clarification_turns
+            result.metadata["original_query"] = user_query
+        
+        return result
+    except Exception as e:
+        raise Exception(f"Failed to generate research brief: {e}")
 
 
 async def clarify_scope(
     user_query: str,
     conversation_history: Optional[List[Dict[str, str]]] = None
-) -> Union[ClarificationQuestions, ResearchBrief]:
-    """Main function to handle scope clarification workflow.
+) -> Union[str, ResearchBrief]:
+    """
+    Orchestrate the scope clarification workflow.
     
-    This function orchestrates the multi-turn clarification process:
-    1. Check if scope is complete
-    2. If complete, generate research brief
-    3. If not complete, generate clarifying questions
+    1. Check if scope is complete.
+    2. If complete, generate ResearchBrief.
+    3. If incomplete, generate ClarificationQuestions.
     
     Args:
-        user_query: User's original query
-        conversation_history: List of previous conversation turns
+        user_query: User's original query.
+        conversation_history: List of previous conversation turns.
         
     Returns:
-        Either ClarificationQuestions (if more info needed) or 
-        ResearchBrief (if scope is complete)
-        
-    Raises:
-        ValueError: If LLM configuration is invalid
-        Exception: If LLM invocation fails after retries
+        Union[str, ResearchBrief]: The next step in the process.
     """
     # Check if we have enough information
-    completion_status = await check_scope_completion(user_query, conversation_history)
+    completion_check = await check_scope_completion(user_query, conversation_history)
     
-    # If scope is complete, generate research brief
-    if completion_status["is_complete"]:
+    if completion_check.is_complete:
         return await generate_research_brief(user_query, conversation_history)
     
-    # Otherwise, generate more clarifying questions
     return await generate_clarification_questions(user_query, conversation_history)
+
+
+@traceable(name="Scope Node", metadata={"agent": "scope", "phase": "scoping"})
+async def scope_node(state: ResearchState) -> Dict[str, Any]:
+    """
+    LangGraph node for the Scope Agent - Generates clarifying questions.
+    
+    This node checks if scope is complete and either:
+    1. Generates a research brief if scope is clear
+    2. Generates clarifying questions and stores them in state
+    
+    Does NOT call interrupt - that's handled by scope_wait_node.
+    This ensures questions are persisted to state before the graph pauses.
+    
+    Args:
+        state: Current research state.
+        
+    Returns:
+        Dict[str, Any]: State update with research_brief or pending_clarification_questions.
+    """
+    MAX_CLARIFICATION_ROUNDS = 3
+    
+    # Skip if we already have a research brief
+    if state.get("research_brief"):
+        return {}
+    
+    messages = state.get("messages", [])
+    user_messages = [msg for msg in messages if msg.get("role") == "user"]
+    if not user_messages:
+        return {
+            "messages": [{
+                "role": "assistant",
+                "content": "Error: No user query provided."
+            }]
+        }
+    
+    current_round = state.get("scope_clarification_rounds", 0)
+    user_query = user_messages[0].get("content", "")
+    conversation_history = [
+        {"role": msg.get("role"), "content": msg.get("content")}
+        for msg in messages
+    ] if messages else None
+    
+    if state.get("pending_clarification_questions"):
+        return {}
+    
+    try:
+        if current_round >= MAX_CLARIFICATION_ROUNDS:
+            logger.info("Max rounds reached. Forcing brief generation.")
+            brief = await generate_research_brief(user_query, conversation_history)
+            return {
+                "research_brief": brief,
+                "pending_clarification_questions": None,
+                "messages": [{
+                    "role": "assistant",
+                    "content": f"Research brief created. Proceeding with research on: {brief.scope}"
+                }]
+            }
+        
+        completion_check = await check_scope_completion(user_query, conversation_history)
+        
+        if completion_check.is_complete:
+            brief = await generate_research_brief(user_query, conversation_history)
+            return {
+                "research_brief": brief,
+                "pending_clarification_questions": None,
+                "messages": [{
+                    "role": "assistant",
+                    "content": f"Research brief created. Proceeding with research on: {brief.scope}"
+                }]
+            }
+        
+        questions = await generate_clarification_questions(user_query, conversation_history)
+        return {
+            "scope_clarification_rounds": current_round + 1,
+            "pending_clarification_questions": questions
+        }
+    
+    except Exception as e:
+        logger.exception(f"Scope Node process failed: {e}")
+        
+        if current_round >= 1:
+            try:
+                # Attempt emergency brief generation if we have some history
+                brief = await generate_research_brief(user_query, conversation_history)
+                return {
+                    "research_brief": brief,
+                    "pending_clarification_questions": None,
+                    "messages": [{
+                        "role": "assistant", 
+                        "content": f"I encountered an issue, but I've generated a research brief based on our conversation: {brief.scope}"
+                    }]
+                }
+            except Exception as fallback_error:
+                logger.error(f"Fallback brief generation also failed: {fallback_error}")
+        
+        return {
+            "scope_clarification_rounds": current_round + 1,
+            "pending_clarification_questions": None,
+            "messages": [{
+                "role": "assistant",
+                "content": "I encountered an error while defining the research scope. Let me proceed with what I have so far."
+            }],
+            "error": [str(e)]
+        }
+
+
+async def scope_wait_node(state: ResearchState) -> Dict[str, Any]:
+    """
+    LangGraph node that handles waiting for user clarification responses.
+    
+    This node is called AFTER scope_node has generated and stored questions.
+    It calls interrupt to pause the graph and wait for user input.
+    When resumed, it processes the user's response and updates state.
+    
+    Args:
+        state: Current research state (should contain pending_clarification_questions).
+        
+    Returns:
+        Dict[str, Any]: State update with messages and cleared pending questions.
+    """
+    from langgraph.types import interrupt
+    
+    questions = state.get("pending_clarification_questions")
+    if not questions:
+        return {}
+    
+    messages = state.get("messages", [])
+    user_messages = [msg for msg in messages if msg.get("role") == "user"]
+    user_query = user_messages[0].get("content", "") if user_messages else ""
+    conversation_history = [{"role": msg.get("role"), "content": msg.get("content")} for msg in messages] if messages else []
+    
+    user_response = interrupt(value={"type": "clarification_request", "questions": questions})
+    
+    updated_history = conversation_history + [
+        {"role": "assistant", "content": questions},
+        {"role": "user", "content": user_response}
+    ]
+    
+    try:
+        check = await check_scope_completion(user_query, updated_history)
+        if check.is_complete:
+            brief = await generate_research_brief(user_query, updated_history)
+            return {
+                "research_brief": brief,
+                "pending_clarification_questions": None,
+                "messages": [
+                    {"role": "assistant", "content": questions},
+                    {"role": "user", "content": user_response},
+                    {"role": "assistant", "content": f"Research brief created: {brief.scope}"}
+                ]
+            }
+    except Exception as e:
+        logger.warning(f"Recheck failed: {e}")
+    
+    return {
+        "pending_clarification_questions": None,
+        "messages": [
+            {"role": "assistant", "content": questions},
+            {"role": "user", "content": user_response}
+        ]
+    }
+
+

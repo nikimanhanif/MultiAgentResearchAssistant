@@ -1,3 +1,2 @@
-# Pytest configuration and fixtures
-# TODO: Add pytest fixtures for testing
+"""Pytest configuration for the backend test suite."""
 

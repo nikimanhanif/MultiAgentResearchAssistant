@@ -1,0 +1,117 @@
+"""
+SSE Streaming Utilities.
+
+Provides helpers for creating Server-Sent Events (SSE) for the chat API.
+Defines event types and formatting functions for consistent streaming responses.
+"""
+
+import json
+from enum import Enum
+from typing import Any, Dict
+
+
+class StreamEventType(str, Enum):
+    """
+    Types of events that can be streamed to the client.
+    
+    - TOKEN: Streaming text tokens from scope agent
+    - REPORT_TOKEN: Streaming text tokens from report agent
+    - PROGRESS: Research progress updates (phase, counts, duration)
+    - STATE_UPDATE: Node state changes
+    - BRIEF_CREATED: Research brief has been created
+    - CLARIFICATION_REQUEST: Scope agent needs user input
+    - REVIEW_REQUEST: Report ready for human review
+    - THOUGHT: High-level internal monologue (agent thinking status)
+    - COMPLETE: Stream has completed successfully
+    - ERROR: An error occurred during processing
+    """
+    TOKEN = "token"
+    PROGRESS = "progress"
+    STATE_UPDATE = "state_update"
+    BRIEF_CREATED = "brief_created"
+    REPORT_TOKEN = "report_token"
+    CLARIFICATION_REQUEST = "clarification_request"
+    REVIEW_REQUEST = "review_request"
+    THOUGHT = "thought"
+    COMPLETE = "complete"
+    ERROR = "error"
+
+
+
+def create_sse_event(event_type: StreamEventType, data: Dict[str, Any]) -> str:
+    """
+    Create a properly formatted SSE event string.
+    
+    Args:
+        event_type: The type of event.
+        data: Event payload data.
+        
+    Returns:
+        str: Formatted SSE event string.
+    """
+    payload = {"type": event_type.value, **data}
+    return f"data: {json.dumps(payload)}\n\n"
+
+
+def create_token_event(content: str, node: str = "assistant") -> str:
+    """Create an SSE event for a streaming token."""
+    return create_sse_event(StreamEventType.TOKEN, {
+        "content": content,
+        "node": node
+    })
+
+
+def create_progress_event(
+    phase: str,
+    tasks_count: int = 0,
+    findings_count: int = 0,
+    iterations: int = 0,
+    phase_duration_ms: int = 0
+) -> str:
+    """Create an SSE event for research progress updates."""
+    return create_sse_event(StreamEventType.PROGRESS, {
+        "phase": phase,
+        "tasks_count": tasks_count,
+        "findings_count": findings_count,
+        "iterations": iterations,
+        "phase_duration_ms": phase_duration_ms
+    })
+
+
+def create_error_event(error: str) -> str:
+    """Create an SSE event for errors."""
+    return create_sse_event(StreamEventType.ERROR, {"error": error})
+
+
+def create_complete_event(message: str = "Stream complete") -> str:
+    """Create an SSE event for stream completion."""
+    return create_sse_event(StreamEventType.COMPLETE, {"message": message})
+
+
+def create_thought_event(
+    agent: str,
+    thought: str,
+    step: str = "",
+    elapsed_ms: int = 0,
+    phase: str = ""
+) -> str:
+    """
+    Create an SSE event for internal monologue/thinking indicator.
+    
+    Args:
+        agent: The agent emitting the thought (e.g., 'supervisor', 'sub_agent').
+        thought: High-level description of what the AI is doing.
+        step: Optional step identifier (e.g., 'searching', 'extracting').
+        elapsed_ms: Time elapsed since thinking started.
+        phase: Research phase identifier (e.g., 'investigating', 'findings', 'deepening').
+        
+    Returns:
+        str: Formatted SSE event string.
+    """
+    return create_sse_event(StreamEventType.THOUGHT, {
+        "agent": agent,
+        "thought": thought,
+        "step": step,
+        "elapsed_ms": elapsed_ms,
+        "phase": phase
+    })

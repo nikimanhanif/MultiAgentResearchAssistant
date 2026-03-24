@@ -1,8 +1,4 @@
-"""Unit tests for app.prompts module initialization and exports.
-
-Tests ensure that the prompts module correctly exports all required templates
-and that imports work as expected.
-"""
+"""Unit tests for app.prompts module initialization and exports."""
 
 import pytest
 
@@ -48,12 +44,26 @@ class TestPromptsModuleExports:
         from app.prompts import __all__
         
         expected_exports = [
+            # Scope prompts
             "SCOPE_QUESTION_GENERATION_TEMPLATE",
             "SCOPE_COMPLETION_DETECTION_TEMPLATE",
             "SCOPE_BRIEF_GENERATION_TEMPLATE",
+            # Report prompts
+            "get_report_generation_prompt",
+            # Research prompts (Phase 8)
+            "CREDIBILITY_HEURISTICS",
+            "RESEARCH_STRATEGY_SELECTION_TEMPLATE",
+            "RESEARCH_TASK_DECOMPOSITION_TEMPLATE",
+            "RESEARCH_ERROR_RE_DELEGATION_TEMPLATE",
+            "RESEARCH_FINDINGS_COMPRESSION_TEMPLATE",
+            "SUPERVISOR_GAP_ANALYSIS_TEMPLATE",
+            "SUB_AGENT_RESEARCH_TEMPLATE",
+            "SUB_AGENT_CITATION_EXTRACTION_TEMPLATE",
         ]
         
         assert len(__all__) == len(expected_exports)
+        for export in expected_exports:
+            assert export in __all__
 
 
 class TestScopePromptsSubmodule:
@@ -133,28 +143,24 @@ class TestReportPromptsSubmodule:
         assert report_prompts is not None
 
     def test_report_generation_template_exists(self):
-        """Test that REPORT_GENERATION_TEMPLATE exists."""
-        from app.prompts.report_prompts import REPORT_GENERATION_TEMPLATE
-        assert REPORT_GENERATION_TEMPLATE is not None
+        """Test that report generation prompt function exists."""
+        from app.prompts.report_prompts import get_report_generation_prompt
+        assert callable(get_report_generation_prompt)
 
     def test_all_format_instruction_functions_exist(self):
         """Test that all format instruction functions are defined."""
         from app.prompts.report_prompts import (
-            get_summary_format_instructions,
-            get_comparison_format_instructions,
             get_literature_review_instructions,
+            get_deep_research_instructions,
+            get_comparative_instructions,
             get_gap_analysis_instructions,
-            get_fact_validation_instructions,
-            get_ranking_format_instructions,
         )
         
         # All should be callable
-        assert callable(get_summary_format_instructions)
-        assert callable(get_comparison_format_instructions)
         assert callable(get_literature_review_instructions)
+        assert callable(get_deep_research_instructions)
+        assert callable(get_comparative_instructions)
         assert callable(get_gap_analysis_instructions)
-        assert callable(get_fact_validation_instructions)
-        assert callable(get_ranking_format_instructions)
 
 
 class TestPromptsModuleStructure:

@@ -1,13 +1,224 @@
-"""Report Agent - One-shot markdown report generation.
+"""
+Report Agent - Generates the final research report.
 
-This agent takes the research brief and summarized findings to generate
-a final markdown-formatted report for the user.
-
-Future implementation:
-- async def generate_report(research_brief: ResearchBrief, summarized_findings: SummarizedFindings) -> str
-- One-shot report generation (no sub-agents, no iterative refinement)
-- Markdown formatting
-- Citation handling and reference formatting
-- Report formatting based on brief specifications
+This agent takes the research brief and aggregated findings to produce a
+comprehensive markdown report. It uses a one-shot generation approach with
+the DeepSeek Reasoner model.
 """
 
+from typing import List, Any, Dict
+import logging
+import re
+from langsmith import traceable
+import langsmith as ls
+from langchain_core.runnables import Runnable
+from langchain_core.prompts import ChatPromptTemplate
+
+from app.models.schemas import ResearchBrief, Finding, ReportFormat
+from app.graphs.state import ResearchState
+from app.config import get_deepseek_reasoner
+from app.prompts.report_prompts import (
+    get_report_generation_prompt,
+    format_findings_for_prompt,
+    get_literature_review_instructions,
+    get_deep_research_instructions,
+    get_comparative_instructions,
+    get_gap_analysis_instructions,
+)
+
+logger = logging.getLogger(__name__)
+
+
+def _build_report_generation_chain() -> Runnable:
+    """
+    Build the LangChain runnable for report generation.
+    
+    Returns:
+        Runnable: Chain of prompt | LLM.
+    """
+    prompt = get_report_generation_prompt()
+    llm = get_deepseek_reasoner(temperature=0.5)
+    
+    chain = prompt | llm
+    return chain
+
+
+@traceable(name="Generate Report", metadata={"agent": "report", "operation": "report_generation"})
+async def generate_report(
+    brief: ResearchBrief,
+    findings: List[Finding],
+    reviewer_feedback: str = None
+) -> str:
+    """
+    Generate a markdown report from the research brief and findings.
+    
+    Args:
+        brief: The research brief defining scope and format.
+        findings: List of findings with citations.
+        reviewer_feedback: Optional feedback for refinement.
+        
+    Returns:
+        str: The generated markdown report.
+        
+    Raises:
+        ValueError: If inputs are invalid.
+        Exception: If generation fails.
+    """
+    if not brief:
+        raise ValueError("Research brief cannot be None")
+    if not brief.scope:
+        raise ValueError("Research brief must have a scope")
+    if findings is None:
+        raise ValueError("Findings list cannot be None (use empty list if no findings)")
+    
+    if not findings:
+        return _generate_no_findings_report(brief)
+    
+    brief_subtopics = "\n".join([f"- {topic}" for topic in brief.sub_topics])
+    brief_constraints = "\n".join(
+        [f"- {key}: {value}" for key, value in brief.constraints.items()]
+    ) if brief.constraints else "No specific constraints"
+    
+    format_type = brief.format or ReportFormat.OTHER
+    format_instructions = _get_format_instructions(format_type)
+    
+    findings_context = format_findings_for_prompt(findings)
+    
+    try:
+        chain = _build_report_generation_chain()
+    except ValueError as e:
+        raise Exception(f"Failed to initialize LLM: {e}")
+    
+    try:
+        response = await chain.ainvoke({
+            "brief_scope": brief.scope,
+            "brief_subtopics": brief_subtopics,
+            "brief_constraints": brief_constraints,
+            "brief_format": format_type.value,
+            "findings_context": findings_context,
+            "format_instructions": format_instructions,
+            "reviewer_feedback": reviewer_feedback or "None",
+        })
+        
+        if hasattr(response, 'content'):
+            report_text = response.content
+        else:
+            report_text = str(response)
+        
+        return _validate_citation_indices(report_text, len(findings))
+            
+    except Exception as e:
+        raise Exception(f"Failed to generate report: {str(e)}")
+
+
+def _get_format_instructions(format_type: ReportFormat) -> str:
+    """
+    Get specific instructions based on the requested report format.
+    
+    Args:
+        format_type: The desired format (aligned with sub-agent strategies).
+        
+    Returns:
+        str: Format instructions for the prompt.
+    """
+    format_map = {
+        ReportFormat.LITERATURE_REVIEW: get_literature_review_instructions,
+        ReportFormat.DEEP_RESEARCH: get_deep_research_instructions,
+        ReportFormat.COMPARATIVE: get_comparative_instructions,
+        ReportFormat.GAP_ANALYSIS: get_gap_analysis_instructions,
+        ReportFormat.OTHER: get_deep_research_instructions,  # Default to deep research
+    }
+    
+    instruction_func = format_map.get(format_type, get_deep_research_instructions)
+    return instruction_func()
+
+
+def _validate_citation_indices(report: str, findings_count: int) -> str:
+    """
+    Validate that citation indices in the report match the findings list.
+    Appends a warning if any indices are out of range (likely hallucinated).
+    """
+    used_indices = set(int(m) for m in re.findall(r'\[(\d+)\]', report))
+    valid_range = set(range(findings_count))
+    
+    invalid = used_indices - valid_range
+    if invalid:
+        warning = (
+            f"\n\n> **Citation Warning**: The following citation indices "
+            f"do not correspond to any finding: {sorted(invalid)}. "
+            f"These may be hallucinated references.\n"
+        )
+        report += warning
+    
+    return report
+
+
+def _generate_no_findings_report(brief: ResearchBrief) -> str:
+    """
+    Generate a fallback report when no findings are available.
+    
+    Args:
+        brief: The research brief.
+        
+    Returns:
+        str: A minimal report stating no findings were found.
+    """
+    return f"""# Research Report: {brief.scope}
+
+## Overview
+
+This report was generated based on the following research brief:
+
+**Scope**: {brief.scope}
+
+**Sub-topics**:
+{chr(10).join([f'- {topic}' for topic in brief.sub_topics])}
+
+## Findings
+
+No research findings were available to generate this report.
+
+## Conclusion
+
+Unable to complete research due to lack of findings. Please expand the research scope or try different search queries.
+"""
+
+
+@traceable(name="Report Agent Node", metadata={"agent": "report", "phase": "reporting"})
+async def report_agent_node(state: ResearchState) -> Dict[str, Any]:
+    """
+    LangGraph node for the Report Agent.
+    
+    Wraps report generation logic, handling state extraction and updates.
+    Incorporates reviewer feedback if present.
+    
+    Args:
+        state: Current research state.
+        
+    Returns:
+        Dict[str, Any]: State update containing the generated report.
+    """
+    brief = state.get("research_brief")
+    findings = state.get("findings", [])
+    reviewer_feedback = state.get("reviewer_feedback")
+    
+    if not brief:
+        return {
+            "report_content": "Error: No research brief available for report generation.",
+            "error": ["Missing research brief"]
+        }
+    
+    try:
+        report_content = await generate_report(brief, findings, reviewer_feedback)
+        
+        return {
+            "report_content": report_content,
+            "reviewer_feedback": None
+        }
+    
+    except Exception as e:
+        logger.error(f"Report Agent: Error generating report - {e}")
+        return {
+            "report_content": f"Error generating report: {str(e)}",
+            "error": [str(e)]
+        }

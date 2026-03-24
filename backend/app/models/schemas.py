@@ -1,4 +1,9 @@
-"""Pydantic schemas for request/response models."""
+"""
+Pydantic schemas for request/response models and internal data structures.
+
+Defines the data models used throughout the application, including API requests,
+responses, and core research entities like Findings, ResearchTasks, and Citations.
+"""
 
 from datetime import datetime
 from typing import Optional, List, Dict, Any
@@ -60,8 +65,8 @@ class ChatResponse(BaseModel):
     timestamp: datetime = Field(
         default_factory=datetime.utcnow, description="Response timestamp"
     )
-    response_type: Optional[str] = None  # CLARIFICATION, RESEARCH_PROGRESS, REPORT
-    scope_status: Optional[str] = None  # CLARIFYING, COMPLETE
+    response_type: Optional[str] = None
+    scope_status: Optional[str] = None
 
     @field_validator("conversation_id", mode="before")
     @classmethod
@@ -83,7 +88,7 @@ class ChatResponse(BaseModel):
 
 
 class ResearchRequest(BaseModel):
-    """Request model for research tasks (for future use)."""
+    """Request model for research tasks (future use)."""
 
     query: str = Field(..., description="Research query", min_length=1)
     context: Optional[str] = Field(None, description="Additional context for research")
@@ -136,8 +141,6 @@ class ErrorResponse(BaseModel):
     )
 
 
-# New models for agent pipeline (minimal stubs - implementation deferred)
-
 class ScopeStatus(str, Enum):
     """Status of scope clarification phase."""
     CLARIFYING = "CLARIFYING"
@@ -161,18 +164,19 @@ class SourceType(str, Enum):
 
 
 class Citation(BaseModel):
-    """Citation model for sources with credibility scoring.
+    """Citation model for sources with credibility scoring."""
     
-    Extended in Phase 1.2 to support credibility assessment (Phase 7.5).
-    """
     # Basic citation information
     source: str = Field(..., description="Source name or identifier")
     url: Optional[str] = Field(None, description="URL to the source")
     title: Optional[str] = Field(None, description="Title of the source")
-    author: Optional[str] = Field(None, description="Author(s) of the source")
+    authors: Optional[List[str]] = Field(
+        None,
+        description="List of authors (None if no authors available)"
+    )
     year: Optional[int] = Field(None, description="Publication year", ge=1900, le=2100)
     
-    # Credibility scoring fields (Phase 7.5)
+    # Credibility scoring fields
     credibility_score: Optional[float] = Field(
         None,
         description="Credibility score (0.0-1.0)",
@@ -224,10 +228,37 @@ class Citation(BaseModel):
     )
 
 
+class ClarificationQuestion(BaseModel):
+    """Single clarification question."""
+    question: str = Field(..., description="The question to ask the user")
+
+
 class ClarificationQuestions(BaseModel):
     """Model for clarification questions to user."""
-    questions: List[str]
-    context: Optional[str] = None
+    clarification_questions: List[ClarificationQuestion] = Field(
+        ...,
+        description="List of 1-3 clarifying questions"
+    )
+    context: Optional[str] = Field(
+        None,
+        description="Brief explanation of why these questions are being asked"
+    )
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "clarification_questions": [
+                    {
+                        "question": "What specific aspect of AI would you like to focus on?"
+                    },
+                    {
+                        "question": "What time period should the research cover?"
+                    }
+                ],
+                "context": "I need to understand the scope and constraints of your research."
+            }
+        }
+    )
 
 
 class ClarificationResponse(BaseModel):
@@ -235,20 +266,52 @@ class ClarificationResponse(BaseModel):
     answers: Dict[str, str]
 
 
-class ReportFormat(str, Enum):
-    """Report format types for different use cases.
-    
-    Created in Phase 1.2, used in Phase 4.2 for report formatting.
+class ScopeCompletionCheck(BaseModel):
     """
-    SUMMARY = "summary"  # Simple summary with key findings
-    COMPARISON = "comparison"  # Side-by-side comparison with metrics (Use Case 2)
-    RANKING = "ranking"  # Ranked items with criteria and justification
-    FACT_VALIDATION = "fact_validation"  # Claims with validation results (Use Case 3)
-    LITERATURE_REVIEW = "literature_review"  # Structured academic review (Use Case 1)
-    GAP_ANALYSIS = "gap_analysis"  # Research gap identification (Use Case 4)
-    DETAILED = "detailed"  # Comprehensive detailed report
-    ACADEMIC_PAPER = "academic_paper"  # Structured academic paper format (Priority 2)
-    OTHER = "other"  # Custom or unspecified format
+    Model for scope completion analysis output.
+    
+    Used by scope agent to determine if enough information has been gathered.
+    """
+    is_complete: bool = Field(
+        ...,
+        description="Whether we have enough information to proceed"
+    )
+    reasoning: str = Field(
+        ...,
+        description="Brief explanation of the decision"
+    )
+    missing_info: List[str] = Field(
+        default_factory=list,
+        description="List of missing information items"
+    )
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "is_complete": False,
+                "reasoning": "Need to clarify time period and depth requirements",
+                "missing_info": ["time_period", "research_depth"]
+            }
+        }
+    )
+
+
+class ReportFormat(str, Enum):
+    """
+    Report format types aligned with sub-agent research strategies.
+    
+    - LITERATURE_REVIEW: Breadth-focused academic reviews, state-of-the-art surveys
+    - DEEP_RESEARCH: Depth-focused factual questions, specific topic deep-dives
+    - COMPARATIVE: Balanced comparison of options/approaches/technologies
+    - GAP_ANALYSIS: Survey-focused identification of research gaps
+    - OTHER: Fallback generic markdown structure
+    
+    """
+    LITERATURE_REVIEW = "literature_review"
+    DEEP_RESEARCH = "deep_research"
+    COMPARATIVE = "comparative"
+    GAP_ANALYSIS = "gap_analysis"
+    OTHER = "other"
 
 
 class ResearchBrief(BaseModel):
@@ -276,38 +339,110 @@ class ResearchBrief(BaseModel):
     )
 
 
-class SubAgentTask(BaseModel):
-    """Task assignment for sub-agents."""
-    topic: str
-    scope: str
-    tools: List[str]
-    priority: Optional[int] = None
+class Finding(BaseModel):
+    """
+    Single research finding with embedded citation.
+    
+    Represents a single factual claim with its source.
+    """
+    claim: str = Field(..., description="The factual claim or finding")
+    citation: Citation = Field(..., description="Embedded citation with all metadata")
+    topic: str = Field(..., description="Sub-topic this finding addresses", min_length=1)
+    credibility_score: float = Field(
+        ...,
+        description="Credibility score inherited from citation (0.0-1.0)",
+        ge=0.0,
+        le=1.0
+    )
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "claim": "Large language models can be fine-tuned for domain-specific tasks",
+                "citation": {
+                    "source": "Nature Machine Intelligence",
+                    "url": "https://nature.com/articles/s42256-023-00123-4",
+                    "title": "Domain Adaptation in Large Language Models",
+                    "authors": ["Smith, J.", "Doe, A."],
+                    "year": 2023,
+                    "credibility_score": 0.95,
+                    "source_type": "peer_reviewed"
+                },
+                "topic": "fine-tuning",
+                "credibility_score": 0.95
+            }
+        }
+    )
 
 
-class SubAgentFindings(BaseModel):
-    """Structured output from sub-agents."""
-    topic: str
-    summary: str
-    key_facts: List[str]
-    citations: List[Citation]
-    sources: List[str]
-    raw_data: Optional[Dict[str, Any]] = None
+class ResearchTask(BaseModel):
+    """Task assignment for sub-agents in Supervisor Loop task queue."""
+    task_id: str = Field(..., description="Unique task identifier", min_length=1)
+    topic: str = Field(..., description="Sub-topic to research", min_length=1)
+    query: str = Field(..., description="Search query for this task", min_length=1)
+    priority: int = Field(..., description="Task priority (1=highest)", ge=1)
+    requested_by: Optional[str] = Field(
+        None,
+        description="Sub-agent ID if this task was delegated by another sub-agent"
+    )
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "task_id": "task_001",
+                "topic": "fine-tuning methods",
+                "query": "LLM fine-tuning techniques for domain adaptation",
+                "priority": 1,
+                "requested_by": None
+            }
+        }
+    )
+
+
+class SubAgentSummary(BaseModel):
+    """Summary of research task completion for supervisor context."""
+    task_id: str = Field(..., description="ID of the completed task")
+    task_answered: bool = Field(
+        ...,
+        description="Whether the research sufficiently answered the assigned task"
+    )
+    key_insights: List[str] = Field(
+        ...,
+        description="3-5 key insights from findings, with [finding_idx] references"
+    )
+    gaps_noted: Optional[str] = Field(
+        None,
+        description="Any gaps this sub-agent noticed while researching"
+    )
+    finding_count: int = Field(..., description="Number of findings produced", ge=0)
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "task_id": "task_001",
+                "task_answered": True,
+                "key_insights": [
+                    "Fine-tuning with LoRA reduces memory requirements [0]",
+                    "Domain adaptation improves accuracy by 15-20% [1]"
+                ],
+                "gaps_noted": "Limited research on multilingual fine-tuning",
+                "finding_count": 3
+            }
+        }
+    )
 
 
 class GapType(str, Enum):
     """Types of research gaps identified."""
-    COVERAGE = "coverage"  # Missing sub-topics from brief
-    DEPTH = "depth"  # Insufficient sources per topic
-    QUALITY = "quality"  # Low average credibility score
-    TEMPORAL = "temporal"  # Missing time periods from constraints
-    PERSPECTIVE = "perspective"  # Missing viewpoints or approaches
+    COVERAGE = "coverage"
+    DEPTH = "depth"
+    QUALITY = "quality"
+    TEMPORAL = "temporal"
+    PERSPECTIVE = "perspective"
 
 
 class ResearchGap(BaseModel):
-    """Model for identified research gaps.
-    
-    Used in Phase 8.5 for gap analysis and conditional re-research.
-    """
+    """Model for identified research gaps."""
     gap_type: GapType = Field(..., description="Type of gap identified")
     description: str = Field(..., description="Description of the gap")
     severity: float = Field(
@@ -327,10 +462,7 @@ class ResearchGap(BaseModel):
 
 
 class CoverageAnalysis(BaseModel):
-    """Analysis of research coverage.
-    
-    Used in Phase 8.5 for gap identification and Phase 4.2 for report formatting.
-    """
+    """Analysis of research coverage."""
     total_topics: int = Field(..., description="Total number of sub-topics", ge=0)
     covered_topics: int = Field(..., description="Number of covered topics", ge=0)
     coverage_percentage: float = Field(
@@ -360,48 +492,31 @@ class CoverageAnalysis(BaseModel):
     )
 
 
-class SummarizedFindings(BaseModel):
-    """Final summarized findings from research agent.
-    
-    Extended in Phase 1.2 to support gap analysis (Phase 8.5) and 
-    enhanced report formats (Phase 4.2).
-    """
-    # Core findings
-    summary: str = Field(..., description="Overall summary of findings")
-    key_findings: List[str] = Field(
+class ReviewAction(BaseModel):
+    """Model for user review actions on generated reports."""
+    action: str = Field(
         ...,
-        description="List of key findings across all topics"
+        description="Action to take: approve, refine, or re_research",
+        pattern="^(approve|refine|re_research)$"
     )
-    sub_topic_findings: List[SubAgentFindings] = Field(
-        ...,
-        description="Detailed findings per sub-topic"
-    )
-    sources: List[Citation] = Field(
-        ...,
-        description="All sources with credibility scores"
-    )
-    research_metadata: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Metadata about the research process"
+    feedback: Optional[str] = Field(
+        None,
+        description="Feedback for refinement or new research query"
     )
     
-    # Gap analysis fields (Phase 8.5)
-    research_gaps: Optional[List[ResearchGap]] = Field(
-        None,
-        description="Identified research gaps"
+    @field_validator("action", mode="before")
+    @classmethod
+    def validate_action(cls, v: str) -> str:
+        """Validate action is one of the allowed values."""
+        if v not in ["approve", "refine", "re_research"]:
+            raise ValueError("Action must be one of: approve, refine, re_research")
+        return v
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "action": "refine",
+                "feedback": "Please add more details about recent developments"
+            }
+        }
     )
-    coverage_analysis: Optional[CoverageAnalysis] = Field(
-        None,
-        description="Analysis of research coverage"
-    )
-    recommendations: Optional[List[str]] = Field(
-        None,
-        description="Recommendations for future research or improvements"
-    )
-    quality_score: Optional[float] = Field(
-        None,
-        description="Overall quality score of findings (0.0-1.0)",
-        ge=0.0,
-        le=1.0
-    )
-

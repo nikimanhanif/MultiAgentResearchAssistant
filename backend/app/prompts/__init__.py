@@ -1,19 +1,12 @@
-"""Centralized prompt management for all agents.
+"""
+Prompts module containing centralized prompt templates.
 
-This module provides prompt templates for the multi-agent research assistant.
+This module exports prompt templates for:
+- Scope Agent: Clarification and brief generation.
+- Report Agent: Report generation and formatting.
+- Research Agent: Strategy, task decomposition, and findings processing.
+
 All prompts use LangChain's ChatPromptTemplate for consistent formatting.
-
-Exports:
-    Scope Agent Prompts:
-        - SCOPE_QUESTION_GENERATION_TEMPLATE
-        - SCOPE_COMPLETION_DETECTION_TEMPLATE
-        - SCOPE_BRIEF_GENERATION_TEMPLATE
-    
-    Research Agent Prompts:
-        - (To be implemented in Phase 8)
-    
-    Report Agent Prompts:
-        - (To be implemented in Phase 4)
 """
 
 from app.prompts.scope_prompts import (
@@ -22,10 +15,35 @@ from app.prompts.scope_prompts import (
     SCOPE_BRIEF_GENERATION_TEMPLATE,
 )
 
+from app.prompts.report_prompts import (
+    get_report_generation_prompt,
+)
+
+from app.prompts.research_prompts import (
+    CREDIBILITY_HEURISTICS,
+    RESEARCH_STRATEGY_SELECTION_TEMPLATE,
+    RESEARCH_TASK_DECOMPOSITION_TEMPLATE,
+    RESEARCH_ERROR_RE_DELEGATION_TEMPLATE,
+    RESEARCH_FINDINGS_COMPRESSION_TEMPLATE,
+    SUPERVISOR_GAP_ANALYSIS_TEMPLATE,
+    SUB_AGENT_RESEARCH_TEMPLATE,
+    SUB_AGENT_CITATION_EXTRACTION_TEMPLATE,
+)
+
 __all__ = [
-    # Scope Agent
+    # Scope prompts
     "SCOPE_QUESTION_GENERATION_TEMPLATE",
     "SCOPE_COMPLETION_DETECTION_TEMPLATE",
     "SCOPE_BRIEF_GENERATION_TEMPLATE",
+    # Report prompts
+    "get_report_generation_prompt",
+    # Research prompts
+    "CREDIBILITY_HEURISTICS",
+    "RESEARCH_STRATEGY_SELECTION_TEMPLATE",
+    "RESEARCH_TASK_DECOMPOSITION_TEMPLATE",
+    "RESEARCH_ERROR_RE_DELEGATION_TEMPLATE",
+    "RESEARCH_FINDINGS_COMPRESSION_TEMPLATE",
+    "SUPERVISOR_GAP_ANALYSIS_TEMPLATE",
+    "SUB_AGENT_RESEARCH_TEMPLATE",
+    "SUB_AGENT_CITATION_EXTRACTION_TEMPLATE",
 ]
-

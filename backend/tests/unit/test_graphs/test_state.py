@@ -1,0 +1,333 @@
+"""Unit tests for LangGraph state definition."""
+
+import pytest
+from typing import Dict, Any
+
+from app.graphs.state import ResearchState, create_initial_state, merge_budgets
+from app.models.schemas import ResearchBrief, Finding, ResearchTask, Citation
+
+
+class TestMergeBudgets:
+    """Test cases for merge_budgets custom reducer."""
+    
+    def test_merge_budgets_uses_max_for_iterations(self):
+        """Test that iterations uses max to preserve supervisor updates."""
+        left = {"iterations": 5, "max_iterations": 20, "total_searches": 10}
+        right = {"iterations": 7, "max_iterations": 20, "total_searches": 10}
+        
+        result = merge_budgets(left, right)
+        
+        assert result["iterations"] == 7
+        
+    def test_merge_budgets_preserves_higher_left_iterations(self):
+        """Test that higher left iterations are preserved."""
+        left = {"iterations": 10, "max_iterations": 20, "total_searches": 5}
+        right = {"iterations": 8, "max_iterations": 20, "total_searches": 5}
+        
+        result = merge_budgets(left, right)
+        
+        assert result["iterations"] == 10
+    
+    def test_merge_budgets_sums_search_deltas_correctly(self):
+        """Test that total_searches increments by delta."""
+        left = {"iterations": 5, "max_iterations": 20, "total_searches": 10}
+        right = {"iterations": 5, "max_iterations": 20, "total_searches": 15}
+        
+        result = merge_budgets(left, right)
+        
+        assert result["total_searches"] == 15
+        
+    def test_merge_budgets_handles_zero_delta(self):
+        """Test that zero delta results in unchanged searches."""
+        left = {"iterations": 5, "max_iterations": 20, "total_searches": 10}
+        right = {"iterations": 6, "max_iterations": 20, "total_searches": 10}
+        
+        result = merge_budgets(left, right)
+        
+        assert result["total_searches"] == 10
+    
+    def test_merge_budgets_ignores_negative_delta(self):
+        """Test that negative deltas are clamped to zero."""
+        left = {"iterations": 5, "max_iterations": 20, "total_searches": 15}
+        right = {"iterations": 6, "max_iterations": 20, "total_searches": 10}
+        
+        result = merge_budgets(left, right)
+        
+        assert result["total_searches"] == 15
+        
+    def test_merge_budgets_preserves_limits_from_right(self):
+        """Test that max limits are taken from right (latest)."""
+        left = {"iterations": 5, "max_iterations": 20, "max_sub_agents": 20, "total_searches": 10}
+        right = {"iterations": 6, "max_iterations": 25, "max_sub_agents": 30, "total_searches": 12}
+        
+        result = merge_budgets(left, right)
+        
+        assert result["max_iterations"] == 25
+        assert result["max_sub_agents"] == 30
+    
+    def test_merge_budgets_handles_missing_iterations(self):
+        """Test that missing iterations defaults to 0."""
+        left = {"max_iterations": 20, "total_searches": 10}
+        right = {"iterations": 5, "max_iterations": 20, "total_searches": 12}
+        
+        result = merge_budgets(left, right)
+        
+        assert result["iterations"] == 5
+        
+    def test_merge_budgets_handles_missing_searches(self):
+        """Test that missing total_searches defaults to 0."""
+        left = {"iterations": 3, "max_iterations": 20}
+        right = {"iterations": 4, "max_iterations": 20, "total_searches": 5}
+        
+        result = merge_budgets(left, right)
+        
+        assert result["total_searches"] == 5
+
+
+class TestResearchState:
+    """Test cases for ResearchState TypedDict structure."""
+
+    def test_research_state_has_all_required_fields(self):
+        """Test that ResearchState TypedDict has all required fields."""
+        # Arrange & Act
+        state: ResearchState = {
+            "research_brief": ResearchBrief(
+                scope="Test scope",
+                sub_topics=["topic1"],
+                constraints={},
+                deliverables="Test deliverables"
+            ),
+            "strategy": None,
+            "tasks": [],
+            "findings": [],
+            "summarized_findings": None,
+            "gaps": None,
+            "extraction_budget": {"used": 0, "max": 5},
+            "is_complete": False,
+            "error": None,
+            "messages": []
+        }
+        
+        # Assert - All fields accessible
+        assert state["research_brief"] is not None
+        assert state["strategy"] is None
+        assert isinstance(state["tasks"], list)
+        assert isinstance(state["findings"], list)
+        assert state["summarized_findings"] is None
+        assert state["gaps"] is None
+        assert isinstance(state["extraction_budget"], dict)
+        assert state["is_complete"] is False
+        assert state["error"] is None
+        assert isinstance(state["messages"], list)
+
+    def test_research_state_findings_reducer_pattern(self):
+        """Test that findings field uses Annotated reducer pattern correctly."""
+        # Arrange
+        state: ResearchState = {
+            "findings": [
+                Finding(
+                    claim="First claim",
+                    citation=Citation(source="Source 1", url="http://example.com"),
+                    topic="Topic 1",
+                    credibility_score=0.9
+                )
+            ]
+        }
+        
+        # Act - Simulate reducer behavior (append)
+        new_finding = Finding(
+            claim="Second claim",
+            citation=Citation(source="Source 2", url="http://example2.com"),
+            topic="Topic 2",
+            credibility_score=0.8
+        )
+        state["findings"] = state["findings"] + [new_finding]
+        
+        # Assert
+        assert len(state["findings"]) == 2
+        assert state["findings"][0].topic == "Topic 1"
+        assert state["findings"][1].topic == "Topic 2"
+
+    def test_research_state_messages_reducer_pattern(self):
+        """Test that messages field uses Annotated reducer pattern correctly."""
+        # Arrange
+        state: ResearchState = {
+            "messages": [{"role": "user", "content": "Message 1"}]
+        }
+        
+        # Act - Simulate reducer behavior (append)
+        new_message = {"role": "assistant", "content": "Message 2"}
+        state["messages"] = state["messages"] + [new_message]
+        
+        # Assert
+        assert len(state["messages"]) == 2
+        assert state["messages"][0]["role"] == "user"
+        assert state["messages"][1]["role"] == "assistant"
+
+    def test_research_state_extraction_budget_structure(self):
+        """Test that extraction_budget has correct structure."""
+        # Arrange & Act
+        state: ResearchState = {
+            "extraction_budget": {"used": 3, "max": 5}
+        }
+        
+        # Assert
+        assert "used" in state["extraction_budget"]
+        assert "max" in state["extraction_budget"]
+        assert state["extraction_budget"]["used"] == 3
+        assert state["extraction_budget"]["max"] == 5
+
+    def test_research_state_with_error_field(self):
+        """Test that error field can hold error messages."""
+        # Arrange & Act
+        state: ResearchState = {
+            "error": "Test error message",
+            "is_complete": False
+        }
+        
+        # Assert
+        assert state["error"] == "Test error message"
+        assert state["is_complete"] is False
+
+    def test_research_state_with_complete_status(self):
+        """Test that is_complete flag works correctly."""
+        # Arrange & Act
+        state: ResearchState = {
+            "is_complete": True,
+            "error": None
+        }
+        
+        # Assert
+        assert state["is_complete"] is True
+        assert state["error"] is None
+
+
+class TestCreateInitialState:
+    """Test cases for create_initial_state function."""
+
+    def test_create_initial_state_with_research_brief_returns_valid_state(self):
+        """Test that create_initial_state creates valid initial ResearchState."""
+        # Arrange
+        brief = ResearchBrief(
+            scope="Test research scope",
+            sub_topics=["topic1", "topic2"],
+            constraints={"time_period": "2020-2024"},
+            deliverables="Test deliverables"
+       )
+        
+        # Act
+        state = create_initial_state(brief)
+        
+        # Assert
+        assert state["research_brief"] == brief
+        assert state["task_history"] == []
+        assert state["completed_tasks"] == []
+        assert state["findings"] == []
+        assert state["gaps"] is None
+        assert state["budget"] == {
+            "iterations": 0,
+            "max_iterations": 20,
+            "max_sub_agents": 20,
+            "max_searches_per_agent": 2,
+            "total_searches": 0
+        }
+        assert state["is_complete"] is False
+        assert state["error"] == []
+        assert state["messages"] == []
+
+    def test_create_initial_state_preserves_research_brief_data(self):
+        """Test that create_initial_state preserves all research brief data."""
+        # Arrange
+        brief = ResearchBrief(
+            scope="Quantum computing research",
+            sub_topics=["Qubits", "Error correction"],
+            constraints={"depth": "detailed"},
+            deliverables="Technical report",
+            format="literature_review",
+            metadata={"author": "Test"}
+        )
+        
+        # Act
+        state = create_initial_state(brief)
+        
+        # Assert
+        assert state["research_brief"].scope == "Quantum computing research"
+        assert len(state["research_brief"].sub_topics) == 2
+        assert state["research_brief"].constraints["depth"] == "detailed"
+        assert state["research_brief"].deliverables == "Technical report"
+        assert state["research_brief"].format == "literature_review"
+        assert state["research_brief"].metadata["author"] == "Test"
+
+    def test_create_initial_state_sets_default_budget(self):
+        """Test that create_initial_state sets correct default budget."""
+        # Arrange
+        brief = ResearchBrief(
+            scope="Test",
+            sub_topics=["topic1"],
+            constraints={},
+            deliverables="Test"
+        )
+        
+        # Act
+        state = create_initial_state(brief)
+        
+        # Assert
+        assert state["budget"]["iterations"] == 0
+        assert state["budget"]["max_iterations"] == 20
+        assert state["budget"]["max_sub_agents"] == 20
+
+    def test_create_initial_state_initializes_empty_collections(self):
+        """Test that create_initial_state initializes empty collections."""
+        # Arrange
+        brief = ResearchBrief(
+            scope="Test",
+            sub_topics=["topic1"],
+            constraints={},
+            deliverables="Test"
+        )
+        
+        # Act
+        state = create_initial_state(brief)
+        
+        # Assert
+        assert isinstance(state["task_history"], list)
+        assert len(state["task_history"]) == 0
+        assert isinstance(state["completed_tasks"], list)
+        assert len(state["completed_tasks"]) == 0
+        assert isinstance(state["findings"], list)
+        assert len(state["findings"]) == 0
+        assert isinstance(state["messages"], list)
+        assert len(state["messages"]) == 0
+
+    def test_create_initial_state_sets_is_complete_to_false(self):
+        """Test that create_initial_state sets is_complete to False."""
+        # Arrange
+        brief = ResearchBrief(
+            scope="Test",
+            sub_topics=["topic1"],
+            constraints={},
+            deliverables="Test"
+        )
+        
+        # Act
+        state = create_initial_state(brief)
+        
+        # Assert
+        assert state["is_complete"] is False
+
+    def test_create_initial_state_sets_error_to_empty_list(self):
+        """Test that create_initial_state sets error to empty list."""
+        # Arrange
+        brief = ResearchBrief(
+            scope="Test",
+            sub_topics=["topic1"],
+            constraints={},
+            deliverables="Test"
+        )
+        
+        # Act
+        state = create_initial_state(brief)
+        
+        # Assert
+        assert state["error"] == []
+

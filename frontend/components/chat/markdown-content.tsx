@@ -14,14 +14,17 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
-          code({ node, inline, className, children, ...props }) {
+          code({ node, className, children, ...props }) {
             const match = /language-(\w+)/.exec(className || '')
             const language = match ? match[1] : ''
             const codeString = String(children).replace(/\n$/, '')
+            
+            // Check if it's a code block (has language) vs inline code
+            const isCodeBlock = match && language
 
-            if (!inline && language) {
+            if (isCodeBlock) {
               return (
-                <CodeBlock language={language} code={codeString} {...props} />
+                <CodeBlock language={language} code={codeString} />
               )
             }
 
@@ -38,4 +41,3 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
     </div>
   )
 }
-

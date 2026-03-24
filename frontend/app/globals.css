@@ -26,26 +26,27 @@
     --radius: 0.5rem;
   }
 
+  /* Obsidian Dark Theme - #030303 */
   .dark {
-    --background: 240 10% 15%;
-    --foreground: 240 5% 96%;
-    --card: 240 10% 18%;
-    --card-foreground: 240 5% 96%;
-    --popover: 240 10% 18%;
-    --popover-foreground: 240 5% 96%;
-    --primary: 240 5% 96%;
-    --primary-foreground: 240 10% 15%;
-    --secondary: 240 8% 22%;
-    --secondary-foreground: 240 5% 96%;
-    --muted: 240 8% 22%;
-    --muted-foreground: 240 5% 70%;
-    --accent: 240 8% 22%;
-    --accent-foreground: 240 5% 96%;
+    --background: 0 0% 1.2%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 3%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 3%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 1%;
+    --secondary: 0 0% 6%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 6%;
+    --muted-foreground: 0 0% 50%;
+    --accent: 0 0% 8%;
+    --accent-foreground: 0 0% 98%;
     --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 240 5% 96%;
-    --border: 240 8% 25%;
-    --input: 240 8% 25%;
-    --ring: 240 5% 84%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 12%;
+    --input: 0 0% 12%;
+    --ring: 217 91% 60%;
   }
 }
 
@@ -67,6 +68,45 @@
   p {
     @apply leading-relaxed;
   }
+}
+
+/* Typewriter animation for agent reasoning */
+@keyframes typewriter {
+  from { opacity: 0.4; }
+  to { opacity: 1; }
+}
+
+.typewriter-cursor::after {
+  content: '▌';
+  animation: typewriter 0.8s ease-in-out infinite alternate;
+  color: hsl(var(--primary));
+}
+
+/* Subtle border style */
+.border-subtle {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Floating input glow effect */
+.floating-input-glow:focus-within {
+  box-shadow: 0 0 0 1px hsl(var(--primary) / 0.3), 0 0 20px -5px hsl(var(--primary) / 0.2);
+}
+
+/* Panel resize handle styling */
+[data-panel-group-direction="horizontal"] > [data-resize-handle-active] {
+  background-color: hsl(var(--primary) / 0.5);
+}
+
+/* Smooth transitions for resizable panels */
+[data-panel-group-direction="horizontal"] > [data-panel-id] {
+  transition: flex-basis 300ms cubic-bezier(0.4, 0, 0.2, 1), 
+              flex-grow 300ms cubic-bezier(0.4, 0, 0.2, 1),
+              flex-shrink 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Disable transitions during manual resize to prevent janky behavior */
+[data-panel-group-direction="horizontal"]:has([data-resize-handle-state="drag"]) > [data-panel-id] {
+  transition: none !important;
 }
 
 /* Markdown styles */
@@ -108,7 +148,8 @@
   }
   
   .markdown-content code {
-    @apply bg-muted px-1.5 py-0.5 rounded text-sm font-mono;
+    @apply bg-muted px-1.5 py-0.5 rounded text-sm;
+    font-family: var(--font-mono);
   }
   
   .markdown-content pre {
@@ -141,3 +182,12 @@
   }
 }
 
+/* Agent status animations */
+@keyframes pulse-glow {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 hsl(var(--primary) / 0.4); }
+  50% { opacity: 0.8; box-shadow: 0 0 8px 2px hsl(var(--primary) / 0.2); }
+}
+
+.agent-active {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
