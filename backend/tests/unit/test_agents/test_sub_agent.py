@@ -12,6 +12,7 @@ from app.agents.sub_agent import (
 from langchain_core.messages import ToolMessage, AIMessage
 from app.graphs.state import SubAgentState
 from app.models.schemas import ResearchBrief
+from langgraph.errors import GraphRecursionError
 
 
 class TestSubAgentNode:
@@ -265,6 +266,136 @@ class TestSubAgentNode:
         assert "Agent execution failed" in result["error"][0]
         assert result["budget"]["total_searches"] == 5
 
+    @pytest.mark.asyncio
+    @patch("app.agents.sub_agent.ls.get_current_run_tree")
+    @patch("app.agents.sub_agent.get_research_tools")
+    @patch("app.agents.sub_agent.get_deepseek_chat")
+    @patch("app.agents.sub_agent.create_agent")
+    async def test_sub_agent_node_run_tree_metadata_and_recursion_error(
+        self, mock_create_agent, mock_get_llm, mock_get_tools, mock_run_tree
+    ):
+        # Test lines 86-88 (metadata) and 161-165 (GraphRecursionError)
+        mock_rt = MagicMock()
+        mock_rt.metadata = {}
+        mock_run_tree.return_value = mock_rt
+        
+        mock_tool = MagicMock()
+        mock_tool.name = "tavily_search"
+        mock_ctx = AsyncMock()
+        mock_ctx.__aenter__.return_value = [mock_tool]
+        mock_ctx.__aexit__.return_value = None
+        mock_get_tools.return_value = mock_ctx
+        
+        mock_agent = AsyncMock()
+        error = GraphRecursionError()
+        error.state = {"messages": []}
+        mock_agent.ainvoke.side_effect = error
+        mock_create_agent.return_value = mock_agent
+
+        state: SubAgentState = {
+            "task": ResearchTask(
+                task_id="task_rec",
+                topic="test topic rec",
+                query="test query rec",
+                priority=1
+            ),
+            "research_brief": ResearchBrief(
+                scope="Test",
+                sub_topics=["test topic rec"],
+                constraints={},
+                deliverables="Test"
+            ),
+            "completed_tasks": [],
+            "failed_tasks": [],
+            "budget": {
+                "iterations": 1,
+                "max_iterations": 20,
+                "max_sub_agents": 20,
+                "max_searches_per_agent": 2,
+                "total_searches": 5
+            }
+        }
+
+        result = await sub_agent_node(state)
+        
+        assert mock_rt.metadata["task_id"] == "task_rec"
+        assert mock_rt.metadata["topic"] == "test topic rec"
+        assert mock_rt.metadata["priority"] == 1
+        assert "failed_tasks" in result
+        assert "task_rec" in result["failed_tasks"]
+        assert "error" in result
+        assert "hit recursion limit with no results" in result["error"][0]
+        
+    @pytest.mark.asyncio
+    @patch("app.agents.sub_agent._extract_citations")
+    @patch("app.agents.sub_agent.create_agent")
+    @patch("app.agents.sub_agent.get_research_tools")
+    @patch("app.agents.sub_agent.get_deepseek_chat")
+    async def test_sub_agent_node_unknown_tool_and_no_tool_results(
+        self, mock_get_llm, mock_get_tools, mock_create_agent, mock_extract
+    ):
+        # Test lines 178-184 (unknown tool name lookup) and then test 194 (no tool results)
+        mock_tool = MagicMock()
+        mock_tool.name = "tavily_search"
+        mock_ctx = AsyncMock()
+        mock_ctx.__aenter__.return_value = [mock_tool]
+        mock_ctx.__aexit__.return_value = None
+        mock_get_tools.return_value = mock_ctx
+        
+        mock_agent = AsyncMock()
+        mock_ai_msg = MagicMock(spec=AIMessage)
+        mock_ai_msg.tool_calls = [{"name": "real_tool", "args": {}, "id": "call_2"}]
+        mock_tool_msg = MagicMock(spec=ToolMessage)
+        mock_tool_msg.name = "" # trigger unknown
+        mock_tool_msg.content = "Search results"
+        mock_tool_msg.tool_call_id = "call_2"
+        
+        mock_agent.ainvoke.return_value = {"messages": [mock_ai_msg, mock_tool_msg]}
+        mock_create_agent.return_value = mock_agent
+        
+        mock_extract.return_value = CitationExtractionOutput(
+            findings=[],
+            task_answered=True,
+            key_insights=[],
+            gaps_noted=None
+        )
+
+        state: SubAgentState = {
+            "task": ResearchTask(
+                task_id="task_unk",
+                topic="topic",
+                query="query",
+                priority=1
+            ),
+            "research_brief": ResearchBrief(
+                scope="Test",
+                sub_topics=["topic"],
+                constraints={},
+                deliverables="Test"
+            ),
+            "completed_tasks": [],
+            "failed_tasks": [],
+            "budget": {
+                "iterations": 1,
+                "max_iterations": 20,
+                "max_sub_agents": 20,
+                "max_searches_per_agent": 2,
+                "total_searches": 0
+            }
+        }
+
+        result = await sub_agent_node(state)
+        # If the tool name was successfully resolved to "real_tool", it should proceed to _extract_citations
+        # Because we set extraction_result.findings=[], it should return state update with findings=[]
+        mock_extract.assert_called_once()
+        kwargs = mock_extract.call_args.kwargs
+        assert kwargs["source_tools"] == ["real_tool"] # Asserts the line 178-184 fix worked
+
+        # Now test line 194 (no tool results)
+        mock_agent.ainvoke.return_value = {"messages": [mock_ai_msg]} # No tool msg
+        result2 = await sub_agent_node(state)
+        assert "failed_tasks" in result2
+        assert "task_unk" in result2["failed_tasks"]
 
 class TestExtractCitations:
     """Test cases for _extract_citations function."""

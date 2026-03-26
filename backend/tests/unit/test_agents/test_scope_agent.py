@@ -865,6 +865,65 @@ class TestScopeNode:
         assert result["pending_clarification_questions"] == expected_questions
         assert result["scope_clarification_rounds"] == 1
 
+    @pytest.mark.asyncio
+    @patch("app.agents.scope_agent.generate_research_brief")
+    async def test_scope_node_max_rounds(self, mock_gen_brief):
+        """Test that scope_node forces brief generation if max rounds reached."""
+        state = ResearchState(
+            messages=[{"role": "user", "content": "Research AI"}],
+            scope_clarification_rounds=3
+        )
+        
+        expected_brief = ResearchBrief(scope="Forced Scope", sub_topics=[], constraints={}, deliverables="")
+        mock_gen_brief.return_value = expected_brief
+        
+        result = await scope_node(state)
+        
+        assert "research_brief" in result
+        assert result["research_brief"] == expected_brief
+        assert result["pending_clarification_questions"] is None
+        mock_gen_brief.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch("app.agents.scope_agent.check_scope_completion")
+    @patch("app.agents.scope_agent.generate_research_brief")
+    async def test_scope_node_fallback_brief_on_error(self, mock_gen_brief, mock_check_completion):
+        """Test that scope_node generates fallback brief on error when rounds >= 1."""
+        state = ResearchState(
+            messages=[{"role": "user", "content": "Query"}],
+            scope_clarification_rounds=1
+        )
+        
+        mock_check_completion.side_effect = Exception("Test error")
+        expected_brief = ResearchBrief(scope="Fallback Scope", sub_topics=[], constraints={}, deliverables="")
+        mock_gen_brief.return_value = expected_brief
+        
+        result = await scope_node(state)
+        
+        assert "research_brief" in result
+        assert result["research_brief"] == expected_brief
+        assert "issue" in result["messages"][0]["content"]
+        assert "Fallback Scope" in result["messages"][0]["content"]
+        mock_gen_brief.assert_called_once()
+        
+    @pytest.mark.asyncio
+    @patch("app.agents.scope_agent.check_scope_completion")
+    @patch("app.agents.scope_agent.generate_research_brief")
+    async def test_scope_node_fallback_brief_fails(self, mock_gen_brief, mock_check_completion):
+        """Test when fallback brief generation also fails."""
+        state = ResearchState(
+            messages=[{"role": "user", "content": "Query"}],
+            scope_clarification_rounds=1
+        )
+        mock_check_completion.side_effect = Exception("Original error")
+        mock_gen_brief.side_effect = Exception("Fallback error")
+        
+        result = await scope_node(state)
+        
+        assert "error" in result
+        assert "Original error" in result["error"][0]
+        assert "research_brief" not in result
+
 
 class TestScopeWaitNode:
     """Test cases for scope_wait_node LangGraph integration."""
@@ -897,3 +956,73 @@ class TestScopeWaitNode:
         
         # Assert
         assert result == {}
+
+    @pytest.mark.asyncio
+    @patch("langgraph.types.interrupt")
+    @patch("app.agents.scope_agent.check_scope_completion")
+    @patch("app.agents.scope_agent.generate_research_brief")
+    async def test_scope_wait_node_completes_after_interrupt(
+        self, mock_gen_brief, mock_check_completion, mock_interrupt
+    ):
+        """Test scope_wait_node completes successfully with user response."""
+        state = ResearchState(
+            messages=[{"role": "user", "content": "Query"}],
+            pending_clarification_questions="What aspect?"
+        )
+        mock_interrupt.return_value = "The machine learning aspect"
+        
+        mock_check_completion.return_value = ScopeCompletionCheck(
+            is_complete=True, reasoning="Good", missing_info=[]
+        )
+        expected_brief = ResearchBrief(scope="ML Scope", sub_topics=[], constraints={}, deliverables="")
+        mock_gen_brief.return_value = expected_brief
+        
+        result = await scope_wait_node(state)
+        
+        assert "research_brief" in result
+        assert result["research_brief"] == expected_brief
+        assert result["pending_clarification_questions"] is None
+        assert len(result["messages"]) == 3
+        mock_interrupt.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch("langgraph.types.interrupt")
+    @patch("app.agents.scope_agent.check_scope_completion")
+    async def test_scope_wait_node_needs_more_clarification(
+        self, mock_check_completion, mock_interrupt
+    ):
+        """Test scope_wait_node when user response doesn't complete the scope."""
+        state = ResearchState(
+            messages=[{"role": "user", "content": "Query"}],
+            pending_clarification_questions="What aspect?"
+        )
+        mock_interrupt.return_value = "Not sure yet"
+        
+        mock_check_completion.return_value = ScopeCompletionCheck(
+            is_complete=False, reasoning="Still bad", missing_info=["depth"]
+        )
+        
+        result = await scope_wait_node(state)
+        
+        assert "research_brief" not in result
+        assert result["pending_clarification_questions"] is None
+        assert len(result["messages"]) == 2
+        
+    @pytest.mark.asyncio
+    @patch("langgraph.types.interrupt")
+    @patch("app.agents.scope_agent.check_scope_completion")
+    async def test_scope_wait_node_handles_check_exception(
+        self, mock_check_completion, mock_interrupt
+    ):
+        """Test scope_wait_node handles exceptions during completion check."""
+        state = ResearchState(
+            messages=[{"role": "user", "content": "Query"}],
+            pending_clarification_questions="What aspect?"
+        )
+        mock_interrupt.return_value = "Answer"
+        mock_check_completion.side_effect = Exception("Network error")
+        
+        result = await scope_wait_node(state)
+        
+        assert "research_brief" not in result
+        assert result["pending_clarification_questions"] is None

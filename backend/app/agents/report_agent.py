@@ -139,7 +139,7 @@ def _validate_citation_indices(report: str, findings_count: int) -> str:
     Appends a warning if any indices are out of range (likely hallucinated).
     """
     used_indices = set(int(m) for m in re.findall(r'\[(\d+)\]', report))
-    valid_range = set(range(findings_count))
+    valid_range = set(range(1, findings_count + 1))
     
     invalid = used_indices - valid_range
     if invalid:

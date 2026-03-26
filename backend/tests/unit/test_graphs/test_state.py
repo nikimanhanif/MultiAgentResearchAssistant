@@ -3,7 +3,7 @@
 import pytest
 from typing import Dict, Any
 
-from app.graphs.state import ResearchState, create_initial_state, merge_budgets
+from app.graphs.state import ResearchState, create_initial_state, merge_budgets, merge_findings_with_dedup
 from app.models.schemas import ResearchBrief, Finding, ResearchTask, Citation
 
 
@@ -328,6 +328,48 @@ class TestCreateInitialState:
         # Act
         state = create_initial_state(brief)
         
-        # Assert
         assert state["error"] == []
+
+class TestMergeFindingsWithDedup:
+    def test_merge_empty_left(self):
+        right = [Finding(claim="R", citation=Citation(source="X"), topic="T", credibility_score=0.5)]
+        assert merge_findings_with_dedup([], right) == right
+
+    def test_merge_empty_right(self):
+        left = [Finding(claim="L", citation=Citation(source="X"), topic="T", credibility_score=0.5)]
+        assert merge_findings_with_dedup(left, []) == left
+        
+    def test_merge_no_duplicates(self):
+        left = [Finding(claim="L", citation=Citation(source="X", doi="10.1"), topic="T", credibility_score=0.5)]
+        right = [Finding(claim="R", citation=Citation(source="Y", doi="10.2"), topic="T", credibility_score=0.5)]
+        merged = merge_findings_with_dedup(left, right)
+        assert len(merged) == 2
+
+    def test_merge_duplicate_doi_higher_credibility(self):
+        left_f = Finding(claim="L", citation=Citation(source="X", doi="10.1"), topic="T", credibility_score=0.5)
+        right_f = Finding(claim="R", citation=Citation(source="Y", doi="10.1", url="http://x.com", title="A", authors=["B"]), topic="T", credibility_score=0.9)
+        merged = merge_findings_with_dedup([left_f], [right_f])
+        assert len(merged) == 1
+        assert merged[0].claim == "R"
+        
+    def test_merge_duplicate_doi_lower_credibility(self):
+        left_f = Finding(claim="L", citation=Citation(source="X", doi="10.1"), topic="T", credibility_score=0.9)
+        right_f = Finding(claim="R", citation=Citation(source="Y", doi="10.1", url="http://x.com", title="A", authors=["B"]), topic="T", credibility_score=0.5)
+        merged = merge_findings_with_dedup([left_f], [right_f])
+        assert len(merged) == 1
+        assert merged[0].claim == "L"
+
+    def test_merge_duplicate_url(self):
+        left_f = Finding(claim="L", citation=Citation(source="X", url="http://test.com"), topic="T", credibility_score=0.5)
+        right_f = Finding(claim="R", citation=Citation(source="Y", url="http://test.com", title="A", authors=["B"]), topic="T", credibility_score=0.9)
+        merged = merge_findings_with_dedup([left_f], [right_f])
+        assert len(merged) == 1
+        assert merged[0].claim == "R"
+
+    def test_merge_duplicate_title_author(self):
+        left_f = Finding(claim="L", citation=Citation(source="X", title="Same Title", authors=["Same Author"]), topic="T", credibility_score=0.5)
+        right_f = Finding(claim="R", citation=Citation(source="Y", title="Same Title", authors=["Same Author", "Other"]), topic="T", credibility_score=0.9)
+        merged = merge_findings_with_dedup([left_f], [right_f])
+        assert len(merged) == 1
+        assert merged[0].claim == "R"
 
