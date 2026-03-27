@@ -90,7 +90,7 @@ type ChatAction =
   | { type: 'OPEN_REPORT'; payload: string }
   | { type: 'CLOSE_REPORT' }
   | { type: 'TOGGLE_FOCUS_MODE' }
-  | { type: 'SET_THINKING'; payload: { agent: string; thought: string; step: string; elapsedMs: number; phase: string } }
+  | { type: 'SET_THINKING'; payload: { agent: string; thought: string; step: string; phase: string } }
   | { type: 'STOP_THINKING' }
   | { type: 'RESTORE_THINKING'; payload: ThinkingState }
 
@@ -220,7 +220,7 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return { ...state, focusMode: !state.focusMode }
     
     case 'SET_THINKING': {
-      const { agent, thought, step, elapsedMs, phase } = action.payload
+      const { agent, thought, step, phase } = action.payload
       const newEntry: ThoughtEntry = {
         id: `thought_${Date.now()}`,
         agent,
@@ -260,7 +260,7 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
           thought,
           step,
           startTime: state.thinking.startTime || Date.now(),
-          elapsedMs,
+          elapsedMs: state.thinking.elapsedMs,
           history: [...state.thinking.history, newEntry],
           phases,
           currentPhase: phase
@@ -273,7 +273,10 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         ...state,
         thinking: {
           ...state.thinking,
-          isThinking: false
+          isThinking: false,
+          elapsedMs: state.thinking.startTime
+            ? Math.max(state.thinking.elapsedMs, Date.now() - state.thinking.startTime)
+            : state.thinking.elapsedMs
         }
       }
     
@@ -344,6 +347,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       
       case 'report_token':
         if (!isReportStreamingRef.current) {
+          dispatch({ type: 'STOP_THINKING' })
           isReportStreamingRef.current = true
           dispatch({ type: 'FINALIZE_AND_SWITCH_TO_REPORT' })
           dispatch({ type: 'SET_PROGRESS', payload: { phase: 'generating_report' } })
@@ -418,7 +422,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             agent: event.agent,
             thought: event.thought,
             step: event.step,
-            elapsedMs: event.elapsed_ms,
             phase: event.phase || ''
           }
         })
