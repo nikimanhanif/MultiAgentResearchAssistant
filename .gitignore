@@ -301,3 +301,6 @@ conversations.db
 conversations.db-journal
 conversations.db-wal
 conversations.db-shm
+
+# Evaluation Runners & Artifacts
+backend/eval_results/
