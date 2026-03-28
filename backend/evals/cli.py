@@ -148,6 +148,26 @@ def _add_budget_args(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _add_langsmith_args(parser: argparse.ArgumentParser) -> None:
+    """Shared LangSmith experiment tracking arguments for generate."""
+    parser.add_argument(
+        "--langsmith-experiment", action="store_true",
+        help="Track this run as a LangSmith experiment (requires LANGSMITH_API_KEY)",
+    )
+    parser.add_argument(
+        "--langsmith-dataset", type=str, default=None,
+        help="LangSmith dataset name to upload cases to (default: drb-{model-name})",
+    )
+    parser.add_argument(
+        "--experiment-prefix", type=str, default=None,
+        help="Prefix for the LangSmith experiment name (default: {model-name})",
+    )
+    parser.add_argument(
+        "--langsmith-max-concurrency", type=int, default=0,
+        help="Max concurrent runs inside aevaluate() (0=sequential, default)",
+    )
+
+
 def _build_budget_overrides(args: argparse.Namespace) -> dict[str, int]:
     overrides: dict[str, int] = {}
     if getattr(args, "max_iterations", None) is not None:
@@ -234,7 +254,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     _add_range_arg(gen_parser)
     _add_budget_args(gen_parser)
-    
+    _add_langsmith_args(gen_parser)
+
     # ---- status ----
     status_parser = sub.add_parser(
         "status",
@@ -301,6 +322,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     eval_parser.add_argument(
         "--phase", choices=["race", "fact", "both"], default="both",
         help="Which evaluation phase to run (default: both)",
+    )
+    eval_parser.add_argument(
+        "--langsmith-experiment", type=str, default=None,
+        help=(
+            "LangSmith experiment name to upload DRB RACE/FACT scores to. "
+            "Copy this from the name logged during 'generate --langsmith-experiment'."
+        ),
+    )
+    eval_parser.add_argument(
+        "--langsmith-dataset", type=str, default=None,
+        help="LangSmith dataset name used when matching runs (default: drb-{model-name})",
     )
 
     # ---- run (legacy internal) ----
@@ -462,6 +494,58 @@ async def cmd_generate(args: argparse.Namespace) -> None:
             result.metadata.duration_seconds or 0,
         )
 
+    # LangSmith experiment tracking path
+    if getattr(args, "langsmith_experiment", False):
+        from evals.langsmith_eval import is_langsmith_available, run_with_langsmith
+        if not is_langsmith_available():
+            logger.warning(
+                "Falling back to standard run (set LANGSMITH_API_KEY to enable experiment tracking)."
+            )
+        else:
+            dataset_name = getattr(args, "langsmith_dataset", None) or f"drb-{args.model_name}"
+            experiment_prefix = getattr(args, "experiment_prefix", None) or args.model_name
+            experiment_metadata = {
+                "model_name": args.model_name,
+                "adapter": args.adapter,
+                "case_count": len(cases),
+            }
+            if getattr(args, "range_tuple", None):
+                start, end = args.range_tuple
+                experiment_metadata["range"] = f"{start}-{end}"
+            if getattr(args, "case_id", None):
+                experiment_metadata["case_id"] = args.case_id
+
+            results, experiment_url = await run_with_langsmith(
+                cases,
+                runner,
+                dataset_name=dataset_name,
+                experiment_prefix=experiment_prefix,
+                experiment_metadata=experiment_metadata,
+                max_concurrency=getattr(args, "langsmith_max_concurrency", 0),
+            )
+
+            if experiment_url:
+                logger.info("LangSmith experiment: %s", experiment_url)
+
+            if not results:
+                logger.error("No results returned from LangSmith experiment run.")
+                return
+
+            # Write DRB-format output and internal reports (unchanged)
+            drb_reporter = DRBOutputReporter(model_name=args.model_name)
+            drb_path = drb_reporter.write(results, args.output, append=use_append)
+            logger.info("DRB output written: %s%s", drb_path, " (merged)" if use_append else "")
+            for fmt_name, ReporterCls in REPORTER_MAP.items():
+                r = ReporterCls()
+                p = r.write(results, args.output)
+                logger.info("Internal %s report: %s", fmt_name, p)
+            successes = sum(1 for r in results if r.status.value == "success")
+            logger.info(
+                "Done. %d/%d cases succeeded. DRB output: %s",
+                successes, len(results), drb_path,
+            )
+            return
+
     results = await runner.run_batch(cases, on_result=_on_result)
 
     # Write DRB-format output (append mode for --range and --case-id)
@@ -530,6 +614,21 @@ async def cmd_evaluate(args: argparse.Namespace) -> None:
                 logger.info("RACE results: %s", result.race_result_path)
             if result.fact_result_path:
                 logger.info("FACT results: %s", result.fact_result_path)
+
+            # Upload DRB scores back to LangSmith experiment if requested
+            if getattr(args, "langsmith_experiment", None):
+                from evals.langsmith_eval import is_langsmith_available, upload_drb_scores_to_experiment
+                if is_langsmith_available():
+                    upload_drb_scores_to_experiment(
+                        experiment_name=args.langsmith_experiment,
+                        race_result_path=result.race_result_path,
+                        fact_result_path=result.fact_result_path,
+                        model_name=args.model_name,
+                    )
+                else:
+                    logger.warning(
+                        "LANGSMITH_API_KEY not set; skipping DRB score upload to LangSmith."
+                    )
         else:
             logger.error("DRB evaluation had errors:")
             for err in result.errors:

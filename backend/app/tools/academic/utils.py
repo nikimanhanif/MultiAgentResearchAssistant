@@ -254,7 +254,8 @@ def format_search_results(papers: List[Dict[str, Any]], source: str, query: str)
         if not url and paper.get('paper_id') and paper.get('source') == 'semantic_scholar':
             url = f"https://www.semanticscholar.org/paper/{paper['paper_id']}"
         if url:
-            output += f"- **URL**: {url}\n"
+            label = "PDF Available" if url == paper.get('pdf_url') else "URL"
+            output += f"- **{label}**: {url}\n"
         if paper.get('abstract'):
             output += f"- **Abstract**: {paper['abstract']}\n"
         output += "\n"

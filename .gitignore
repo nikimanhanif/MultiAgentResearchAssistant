@@ -273,6 +273,11 @@ cython_debug/
 .github/
 .agent/
 
+# Claude Code (kept local, not committed)
+CLAUDE.md
+backend/CLAUDE.md
+.claude/
+
 # Custom commit script summariser
 backend/git_summarizer/
 
