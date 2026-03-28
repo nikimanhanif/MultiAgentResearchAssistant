@@ -9,12 +9,15 @@ from __future__ import annotations
 
 import csv
 import json
+import logging
 import os
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import List
 
 from evals.models import EvalResult
+
+logger = logging.getLogger(__name__)
 
 
 class Reporter(ABC):
@@ -146,16 +149,50 @@ class DRBOutputReporter(Reporter):
     def __init__(self, model_name: str = "model"):
         self.model_name = model_name
 
-    def write(self, results: List[EvalResult], output_dir: str) -> str:
+    def write(self, results: List[EvalResult], output_dir: str, *, append: bool = False) -> str:
         os.makedirs(output_dir, exist_ok=True)
         path = os.path.join(output_dir, f"{self.model_name}.jsonl")
+
+        # Build new records from this run
+        new_records: dict[str | int, dict] = {}
+        for r in results:
+            drb_prompt = (r.case_metadata or {}).get("drb_prompt", r.query)
+            record = {
+                "id": r.case_id,
+                "prompt": drb_prompt,
+                "article": r.report_content or "",
+            }
+            new_records[r.case_id] = record
+
+        if append and os.path.exists(path):
+            # Load existing entries, keyed by id
+            existing: dict[str | int, dict] = {}
+            with open(path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        entry = json.loads(line)
+                        if "id" in entry:
+                            existing[entry["id"]] = entry
+                    except json.JSONDecodeError:
+                        logger.warning("Skipping malformed or incomplete JSON line in %s", path)
+                        continue
+            # Merge: new results overwrite matching IDs
+            existing.update(new_records)
+            merged = existing
+        else:
+            merged = new_records
+
+        # Sort by numeric id (fall back to string sort for non-numeric)
+        def _sort_key(entry: dict):
+            eid = entry["id"]
+            return (0, int(eid)) if isinstance(eid, int) or (isinstance(eid, str) and eid.isdigit()) else (1, str(eid))
+
+        sorted_entries = sorted(merged.values(), key=_sort_key)
+
         with open(path, "w", encoding="utf-8") as f:
-            for r in results:
-                # Use the preserved DRB prompt from metadata, falling back to query
-                drb_prompt = (r.case_metadata or {}).get("drb_prompt", r.query)
-                f.write(json.dumps({
-                    "id": r.case_id,
-                    "prompt": drb_prompt,
-                    "article": r.report_content or ""
-                }, ensure_ascii=False) + "\n")
+            for entry in sorted_entries:
+                f.write(json.dumps(entry, ensure_ascii=False) + "\n")
         return path

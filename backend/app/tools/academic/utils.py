@@ -246,8 +246,15 @@ def format_search_results(papers: List[Dict[str, Any]], source: str, query: str)
             output += f"- **Year**: {paper['year']}\n"
         if paper.get('citation_count') is not None:
             output += f"- **Citations**: {paper['citation_count']} {'📈' if paper['citation_count'] > 100 else ''}\n"
-        if paper.get('pdf_url'):
-            output += f"- **PDF**: Available\n"
+        url = paper.get('url') or paper.get('pdf_url')
+        if not url and paper.get('doi'):
+            url = f"https://doi.org/{paper['doi']}"
+        if not url and paper.get('arxiv_id'):
+            url = f"https://arxiv.org/abs/{paper['arxiv_id']}"
+        if not url and paper.get('paper_id') and paper.get('source') == 'semantic_scholar':
+            url = f"https://www.semanticscholar.org/paper/{paper['paper_id']}"
+        if url:
+            output += f"- **URL**: {url}\n"
         if paper.get('abstract'):
             output += f"- **Abstract**: {paper['abstract']}\n"
         output += "\n"

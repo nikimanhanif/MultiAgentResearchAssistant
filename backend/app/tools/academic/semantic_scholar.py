@@ -54,7 +54,7 @@ def _search_semantic_scholar_sync(query: str, count: int) -> List[Dict[str, Any]
         
         results = sch.search_paper(query, limit=count, fields=[
             "paperId", "title", "abstract", "authors", "year", 
-            "citationCount", "openAccessPdf", "externalIds"
+            "citationCount", "openAccessPdf", "externalIds", "url"
         ])
         
         papers = []
@@ -91,6 +91,7 @@ def _search_semantic_scholar_sync(query: str, count: int) -> List[Dict[str, Any]
                 "abstract": abstract[:500] + "..." if len(abstract) > 500 else abstract,
                 "year": paper.year,
                 "pdf_url": pdf_url,
+                "url": pdf_url or getattr(paper, 'url', None) or f"https://www.semanticscholar.org/paper/{paper.paperId}",
                 "citation_count": paper.citationCount,
                 "arxiv_id": arxiv_id,
             })

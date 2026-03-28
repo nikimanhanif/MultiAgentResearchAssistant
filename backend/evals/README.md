@@ -125,6 +125,30 @@ PYTHONPATH=. .venv/bin/python -m evals.cli evaluate \
 > [!NOTE]
 > When using `--case-id` with `evaluate`, the system automatically handles creating a temporary filtered version of `query.jsonl` so that the official DRB scripts only process that specific case.
 
+### Step 7: Incremental Batch Testing (Optional)
+
+If you want to run queries in sequential batches (e.g., 1-10, then 11-20) and verify them progressively, use the `--range` flag. This flag filters by the numeric `id` in the benchmark dataset.
+
+When using `--range`, the harness automatically runs in **append mode**. It will load existing results from `multi_agent_researcher.jsonl`, merge in the new results (overwriting any matching IDs), and write the file sorted by ID.
+
+```bash
+# 1. Run the first 10 queries
+PYTHONPATH=. .venv/bin/python -m evals.cli generate \
+  --queries $DRB_REPO_PATH/data/prompt_data/query.jsonl \
+  --output eval_results/ \
+  --model-name multi_agent_researcher \
+  --range 1-10
+
+# 2. (Verify output manually if desired)
+
+# 3. Run the next 10 queries (results safely appended and sorted)
+PYTHONPATH=. .venv/bin/python -m evals.cli generate \
+  --queries $DRB_REPO_PATH/data/prompt_data/query.jsonl \
+  --output eval_results/ \
+  --model-name multi_agent_researcher \
+  --range 11-20
+```
+
 Results saved to:
 - `$DRB_REPO_PATH/results/race/multi_agent_researcher/race_result.txt`
 - `$DRB_REPO_PATH/results/fact/multi_agent_researcher/fact_result.txt`

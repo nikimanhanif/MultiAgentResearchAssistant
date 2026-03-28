@@ -208,3 +208,71 @@ class TestMarkdownReporter:
         assert "Evaluation Report" in content
         assert "test_1" in content
         assert "success" in content
+
+
+class TestDRBOutputReporter:
+
+    def test_writes_drb_format(self, tmp_path):
+        from evals.reporters import DRBOutputReporter
+        
+        results = [
+            _make_result(
+                report="Extensive research on topic...",
+            ),
+        ]
+        results[0].case_metadata = {"drb_prompt": "Original prompt text"}
+        
+        path = DRBOutputReporter(model_name="test_model").write(results, str(tmp_path))
+
+        assert os.path.exists(path)
+        with open(path) as f:
+            lines = [l.strip() for l in f if l.strip()]
+        
+        assert len(lines) == 1
+        parsed = json.loads(lines[0])
+        assert parsed["id"] == "test_1"
+        assert parsed["prompt"] == "Original prompt text"
+        assert parsed["article"] == "Extensive research on topic..."
+
+    def test_write_append_merge(self, tmp_path):
+        out_dir = str(tmp_path)
+        from evals.reporters import DRBOutputReporter
+        
+        reporter = DRBOutputReporter(model_name="merged")
+        
+        # 1. First run, entries 2 and 4
+        res1 = []
+        for i in [2, 4]:
+            r = _make_result(report=f"Report {i}")
+            r.case_id = str(i)
+            r.case_metadata = {"drb_prompt": f"Prompt {i}"}
+            res1.append(r)
+            
+        path = reporter.write(res1, out_dir, append=True)
+        
+        # 2. Second run, entries 1 and 2 (2 is an update)
+        res2 = []
+        for i in [1, 2]:
+            r = _make_result(report=f"Report {i} updated")
+            r.case_id = str(i)
+            r.case_metadata = {"drb_prompt": f"Prompt {i} updated"}
+            res2.append(r)
+            
+        reporter.write(res2, out_dir, append=True)
+        
+        # Verify
+        with open(path) as f:
+            lines = [l.strip() for l in f if l.strip()]
+            
+        assert len(lines) == 3
+        parsed = [json.loads(l) for l in lines]
+        
+        # Should be sorted numerically by default: 1, 2, 4
+        assert parsed[0]["id"] == "1"
+        assert parsed[0]["article"] == "Report 1 updated"
+        
+        assert parsed[1]["id"] == "2"
+        assert parsed[1]["article"] == "Report 2 updated"
+        
+        assert parsed[2]["id"] == "4"
+        assert parsed[2]["article"] == "Report 4"

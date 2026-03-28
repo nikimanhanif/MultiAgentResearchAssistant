@@ -89,6 +89,53 @@ INTERNAL_SCORERS: list[Scorer] = [
 ]
 
 
+def _parse_range(range_str: str) -> tuple[int, int]:
+    """Parse a 'START-END' range string. Both inclusive, 1-indexed."""
+    parts = range_str.split("-")
+    if len(parts) != 2:
+        raise argparse.ArgumentTypeError(
+            f"Invalid range '{range_str}'. Expected format: START-END (e.g., 1-10)"
+        )
+    try:
+        start, end = int(parts[0]), int(parts[1])
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            f"Invalid range '{range_str}'. START and END must be integers."
+        )
+    if start < 1:
+        raise argparse.ArgumentTypeError(
+            f"Invalid range '{range_str}'. START must be >= 1."
+        )
+    if start > end:
+        raise argparse.ArgumentTypeError(
+            f"Invalid range '{range_str}'. START ({start}) must be <= END ({end})."
+        )
+    return start, end
+
+
+def _filter_cases_by_range(
+    cases: list[BenchmarkCase], start: int, end: int,
+) -> list[BenchmarkCase]:
+    """Filter cases whose numeric case_id falls within [start, end] inclusive."""
+    filtered = []
+    for c in cases:
+        try:
+            cid = int(c.case_id)
+        except (ValueError, TypeError):
+            continue
+        if start <= cid <= end:
+            filtered.append(c)
+    return filtered
+
+
+def _add_range_arg(parser: argparse.ArgumentParser) -> None:
+    """Add shared --range argument."""
+    parser.add_argument(
+        "--range", type=_parse_range, default=None, dest="range_tuple",
+        help="Run a range of cases by ID: START-END (inclusive, e.g., 1-10)",
+    )
+
+
 def _add_budget_args(parser: argparse.ArgumentParser) -> None:
     """Shared budget override arguments."""
     parser.add_argument(
@@ -142,6 +189,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--case-id", type=str, default=None,
         help="Target a specific case by its ID",
     )
+    _add_range_arg(inspect_parser)
 
     # ---- generate ----
     gen_parser = sub.add_parser(
@@ -180,7 +228,34 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--case-id", type=str, default=None,
         help="Target a specific case by its ID",
     )
+    gen_parser.add_argument(
+        "--force", action="store_true",
+        help="Force overwrite existing cases in the output file",
+    )
+    _add_range_arg(gen_parser)
     _add_budget_args(gen_parser)
+    
+    # ---- status ----
+    status_parser = sub.add_parser(
+        "status",
+        help="Check the completion status of the benchmark against the output file",
+    )
+    status_parser.add_argument(
+        "--queries", required=True,
+        help="Path to benchmark query file (JSONL)",
+    )
+    status_parser.add_argument(
+        "--output", default="eval_results",
+        help="Output directory where the JSONL results are stored",
+    )
+    status_parser.add_argument(
+        "--model-name", default="multi_agent_researcher",
+        help="Model name for the output file (e.g., <model-name>.jsonl)",
+    )
+    status_parser.add_argument(
+        "--adapter", choices=list(ADAPTER_MAP.keys()), default="drb",
+        help="Dataset adapter (default: drb)",
+    )
 
     # ---- evaluate ----
     eval_parser = sub.add_parser(
@@ -260,11 +335,21 @@ async def cmd_inspect(args: argparse.Namespace) -> None:
     cases = adapter.load_cases(args.queries)
     total = len(cases)
 
+    if args.case_id and getattr(args, "range_tuple", None):
+        logger.error("--case-id and --range are mutually exclusive.")
+        return
+
     if args.case_id:
-        # Match as string to be safe, but handle potential int IDs
         cases = [c for c in cases if str(c.case_id) == args.case_id]
         if not cases:
             logger.error("Case ID '%s' not found in %s", args.case_id, args.queries)
+            return
+
+    if getattr(args, "range_tuple", None):
+        start, end = args.range_tuple
+        cases = _filter_cases_by_range(cases, start, end)
+        if not cases:
+            logger.error("No cases found in range %d-%d", start, end)
             return
 
     if args.shuffle:
@@ -293,12 +378,61 @@ async def cmd_generate(args: argparse.Namespace) -> None:
     adapter = ADAPTER_MAP[args.adapter]()
     cases = adapter.load_cases(args.queries)
     total = len(cases)
+    use_append = False
+
+    if args.case_id and getattr(args, "range_tuple", None):
+        logger.error("--case-id and --range are mutually exclusive.")
+        return
 
     if args.case_id:
         cases = [c for c in cases if str(c.case_id) == args.case_id]
         if not cases:
             logger.error("Case ID '%s' not found in %s", args.case_id, args.queries)
             return
+        use_append = True
+
+    if getattr(args, "range_tuple", None):
+        start, end = args.range_tuple
+        cases = _filter_cases_by_range(cases, start, end)
+        if not cases:
+            logger.error("No cases found in range %d-%d", start, end)
+            return
+        use_append = True
+        logger.info("Range mode: cases %d-%d (append enabled)", start, end)
+
+    # Collision detection
+    if use_append and not args.force:
+        output_path = os.path.join(args.output, f"{args.model_name}.jsonl")
+        if os.path.exists(output_path):
+            existing_ids = set()
+            import json
+            with open(output_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    if not line.strip(): continue
+                    try:
+                        entry = json.loads(line)
+                        if "id" in entry:
+                            existing_ids.add(str(entry["id"]))
+                    except json.JSONDecodeError:
+                        continue
+            
+            filtered_cases = []
+            skipped_ids = []
+            for c in cases:
+                if str(c.case_id) in existing_ids:
+                    skipped_ids.append(str(c.case_id))
+                else:
+                    filtered_cases.append(c)
+                    
+            if skipped_ids:
+                logger.warning(
+                    "Skipping %d cases already present in output file: %s. Use --force to overwrite.",
+                    len(skipped_ids), ", ".join(skipped_ids[:10]) + ("..." if len(skipped_ids) > 10 else "")
+                )
+            cases = filtered_cases
+            if not cases:
+                logger.info("No new cases to run. Exiting.")
+                return
 
     if args.shuffle:
         import random
@@ -330,10 +464,10 @@ async def cmd_generate(args: argparse.Namespace) -> None:
 
     results = await runner.run_batch(cases, on_result=_on_result)
 
-    # Write DRB-format output
+    # Write DRB-format output (append mode for --range and --case-id)
     drb_reporter = DRBOutputReporter(model_name=args.model_name)
-    drb_path = drb_reporter.write(results, args.output)
-    logger.info("DRB output written: %s", drb_path)
+    drb_path = drb_reporter.write(results, args.output, append=use_append)
+    logger.info("DRB output written: %s%s", drb_path, " (merged)" if use_append else "")
 
     # Also write internal reports
     for fmt_name, ReporterCls in REPORTER_MAP.items():
@@ -457,6 +591,58 @@ async def cmd_run(args: argparse.Namespace) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Command: status
+# ---------------------------------------------------------------------------
+
+async def cmd_status(args: argparse.Namespace) -> None:
+    adapter = ADAPTER_MAP[args.adapter]()
+    cases = adapter.load_cases(args.queries)
+    total_expected = len(cases)
+    
+    output_path = os.path.join(args.output, f"{args.model_name}.jsonl")
+    
+    if not os.path.exists(output_path):
+        logger.info("Output file %s does not exist.", output_path)
+        logger.info("Completed: 0/%d", total_expected)
+        return
+        
+    existing_ids = set()
+    import json
+    with open(output_path, "r", encoding="utf-8") as f:
+        for line in f:
+            if not line.strip(): continue
+            try:
+                entry = json.loads(line)
+                if "id" in entry:
+                    existing_ids.add(str(entry["id"]))
+            except json.JSONDecodeError:
+                continue
+                
+    missing_ids = []
+    completed_ids = []
+    
+    for c in cases:
+        cid = str(c.case_id)
+        if cid in existing_ids:
+            completed_ids.append(cid)
+        else:
+            missing_ids.append(cid)
+            
+    # Sort for prettier output
+    def try_int(x):
+        return int(x) if x.isdigit() else x
+        
+    missing_ids.sort(key=lambda x: (0, try_int(x)) if x.isdigit() else (1, str(x)))
+    
+    logger.info("Benchmark Status: %s", output_path)
+    logger.info("Completed: %d/%d", len(completed_ids), total_expected)
+    if missing_ids:
+        logger.info("Missing IDs (%d): %s", len(missing_ids), ", ".join(missing_ids))
+    else:
+        logger.info("All cases completed!")
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -465,6 +651,7 @@ COMMAND_MAP = {
     "generate": cmd_generate,
     "evaluate": cmd_evaluate,
     "run": cmd_run,
+    "status": cmd_status,
 }
 
 

@@ -94,6 +94,7 @@ def _search_scopus_sync(query: str, count: int) -> List[Dict[str, Any]]:
                 "abstract": result.get("dc:description", ""),
                 "year": year,
                 "pdf_url": pdf_url,
+                "url": f"https://doi.org/{doi}" if doi else None,
                 "citation_count": int(result.get("citedby-count", 0)),
                 "doi": doi,
             })
