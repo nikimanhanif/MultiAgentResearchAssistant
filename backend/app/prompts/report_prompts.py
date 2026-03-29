@@ -25,7 +25,7 @@ def format_findings_for_prompt(findings: List[Finding]) -> str:
         return "No findings available."
     
     formatted_lines = []
-    for idx, finding in enumerate(findings):
+    for idx, finding in enumerate(findings, 1):
         citation = finding.citation
         
         if citation.authors:
@@ -74,10 +74,10 @@ Your task is to generate a comprehensive, well-structured markdown report from t
 ## CRITICAL CITATION RULES:
 
 1. **In-text Citations**: 
-   - Use ONLY the finding index numbers [0], [1], [2], etc. provided in the findings list
+   - Use ONLY the finding index numbers [1], [2], [3], etc. provided in the findings list
    - Every claim MUST reference its source using the correct finding index
    - Multiple claims from the same source should repeat the citation
-   - Example: "Machine learning models can be fine-tuned [0]. This approach is common [0]."
+   - Example: "Machine learning models can be fine-tuned [1]. This approach is common [1]."
 
 2. **Bibliography/References Section**:
    - Include ALL findings at the end in a "References" or "Bibliography" section
@@ -92,10 +92,10 @@ Your task is to generate a comprehensive, well-structured markdown report from t
    - Add ⚠️ WARNING for sources with credibility score < 0.5
    - Example format:
      ```
-     [0] Smith, J., Doe, A. (2023). "Title of Paper". Nature. DOI: 10.1038/example
+     [1] Smith, J., Doe, A. (2023). "Title of Paper". Nature. DOI: 10.1038/example
          https://nature.com/article (Credibility: 0.95 - High)
      
-     [1] MIT Technology Review. "Blog Post Title". MIT Technology Review.
+     [2] MIT Technology Review. "Blog Post Title". MIT Technology Review.
          https://technologyreview.com/article (Credibility: 0.70 - Established Tech Blog)
      ```
 
@@ -151,7 +151,7 @@ Handling findings:
 
 DO NOT hallucinate or invent information beyond what's in the findings list.
 DO NOT create fake citations or references.
-ONLY use the finding indices [0], [1], [2]... provided in the findings context."""),
+ONLY use the finding indices [1], [2], [3]... provided in the findings context."""),
         
         ("human", """# Research Brief
 

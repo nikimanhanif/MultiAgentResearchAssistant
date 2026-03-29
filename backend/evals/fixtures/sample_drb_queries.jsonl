@@ -1,0 +1,3 @@
+{"id": "sample_drb_001", "topic": "NLP", "language": "en", "prompt": "What are the current challenges and recent advances in applying large language models to automated scientific literature review?"}
+{"id": "sample_drb_002", "topic": "AI Systems", "language": "en", "prompt": "How do multi-agent systems improve the reliability and depth of automated research compared to single-agent approaches?"}
+{"id": "sample_drb_003", "topic": "AI Evaluation", "language": "en", "prompt": "What methods exist for evaluating the factual accuracy and citation quality of AI-generated research reports?"}

@@ -27,27 +27,23 @@ export function ReasoningBlock({
   const [isExpanded, setIsExpanded] = useState(true)
   const [displayDuration, setDisplayDuration] = useState(durationMs)
 
-  // Update duration in real-time when active using thinking.startTime
+  // Drive the timer locally so it updates independently of backend thought events.
   useEffect(() => {
-    if (!isActive || !thinking.startTime) {
-      // When not active, use the last known duration from props or thinking elapsed
+    if (!thinking.isThinking || !thinking.startTime) {
       setDisplayDuration(thinking.elapsedMs || durationMs)
       return
     }
-    
-    // Calculate elapsed from startTime for live updates
+
     const updateDuration = () => {
       setDisplayDuration(Date.now() - thinking.startTime)
     }
-    
-    // Update immediately
+
     updateDuration()
-    
-    // Then update every 100ms
+
     const interval = setInterval(updateDuration, 100)
-    
+
     return () => clearInterval(interval)
-  }, [isActive, thinking.startTime, thinking.elapsedMs, durationMs])
+  }, [thinking.isThinking, thinking.startTime, thinking.elapsedMs, durationMs])
 
   // Auto-collapse when complete (but not immediately)
   useEffect(() => {

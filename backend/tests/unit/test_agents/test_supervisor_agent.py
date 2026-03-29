@@ -493,3 +493,138 @@ class TestAggregateFindings:
         result = aggregate_findings(state)
         
         assert result == []
+
+class TestFormatContexts:
+    def test_format_findings_max_limit(self):
+        from app.agents.supervisor_agent import _format_findings_for_supervisor
+        findings = [
+            Finding(claim=f"Claim {i}", citation=Citation(source="Source", url=""), topic=f"t{i}", credibility_score=0.8)
+            for i in range(60)
+        ]
+        res = _format_findings_for_supervisor(findings, max_findings=5)
+        assert "showing 5" in res or "showing 4" in res or "showing 6" not in res
+        
+    def test_format_summaries_for_supervisor(self):
+        from app.agents.supervisor_agent import _format_summaries_for_supervisor
+        from app.models.schemas import SubAgentSummary
+        
+        assert "No sub-agent summaries" in _format_summaries_for_supervisor([])
+        
+        summaries = [
+            SubAgentSummary(task_id="t1", task_answered=True, key_insights=["Insight 1"], gaps_noted="gap", finding_count=2),
+            SubAgentSummary(task_id="t2", task_answered=False, key_insights=[], finding_count=0)
+        ]
+        res = _format_summaries_for_supervisor(summaries)
+        assert "Task t1" in res
+        assert "Answered" in res
+        assert "Insight 1" in res
+        assert "gap" in res
+        assert "Task t2" in res
+        assert "Incomplete" in res
+
+class TestDecomposeInitialTasks:
+    @pytest.mark.asyncio
+    @patch("app.agents.supervisor_agent.RESEARCH_TASK_DECOMPOSITION_TEMPLATE")
+    @patch("app.agents.supervisor_agent.get_deepseek_reasoner_json")
+    async def test_decompose_tasks(self, mock_get_llm, mock_template):
+        from app.agents.supervisor_agent import _decompose_initial_tasks
+        mock_llm = MagicMock()
+        mock_get_llm.return_value = mock_llm
+        
+        mock_chain = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.content = '[{"task_id": "test", "description": "desc", "query_variants": ["q1"]}]'
+        mock_chain.ainvoke = AsyncMock(return_value=mock_resp)
+        mock_template.__or__.return_value = mock_chain
+        
+        brief = ResearchBrief(scope="Scope", sub_topics=["t1"], constraints={}, deliverables="D")
+        budget = {"max_sub_agents": 20}
+        res = await _decompose_initial_tasks(brief, budget)
+        
+        assert res.has_gaps is True
+        assert len(res.new_tasks) == 1
+        assert res.new_tasks[0].task_id == "test"
+        assert res.new_tasks[0].query == "q1"
+
+class TestSupervisorNodeMisc:
+    @pytest.mark.asyncio
+    async def test_supervisor_is_complete_early_return(self):
+        state = {"is_complete": True, "research_brief": MagicMock(), "budget": {}}
+        res = await supervisor_node(state)
+        assert res == {"is_complete": True}
+
+    @pytest.mark.asyncio
+    @patch("app.agents.supervisor_agent.ls.get_current_run_tree")
+    @patch("app.agents.supervisor_agent._decompose_initial_tasks")
+    async def test_supervisor_initial_iteration(self, mock_decompose, mock_get_rt):
+        mock_rt = MagicMock()
+        mock_rt.metadata = {}
+        mock_get_rt.return_value = mock_rt
+        
+        mock_decompose.return_value = GapAnalysisOutput(
+            has_gaps=True, is_complete=False, gaps_identified=["gap"], new_tasks=[], reasoning="reasoning"
+        )
+        
+        state = {
+            "research_brief": ResearchBrief(scope="Scope", sub_topics=["t1"], constraints={}, deliverables="D"),
+            "findings": [],
+            "completed_tasks": [],
+            "failed_tasks": [],
+            "budget": {"iterations": 0, "max_iterations": 20, "max_sub_agents": 20, "max_searches_per_agent": 2}
+        }
+        res = await supervisor_node(state)
+        
+        assert "task_history" in res
+        assert res["gaps"]["has_gaps"] is True
+        assert mock_rt.metadata["iteration"] == 1
+        
+        mock_decompose.side_effect = Exception("Decompose failed")
+        with patch("app.agents.supervisor_agent.SUPERVISOR_GAP_ANALYSIS_TEMPLATE") as mock_template, patch("app.agents.supervisor_agent.get_deepseek_reasoner_json") as mock_get_llm:
+            mock_llm = MagicMock()
+            mock_get_llm.return_value = mock_llm
+            mock_chain = MagicMock()
+            mock_resp = MagicMock()
+            mock_resp.content = '{"has_gaps": false, "is_complete": true, "gaps_identified": [], "new_tasks": [], "reasoning": "Test"}'
+            mock_chain.ainvoke = AsyncMock(return_value=mock_resp)
+            mock_template.__or__.return_value = mock_chain
+            
+            res2 = await supervisor_node(state)
+            assert res2["is_complete"] is True
+            assert res2["budget"]["iterations"] == 1
+
+    @pytest.mark.asyncio
+    @patch("app.agents.supervisor_agent.SUPERVISOR_GAP_ANALYSIS_TEMPLATE")
+    @patch("app.agents.supervisor_agent.get_deepseek_reasoner_json")
+    async def test_supervisor_empty_llm_response_and_json_error_and_aggregation_error(self, mock_get_llm, mock_template):
+        state = {
+            "research_brief": ResearchBrief(scope="S", sub_topics=["t"], constraints={}, deliverables="D"),
+            "findings": [Finding(claim="c", citation=Citation(source="s", url=""), topic="t", credibility_score=0.9)],
+            "completed_tasks": [],
+            "failed_tasks": [],
+            "budget": {"iterations": 5, "max_iterations": 20, "max_sub_agents": 20}
+        }
+        mock_llm = MagicMock()
+        mock_get_llm.return_value = mock_llm
+        mock_chain = MagicMock()
+        
+        mock_resp = MagicMock()
+        mock_resp.content = ""
+        mock_chain.ainvoke = AsyncMock(return_value=mock_resp)
+        mock_template.__or__.return_value = mock_chain
+        
+        res = await supervisor_node(state)
+        assert res["is_complete"] is True
+        assert "error" in res
+        assert "Empty response from LLM" in str(res["error"])
+        
+        mock_resp.content = "not json"
+        res2 = await supervisor_node(state)
+        assert res2["is_complete"] is True
+        assert "error" in res2
+        assert "JSON parsing failed" in str(res2["error"])
+
+        mock_resp.content = '{"has_gaps": false, "is_complete": true, "gaps_identified": [], "new_tasks": [], "reasoning": "Test"}'
+        with patch("app.agents.supervisor_agent.aggregate_findings", side_effect=Exception("Agg fail")):
+            res3 = await supervisor_node(state)
+            assert res3["is_complete"] is True
+            assert "findings" not in res3

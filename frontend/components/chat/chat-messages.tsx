@@ -82,7 +82,7 @@ export function ChatMessages() {
                     {isBriefMessage && showReasoning && (
                       <ReasoningBlock 
                         phase={researchProgress.phase}
-                        isActive={isStreaming && (isResearchingPhase || researchProgress.phase === 'scoping')}
+                        isActive={thinking.isThinking}
                         isComplete={isCompletePhase}
                         findingsCount={researchProgress.findingsCount}
                         tasksCount={researchProgress.tasksCount}
@@ -103,7 +103,7 @@ export function ChatMessages() {
             ) && (
               <ReasoningBlock 
                 phase={researchProgress.phase}
-                isActive={isStreaming && (isResearchingPhase || researchProgress.phase === 'scoping')}
+                isActive={thinking.isThinking}
                 isComplete={isCompletePhase}
                 findingsCount={researchProgress.findingsCount}
                 tasksCount={researchProgress.tasksCount}
@@ -160,4 +160,3 @@ export function ChatMessages() {
     </ScrollArea>
   )
 }
-

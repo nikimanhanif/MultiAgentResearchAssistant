@@ -20,6 +20,7 @@ from app.tools.academic.utils import (
     extract_paper_sections,
     format_search_results,
 )
+from app.tools.academic.semantic_scholar import _run_in_thread, _get_paper_sync
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -94,6 +95,7 @@ def _search_scopus_sync(query: str, count: int) -> List[Dict[str, Any]]:
                 "abstract": result.get("dc:description", ""),
                 "year": year,
                 "pdf_url": pdf_url,
+                "url": f"https://doi.org/{doi}" if doi else None,
                 "citation_count": int(result.get("citedby-count", 0)),
                 "doi": doi,
             })
@@ -162,6 +164,19 @@ def search_scopus(
         return (f"Scopus search error: {str(e)}. Try rephrasing your query.", None)
 
 
+def _get_oa_pdf_url_for_doi(doi: str) -> Optional[str]:
+    """Look up an open-access PDF URL for a DOI via Semantic Scholar."""
+    try:
+        paper = _run_in_thread(_get_paper_sync, f"DOI:{doi}", ["openAccessPdf"])
+        if not paper or not paper.openAccessPdf:
+            return None
+        if isinstance(paper.openAccessPdf, dict):
+            return paper.openAccessPdf.get("url")
+        return getattr(paper.openAccessPdf, "url", None)
+    except Exception:
+        return None
+
+
 def fetch_scopus_content(paper_id: str) -> Tuple[str, Optional[Any]]:
     """
     Fetch content for a Scopus paper.
@@ -214,11 +229,14 @@ def fetch_scopus_content(paper_id: str) -> Tuple[str, Optional[Any]]:
             metadata_prefix += f"**DOI**: {doi}\n"
         metadata_prefix += "\n"
         
-        # Try PDF via DOI
+        # Try PDF: prefer open-access version from Semantic Scholar, fall back to DOI URL
         full_text = None
         if doi:
-            pdf_url = f"https://doi.org/{doi}"
-            full_text = download_and_parse_pdf(pdf_url)
+            oa_url = _get_oa_pdf_url_for_doi(doi)
+            if oa_url:
+                full_text = download_and_parse_pdf(oa_url)
+            if not full_text:
+                full_text = download_and_parse_pdf(f"https://doi.org/{doi}")
         
         if full_text and len(full_text) > 10000:
             return (extract_paper_sections(full_text, metadata_prefix), None)

@@ -8,6 +8,7 @@ Centralizes configuration for:
 - External tools (Tavily, MCP)
 - Observability (LangSmith)
 - Persistence (Postgres)
+- DRB evaluation (judge backend, models)
 """
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -45,6 +46,14 @@ class Settings(BaseSettings):
     LANGSMITH_PROJECT: str = "multi-agent-research-assistant-eval"
     LANGSMITH_ENDPOINT: str = "https://api.smith.langchain.com"
     DEEPEVAL_TELEMETRY_OPT_OUT: str = "true"
+    
+    # DRB Evaluation (DeepResearch Bench)
+    DRB_REPO_PATH: str = ""
+    DRB_JUDGE_PROVIDER: str = "deepseek"
+    DRB_RACE_MODEL: str = "deepseek-reasoner"
+    DRB_FACT_MODEL: str = "deepseek-reasoner"
+    DEEPSEEK_BASE_URL: str = "https://api.deepseek.com"
+    JINA_API_KEY: str = ""
     
     # Deprecated 
     GOOGLE_GEMINI_API_KEY: str = ""

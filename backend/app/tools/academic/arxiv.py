@@ -38,14 +38,16 @@ def _search_arxiv_internal(query: str, count: int) -> List[Dict[str, Any]]:
         
         papers = []
         for result in client.results(search):
+            arxiv_id = result.entry_id.split("/")[-1]
             papers.append({
                 "source": "arxiv",
-                "paper_id": result.entry_id.split("/")[-1],
+                "paper_id": arxiv_id,
                 "title": result.title,
                 "authors": ", ".join([a.name for a in result.authors[:3]]),
                 "abstract": result.summary[:500] + "..." if len(result.summary) > 500 else result.summary,
                 "year": result.published.year if result.published else None,
                 "pdf_url": result.pdf_url,
+                "url": f"https://arxiv.org/abs/{arxiv_id}",
                 "citation_count": None,  # ArXiv doesn't provide citations
             })
         return papers

@@ -499,6 +499,16 @@ AUTHOR EXTRACTION RULES (MANDATORY):
 - As a LAST RESORT, use the publication name or website name (e.g., ["MIT Technology Review"]), but NEVER "arXiv" or "Semantic Scholar".
 - NEVER return None for authors — always provide at least an organizational attribution, or if truly impossible, return "Unknown Author".
 
+URL EXTRACTION RULES (MANDATORY):
+- Extract the URL exactly as it appears in the source metadata (look for **URL**: lines in the raw results)
+- If no explicit URL is present but a DOI is available, construct: https://doi.org/{{DOI}}
+- If no URL or DOI but an ArXiv ID is present, construct: https://arxiv.org/abs/{{arxiv_id}}
+- If the source is Semantic Scholar with a paper_id, construct: https://www.semanticscholar.org/paper/{{paper_id}}
+- For Scopus papers with a DOI, construct: https://doi.org/{{DOI}}
+- For web sources (tavily_search), use the page URL from the search results
+- NEVER return None for url — every finding MUST have a web-accessible URL
+- The URL is critical for downstream verification of claims
+
 Return structured output with both findings and summary."""
     ),
     HumanMessagePromptTemplate.from_template(

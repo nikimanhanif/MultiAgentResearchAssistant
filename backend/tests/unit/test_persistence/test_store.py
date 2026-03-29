@@ -10,6 +10,9 @@ from app.persistence.store import (
     save_conversation,
     get_conversation,
     list_conversations,
+    save_in_progress_conversation,
+    update_conversation_status,
+    update_thinking_state,
 )
 from app.models.schemas import ResearchBrief, Finding, Citation, ReportFormat
 
@@ -180,5 +183,89 @@ class TestStore:
                 assert results[0]["conversation_id"] == "conv1"
                 assert results[0]["user_query"] == "q1"
                 assert results[1]["conversation_id"] == "conv2"
-                
                 mock_store.asearch.assert_awaited_once_with(("user1", "conversations"), limit=10)
+
+    @pytest.mark.asyncio
+    async def test_save_in_progress_conversation(self):
+        mock_store = MagicMock()
+        mock_store.setup = AsyncMock()
+        mock_conn = MagicMock()
+        mock_conn.close = AsyncMock()
+        mock_store.conn = mock_conn
+        
+        mock_existing = MagicMock()
+        mock_existing.value = {"thinking_state": "ts", "created_at": "old_date"}
+        mock_store.aget = AsyncMock(return_value=mock_existing)
+        mock_store.aput = AsyncMock()
+        
+        with patch("aiosqlite.connect", new_callable=AsyncMock):
+            with patch("app.persistence.store.AsyncSqliteStore", return_value=mock_store):
+                await initialize_store()
+                
+                await save_in_progress_conversation("u1", "c1", "query")
+                
+                mock_store.aput.assert_awaited_once()
+                val = mock_store.aput.call_args.kwargs["value"]
+                assert val["thinking_state"] == "ts"
+                assert val["created_at"] == "old_date"
+                assert val["status"] == "in_progress"
+
+    @pytest.mark.asyncio
+    async def test_update_conversation_status(self):
+        mock_store = MagicMock()
+        mock_store.setup = AsyncMock()
+        mock_conn = MagicMock()
+        mock_conn.close = AsyncMock()
+        mock_store.conn = mock_conn
+        
+        mock_existing = MagicMock()
+        mock_existing.value = {"status": "in_progress"}
+        mock_store.aget = AsyncMock(return_value=mock_existing)
+        mock_store.aput = AsyncMock()
+        
+        with patch("aiosqlite.connect", new_callable=AsyncMock):
+            with patch("app.persistence.store.AsyncSqliteStore", return_value=mock_store):
+                await initialize_store()
+                
+                await update_conversation_status("u1", "c1", "complete", "phase1", "rep")
+                
+                mock_store.aput.assert_awaited_once()
+                val = mock_store.aput.call_args.kwargs["value"]
+                assert val["status"] == "complete"
+                assert val["phase"] == "phase1"
+                assert val["report_content"] == "rep"
+                
+                # Test not found
+                mock_store.aget.return_value = None
+                mock_store.aput.reset_mock()
+                await update_conversation_status("u1", "c2", "complete")
+                mock_store.aput.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_update_thinking_state(self):
+        mock_store = MagicMock()
+        mock_store.setup = AsyncMock()
+        mock_conn = MagicMock()
+        mock_conn.close = AsyncMock()
+        mock_store.conn = mock_conn
+        
+        mock_existing = MagicMock()
+        mock_existing.value = {"thinking_state": None}
+        mock_store.aget = AsyncMock(return_value=mock_existing)
+        mock_store.aput = AsyncMock()
+        
+        with patch("aiosqlite.connect", new_callable=AsyncMock):
+            with patch("app.persistence.store.AsyncSqliteStore", return_value=mock_store):
+                await initialize_store()
+                
+                res = await update_thinking_state("u1", "c1", {"agent": "sup"})
+                
+                assert res is True
+                mock_store.aput.assert_awaited_once()
+                val = mock_store.aput.call_args[0][2] # args[2] is value for positional or apur(namespace, key, data)
+                # wait, in store.py: await store.aput(namespace, conversation_id, data)
+                
+                # Test not found
+                mock_store.aget.return_value = None
+                res2 = await update_thinking_state("u1", "c2", {})
+                assert res2 is False
