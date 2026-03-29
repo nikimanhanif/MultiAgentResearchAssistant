@@ -295,6 +295,13 @@ planned_developments.md
 backend/tests/evaluation/.deepeval/
 backend/.deepeval/
 
+# Eval run outputs (regenerated on each run)
+backend/eval_results/report.md
+backend/eval_results/results.jsonl
+backend/eval_results/summary.csv
+CLAUDE.md*
+
+
 backend/sqlite_example
 
 # LangGraph persistence files
@@ -306,6 +313,3 @@ conversations.db
 conversations.db-journal
 conversations.db-wal
 conversations.db-shm
-
-# Evaluation Runners & Artifacts
-backend/eval_results/

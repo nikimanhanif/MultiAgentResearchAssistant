@@ -157,12 +157,16 @@ class DRBOutputReporter(Reporter):
         new_records: dict[str | int, dict] = {}
         for r in results:
             drb_prompt = (r.case_metadata or {}).get("drb_prompt", r.query)
+            # Normalize numeric string IDs to int — DRB's query.jsonl uses integer IDs
+            # and extract.py builds id_to_lang_map with int keys, so a string "51" would
+            # fail the lookup and produce "Language not found" errors.
+            case_id = int(r.case_id) if isinstance(r.case_id, str) and r.case_id.isdigit() else r.case_id
             record = {
-                "id": r.case_id,
+                "id": case_id,
                 "prompt": drb_prompt,
                 "article": r.report_content or "",
             }
-            new_records[r.case_id] = record
+            new_records[case_id] = record
 
         if append and os.path.exists(path):
             # Load existing entries, keyed by id

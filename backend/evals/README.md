@@ -117,186 +117,17 @@ Results land in:
 
 ---
 
-## LangSmith Experiment Tracking
+## Incremental Generation
 
-When `LANGSMITH_API_KEY` is set, you can add `--langsmith-experiment` to `generate`. This:
+Running all 100 cases in a single command is impractical — each case takes minutes. The recommended approach is to generate in batches using `--range` or target individual cases with `--case-id`, then evaluate once the full dataset is complete.
 
-1. Uploads the benchmark cases as a LangSmith dataset (idempotent — safe to run repeatedly)
-2. Runs each case through `aevaluate()`, creating a LangSmith experiment
-3. Links all agent and tool traces as children of each experiment run
-4. Logs internal scores (success, latency, citations, etc.) as LangSmith feedback
+### How batching works
 
-After running `evaluate`, you can push the official RACE/FACT scores back to the experiment so everything is in one place.
-
-### LangSmith flags
-
-| Flag | Command | Purpose |
-|------|---------|---------|
-| `--langsmith-experiment` | `generate` | Enable experiment tracking |
-| `--langsmith-dataset <name>` | `generate`, `evaluate` | Dataset name (default: `drb-{model-name}`) |
-| `--experiment-prefix <prefix>` | `generate` | Experiment name prefix (default: `{model-name}`) |
-| `--langsmith-max-concurrency <n>` | `generate` | Concurrent runs in aevaluate (default: 0 = sequential) |
-| `--langsmith-experiment <name>` | `evaluate` | Experiment name to upload DRB scores to |
-
-### Full LangSmith workflow
-
-**Step 1 — Generate with experiment tracking**
-
-```bash
-PYTHONPATH=. uv run -m evals.cli generate \
-  --queries $DRB_REPO_PATH/data/prompt_data/query.jsonl \
-  --output eval_results/ \
-  --model-name multi_agent_researcher \
-  --langsmith-experiment \
-  --langsmith-dataset drb-multi-agent \
-  --experiment-prefix "multi-agent-v1"
-```
-
-The command logs the full experiment name at the end, e.g.:
-```
-LangSmith experiment: https://smith.langchain.com (experiment: multi-agent-v1-20260328T102300)
-```
-
-Copy that name — you'll need it in step 4.
-
-**Step 2 — Copy output to DRB repo** (same as standard workflow)
-
-```bash
-cp eval_results/multi_agent_researcher.jsonl \
-   $DRB_REPO_PATH/data/test_data/raw_data/
-```
-
-**Step 3 — Run DRB evaluation**
-
-```bash
-PYTHONPATH=. uv run -m evals.cli evaluate \
-  --model-name multi_agent_researcher
-```
-
-**Step 4 — Push RACE/FACT scores back to LangSmith**
-
-```bash
-PYTHONPATH=. uv run -m evals.cli evaluate \
-  --model-name multi_agent_researcher \
-  --langsmith-experiment "multi-agent-v1-20260328T102300" \
-  --langsmith-dataset drb-multi-agent
-```
-
-This attaches `drb_race_score` and `drb_fact_score` as feedback on each individual run in the experiment.
-
-### Incremental batch runs with LangSmith
-
-`--range` and `--case-id` work as normal. Each `generate` call creates a separate experiment, but they all write to the same dataset. Use a consistent `--experiment-prefix` so the batches group together visually in LangSmith.
-
-```bash
-# Batch 1
-PYTHONPATH=. uv run -m evals.cli generate \
-  --queries $DRB_REPO_PATH/data/prompt_data/query.jsonl \
-  --output eval_results/ \
-  --model-name multi_agent_researcher \
-  --range 1-10 \
-  --langsmith-experiment \
-  --langsmith-dataset drb-multi-agent \
-  --experiment-prefix "multi-agent-v1"
-
-# Batch 2 — appends to the same output file and dataset
-PYTHONPATH=. uv run -m evals.cli generate \
-  --queries $DRB_REPO_PATH/data/prompt_data/query.jsonl \
-  --output eval_results/ \
-  --model-name multi_agent_researcher \
-  --range 11-20 \
-  --langsmith-experiment \
-  --langsmith-dataset drb-multi-agent \
-  --experiment-prefix "multi-agent-v1"
-```
-
-`--case-id` is useful for debugging a single failing case — it creates a one-run experiment with the full trace tree visible in LangSmith.
-
-```bash
-PYTHONPATH=. uv run -m evals.cli generate \
-  --queries $DRB_REPO_PATH/data/prompt_data/query.jsonl \
-  --output eval_results/ \
-  --model-name multi_agent_researcher \
-  --case-id 42 \
-  --langsmith-experiment \
-  --experiment-prefix "debug-case-42"
-```
-
----
-
-## Targeted and Incremental Runs (Standard)
-
-### Target a single case
-
-```bash
-# Generate only case 50
-PYTHONPATH=. uv run -m evals.cli generate \
-  --queries $DRB_REPO_PATH/data/prompt_data/query.jsonl \
-  --output eval_results/ \
-  --model-name multi_agent_researcher \
-  --case-id 50
-
-cp eval_results/multi_agent_researcher.jsonl $DRB_REPO_PATH/data/test_data/raw_data/
-
-# Evaluate only case 50
-PYTHONPATH=. uv run -m evals.cli evaluate \
-  --model-name multi_agent_researcher --case-id 50
-```
-
-> When `--case-id` is used with `evaluate`, a temporary filtered query file is created automatically so the DRB scripts only process that case.
-
-### Evaluating a partial dataset
-
-`evaluate` has no `--range` flag. It always evaluates **whatever cases are currently in the output JSONL file** — it passes that file directly to the DRB RACE and FACT scripts unchanged.
-
-This means:
-
-- If you only generated cases 51–100, `evaluate` scores those 50 cases. The RACE/FACT result files will reflect a 50-case subset, **not** a full-100 benchmark run.
-- Scores from a partial dataset are **not comparable** to official DRB baselines (which require all 100 cases).
-- You can still run `evaluate` mid-batch to get a directional signal, but treat those numbers as intermediate diagnostics only.
-
-To evaluate after a partial run:
-
-```bash
-# 1. Copy the partial output to the DRB repo (same as always)
-cp eval_results/multi_agent_researcher.jsonl \
-   $DRB_REPO_PATH/data/test_data/raw_data/
-
-# 2. Run evaluate normally — no range flag needed
-PYTHONPATH=. uv run -m evals.cli evaluate \
-  --model-name multi_agent_researcher
-```
-
-The DRB scripts will process only the IDs present in the JSONL. If you later add more cases (via another `generate --range` batch), re-copy the file and re-run `evaluate`. Use `--force` to overwrite existing intermediate result files:
-
-```bash
-PYTHONPATH=. uv run -m evals.cli evaluate \
-  --model-name multi_agent_researcher --force
-```
-
-For a meaningful final score, wait until `status` confirms all 100 cases are complete before treating the evaluate output as a real benchmark result.
-
-### Incremental batch testing
-
-Run cases in batches and verify progressively. The harness automatically runs in append mode when `--range` is used — existing results for the same IDs are overwritten, new ones are merged in, and the file is kept sorted by ID.
-
-```bash
-# Run cases 1-10
-PYTHONPATH=. uv run -m evals.cli generate \
-  --queries $DRB_REPO_PATH/data/prompt_data/query.jsonl \
-  --output eval_results/ \
-  --model-name multi_agent_researcher \
-  --range 1-10
-
-# Run cases 11-20 (results merged into the same file)
-PYTHONPATH=. uv run -m evals.cli generate \
-  --queries $DRB_REPO_PATH/data/prompt_data/query.jsonl \
-  --output eval_results/ \
-  --model-name multi_agent_researcher \
-  --range 11-20
-```
+`--range` and `--case-id` both run in **append mode**: new results are merged into the existing output JSONL and the file is kept sorted by ID. Existing IDs are skipped automatically (use `--force` to overwrite). This means you can stop and resume at any point without losing prior work.
 
 ### Check completion status
+
+After each batch, check how many of the 100 cases are done and which IDs are still missing:
 
 ```bash
 PYTHONPATH=. uv run -m evals.cli status \
@@ -305,16 +136,197 @@ PYTHONPATH=. uv run -m evals.cli status \
   --model-name multi_agent_researcher
 ```
 
-This shows how many of the 100 cases have been completed and which IDs are still missing.
+### Generate in batches
 
-### Budget overrides (shorter runs)
+```bash
+# Batch 1 — cases 1 to 25
+PYTHONPATH=. uv run -m evals.cli generate \
+  --queries $DRB_REPO_PATH/data/prompt_data/query.jsonl \
+  --output eval_results/ \
+  --model-name multi_agent_researcher \
+  --range 1-25
+
+# Batch 2 — appends to the same output file
+PYTHONPATH=. uv run -m evals.cli generate \
+  --queries $DRB_REPO_PATH/data/prompt_data/query.jsonl \
+  --output eval_results/ \
+  --model-name multi_agent_researcher \
+  --range 26-50
+
+# ... continue until status shows 100/100
+```
+
+### Re-run a single case
+
+Use `--case-id` to re-run a specific case (e.g., one that timed out or returned a partial result). Combined with `--force` to overwrite the existing entry:
 
 ```bash
 PYTHONPATH=. uv run -m evals.cli generate \
   --queries $DRB_REPO_PATH/data/prompt_data/query.jsonl \
   --output eval_results/ \
   --model-name multi_agent_researcher \
+  --case-id 42 --force
+```
+
+### Budget overrides (faster smoke runs)
+
+Reduce iterations to get a quick directional signal without spending full API credits:
+
+```bash
+PYTHONPATH=. uv run -m evals.cli generate \
+  --queries $DRB_REPO_PATH/data/prompt_data/query.jsonl \
+  --output eval_results/ \
+  --model-name multi_agent_researcher \
+  --range 1-5 \
   --max-iterations 5 --max-sub-agents 3
+```
+
+---
+
+## Intermediate Evaluation (Local Only)
+
+You can run `evaluate` at any point during batching to get a directional signal on the cases generated so far. `evaluate` always scores **whatever is currently in the output JSONL** — it passes that file directly to the DRB RACE and FACT scripts unchanged.
+
+```bash
+# Copy current output to DRB repo
+cp eval_results/multi_agent_researcher.jsonl \
+   $DRB_REPO_PATH/data/test_data/raw_data/
+
+# Score what you have so far (no LangSmith upload)
+PYTHONPATH=. uv run -m evals.cli evaluate \
+  --model-name multi_agent_researcher
+```
+
+After adding more batches, re-copy and re-run with `--force` to overwrite cached intermediate results:
+
+```bash
+cp eval_results/multi_agent_researcher.jsonl \
+   $DRB_REPO_PATH/data/test_data/raw_data/
+
+PYTHONPATH=. uv run -m evals.cli evaluate \
+  --model-name multi_agent_researcher --force
+```
+
+> Intermediate scores are **not comparable** to official DRB baselines. A partial dataset will produce artificially high or low RACE/FACT scores depending on which cases happen to be included. Treat them as diagnostics only.
+
+> When `--case-id` is used with `evaluate`, a temporary filtered query file is created automatically so the DRB scripts only process that case.
+
+---
+
+## LangSmith Experiment Tracking
+
+LangSmith serves two separate purposes here — **tracing** and **score visibility** — and it helps to keep them distinct.
+
+- **Tracing**: every agent node, LLM call, and tool invocation recorded as a linked trace tree. This happens automatically during `generate` when `--langsmith-experiment` is set. No extra steps needed.
+- **Score visibility**: the RACE/FACT scores are aggregate numbers produced by the local `evaluate` command. They live in local result files. The `--langsmith-experiment` flag on `evaluate` is an optional step to attach those scores to LangSmith — but it is not required.
+
+For most purposes: use `--langsmith-experiment` on `generate` to get traces, run `evaluate` locally to get scores, and check the result files. That's it.
+
+### LangSmith flags
+
+| Flag | Command | Purpose |
+|------|---------|---------|
+| `--langsmith-experiment` | `generate` | Enable tracing — records all runs in a LangSmith experiment |
+| `--langsmith-dataset <name>` | `generate` | Dataset name to accumulate cases across batches (default: `drb-{model-name}`) |
+| `--experiment-prefix <prefix>` | `generate` | Prefix for the experiment name (default: `{model-name}`) |
+| `--langsmith-max-concurrency <n>` | `generate` | Concurrent runs in aevaluate (default: 0 = sequential) |
+
+### Recommended workflow
+
+**Step 1 — Generate all batches with tracing enabled**
+
+Use a consistent `--langsmith-dataset` name across all batches. This is the shared dataset that accumulates all 100 cases — it is the durable artifact in LangSmith that persists across batch runs. Each batch creates its own experiment (one per `generate` call), all pointing at the same dataset.
+
+```bash
+# Batch 1
+PYTHONPATH=. uv run -m evals.cli generate \
+  --queries $DRB_REPO_PATH/data/prompt_data/query.jsonl \
+  --output eval_results/ \
+  --model-name multi_agent_researcher \
+  --range 1-25 \
+  --langsmith-experiment \
+  --langsmith-dataset drb-multi-agent \
+  --experiment-prefix "multi-agent-v1"
+
+# Batch 2 — same dataset, new experiment for this batch
+PYTHONPATH=. uv run -m evals.cli generate \
+  --queries $DRB_REPO_PATH/data/prompt_data/query.jsonl \
+  --output eval_results/ \
+  --model-name multi_agent_researcher \
+  --range 26-50 \
+  --langsmith-experiment \
+  --langsmith-dataset drb-multi-agent \
+  --experiment-prefix "multi-agent-v1"
+
+# ... continue until all 100 cases are done
+```
+
+**Step 2 — Check completion**
+
+```bash
+PYTHONPATH=. uv run -m evals.cli status \
+  --queries $DRB_REPO_PATH/data/prompt_data/query.jsonl \
+  --output eval_results/ \
+  --model-name multi_agent_researcher
+# Should show: Completed: 100/100
+```
+
+**Step 3 — Run final evaluation locally**
+
+```bash
+cp eval_results/multi_agent_researcher.jsonl \
+   $DRB_REPO_PATH/data/test_data/raw_data/
+
+PYTHONPATH=. uv run -m evals.cli evaluate \
+  --model-name multi_agent_researcher --force
+```
+
+The definitive aggregate scores are now in:
+- `$DRB_REPO_PATH/results/race/multi_agent_researcher/race_result.txt`
+- `$DRB_REPO_PATH/results/fact/multi_agent_researcher/fact_result.txt`
+
+If `LANGSMITH_API_KEY` is set, `evaluate` automatically writes the aggregate scores as metadata on the LangSmith dataset (e.g. `drb-multi-agent`). The dataset is shared across all batch experiments so this gives you one place to see the overall benchmark result without caring which experiment it came from. Re-running `evaluate` overwrites the previous metadata with the latest scores.
+
+The dataset metadata will contain:
+```
+race_overall_score, race_comprehensiveness, race_insight,
+race_instruction_following, race_readability,
+fact_valid_rate, fact_total_citations, fact_total_valid_citations,
+model_name, evaluated_at
+```
+
+The traces for all runs are already in LangSmith from step 1. This is the complete workflow.
+
+### Optional: attaching per-run DRB scores to traces
+
+If you also want the RACE/FACT scores visible alongside individual run traces (e.g. to filter or sort runs by score in the experiment view), pass `--langsmith-experiment` with the name logged during `generate`:
+
+```bash
+# The experiment name is printed at the end of each generate call:
+# "LangSmith experiment name: multi-agent-v1-20260328T102300"
+
+PYTHONPATH=. uv run -m evals.cli evaluate \
+  --model-name multi_agent_researcher \
+  --langsmith-experiment "multi-agent-v1-20260328T102300" \
+  --langsmith-dataset drb-multi-agent
+```
+
+This attaches `drb_race_score` and `drb_fact_score` as feedback on each individual run. If you generated in batches, repeat this for each batch experiment name. Only do this after the final `evaluate --force` with all 100 cases — uploading against partial result files and then re-running later creates duplicate feedback entries.
+
+This step is purely additive and separate from the dataset metadata update above.
+
+### Debugging a single failing case
+
+`--case-id` creates a one-run experiment with the full agent trace visible in LangSmith. Useful for inspecting why a specific case returned a partial result or timed out:
+
+```bash
+PYTHONPATH=. uv run -m evals.cli generate \
+  --queries $DRB_REPO_PATH/data/prompt_data/query.jsonl \
+  --output eval_results/ \
+  --model-name multi_agent_researcher \
+  --case-id 42 --force \
+  --langsmith-experiment \
+  --experiment-prefix "debug-case-42"
 ```
 
 ---

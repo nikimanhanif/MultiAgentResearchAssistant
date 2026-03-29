@@ -276,8 +276,8 @@ def setup_drb_judge(repo_path: str) -> None:
     _deploy_patched_api(repo_path)
     _ensure_openai_dependency(repo_path)
     provider = _get_judge_provider()
-    race_model = os.environ.get("DRB_RACE_MODEL", "deepseek-chat" if provider == "deepseek" else "gemini-2.5-pro-preview-06-05")
-    fact_model = os.environ.get("DRB_FACT_MODEL", "deepseek-chat" if provider == "deepseek" else "gemini-2.5-flash-preview-05-20")
+    race_model = os.environ.get("DRB_RACE_MODEL", "deepseek-reasoner" if provider == "deepseek" else "gemini-2.5-pro-preview-06-05")
+    fact_model = os.environ.get("DRB_FACT_MODEL", "deepseek-reasoner" if provider == "deepseek" else "gemini-2.5-flash-preview-05-20")
     logger.info(
         "Judge setup complete: provider=%s, race_model=%s, fact_model=%s",
         provider, race_model, fact_model,

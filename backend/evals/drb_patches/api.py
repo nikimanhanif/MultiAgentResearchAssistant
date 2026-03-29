@@ -16,8 +16,8 @@ Environment variables:
     DRB_JUDGE_PROVIDER  - "deepseek" (default) or "gemini"
     DEEPSEEK_API_KEY    - Required when provider=deepseek
     DEEPSEEK_BASE_URL   - Optional (default: https://api.deepseek.com)
-    DRB_RACE_MODEL      - Model for RACE evaluation (default: deepseek-chat)
-    DRB_FACT_MODEL      - Model for FACT extraction/validation (default: deepseek-chat)
+    DRB_RACE_MODEL      - Model for RACE evaluation (default: deepseek-reasoner)
+    DRB_FACT_MODEL      - Model for FACT extraction/validation (default: deepseek-reasoner)
     GEMINI_API_KEY      - Required when provider=gemini
     JINA_API_KEY        - Required for FACT web scraping (unchanged)
 """
@@ -41,8 +41,8 @@ JUDGE_PROVIDER = os.environ.get("DRB_JUDGE_PROVIDER", "deepseek").lower()
 # DeepSeek defaults
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 DEEPSEEK_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
-DEEPSEEK_RACE_MODEL = os.environ.get("DRB_RACE_MODEL", "deepseek-chat")
-DEEPSEEK_FACT_MODEL = os.environ.get("DRB_FACT_MODEL", "deepseek-chat")
+DEEPSEEK_RACE_MODEL = os.environ.get("DRB_RACE_MODEL", "deepseek-reasoner")
+DEEPSEEK_FACT_MODEL = os.environ.get("DRB_FACT_MODEL", "deepseek-reasoner")
 
 # Gemini defaults (optional fallback)
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
@@ -92,17 +92,25 @@ class _DeepSeekClient:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": user_prompt})
 
+        # deepseek-reasoner supports up to 64K output tokens (vs 8K for deepseek-chat).
+        # Temperature 0-2 is supported for both models.
+        is_reasoner = "reasoner" in model_to_use
+        kwargs: Dict[str, Any] = {
+            "model": model_to_use,
+            "messages": messages,
+            "temperature": 0.0,
+            "max_tokens": 65536 if is_reasoner else 8192,
+        }
+
         try:
-            response = self.client.chat.completions.create(
-                model=model_to_use,
-                messages=messages,
-                temperature=0.0,
-                max_tokens=8192, # Allow for large citation lists
-            )
-            
+            response = self.client.chat.completions.create(**kwargs)
+
             if response.choices[0].finish_reason == "length":
-                logger.warning("DeepSeek response was truncated due to output length limit.")
-                
+                logger.warning(
+                    "DeepSeek response was truncated (model=%s, max_tokens=%d).",
+                    model_to_use, kwargs["max_tokens"],
+                )
+
             content = response.choices[0].message.content
             if content is None:
                 raise Exception("DeepSeek returned empty response content (possibly filtered or refused)")

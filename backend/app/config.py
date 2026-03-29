@@ -50,8 +50,8 @@ class Settings(BaseSettings):
     # DRB Evaluation (DeepResearch Bench)
     DRB_REPO_PATH: str = ""
     DRB_JUDGE_PROVIDER: str = "deepseek"
-    DRB_RACE_MODEL: str = "deepseek-chat"
-    DRB_FACT_MODEL: str = "deepseek-chat"
+    DRB_RACE_MODEL: str = "deepseek-reasoner"
+    DRB_FACT_MODEL: str = "deepseek-reasoner"
     DEEPSEEK_BASE_URL: str = "https://api.deepseek.com"
     JINA_API_KEY: str = ""
     

@@ -615,20 +615,28 @@ async def cmd_evaluate(args: argparse.Namespace) -> None:
             if result.fact_result_path:
                 logger.info("FACT results: %s", result.fact_result_path)
 
-            # Upload DRB scores back to LangSmith experiment if requested
+            # Always push aggregate scores to the LangSmith dataset when available.
+            # The dataset is the shared artifact across all batch experiments and is
+            # the natural home for an overall benchmark score.
+            from evals.langsmith_eval import is_langsmith_available, upload_aggregate_scores_to_dataset
+            if is_langsmith_available():
+                dataset_name = getattr(args, "langsmith_dataset", None) or f"drb-{args.model_name}"
+                upload_aggregate_scores_to_dataset(
+                    dataset_name=dataset_name,
+                    race_result_path=result.race_result_path,
+                    fact_result_path=result.fact_result_path,
+                    model_name=args.model_name,
+                )
+
+            # Optional: also attach per-run scores to a specific experiment if requested
             if getattr(args, "langsmith_experiment", None):
-                from evals.langsmith_eval import is_langsmith_available, upload_drb_scores_to_experiment
-                if is_langsmith_available():
-                    upload_drb_scores_to_experiment(
-                        experiment_name=args.langsmith_experiment,
-                        race_result_path=result.race_result_path,
-                        fact_result_path=result.fact_result_path,
-                        model_name=args.model_name,
-                    )
-                else:
-                    logger.warning(
-                        "LANGSMITH_API_KEY not set; skipping DRB score upload to LangSmith."
-                    )
+                from evals.langsmith_eval import upload_drb_scores_to_experiment
+                upload_drb_scores_to_experiment(
+                    experiment_name=args.langsmith_experiment,
+                    race_result_path=result.race_result_path,
+                    fact_result_path=result.fact_result_path,
+                    model_name=args.model_name,
+                )
         else:
             logger.error("DRB evaluation had errors:")
             for err in result.errors:

@@ -443,6 +443,126 @@ def _parse_fact_result_file(path: str) -> dict[str, float]:
     return scores
 
 
+def _parse_race_aggregate(path: str) -> dict[str, float]:
+    """
+    Parse aggregate metrics from a DRB race_result.txt file.
+
+    Expected format (one metric per line):
+        Comprehensiveness: 0.4159
+        Insight: 0.4653
+        Instruction Following: 0.5000
+        Readability: 0.4750
+        Overall Score: 0.4661
+
+    Returns a dict with snake_case keys, e.g.:
+        {"comprehensiveness": 0.4159, "insight": 0.4653, ..., "overall_score": 0.4661}
+    """
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+    except OSError as exc:
+        logger.warning("Could not read RACE result file %s: %s", path, exc)
+        return {}
+
+    metrics: dict[str, float] = {}
+    pattern = re.compile(r"^(.+?):\s*([0-9]*\.?[0-9]+)\s*$")
+    for line in lines:
+        match = pattern.match(line.strip())
+        if match:
+            key = match.group(1).strip().lower().replace(" ", "_")
+            metrics[key] = float(match.group(2))
+
+    return metrics
+
+
+def _parse_fact_aggregate(path: str) -> dict[str, float]:
+    """
+    Parse aggregate metrics from a DRB fact_result.txt file.
+
+    Expected format (one metric per line):
+        total_citations: 43.0
+        total_valid_citations: 21.0
+        valid_rate: 0.4883720930232558
+
+    Returns a dict with the same keys as in the file.
+    """
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+    except OSError as exc:
+        logger.warning("Could not read FACT result file %s: %s", path, exc)
+        return {}
+
+    metrics: dict[str, float] = {}
+    pattern = re.compile(r"^(.+?):\s*([0-9]*\.?[0-9]+)\s*$")
+    for line in lines:
+        match = pattern.match(line.strip())
+        if match:
+            key = match.group(1).strip()
+            metrics[key] = float(match.group(2))
+
+    return metrics
+
+
+def upload_aggregate_scores_to_dataset(
+    dataset_name: str,
+    race_result_path: str | None,
+    fact_result_path: str | None,
+    *,
+    model_name: str,
+    evaluated_at: str | None = None,
+) -> None:
+    """
+    Parse aggregate RACE/FACT scores and store them as LangSmith dataset metadata.
+
+    The dataset is the shared artifact that persists across all batch experiments,
+    making it the natural home for an overall benchmark score that is not tied to
+    any single experiment or run.
+
+    Calling this multiple times overwrites previous aggregate scores — always
+    reflects the most recent full evaluation.
+    """
+    if not is_langsmith_available():
+        return
+
+    import langsmith
+    from datetime import datetime, timezone
+
+    client = langsmith.Client()
+
+    race_metrics = _parse_race_aggregate(race_result_path) if race_result_path else {}
+    fact_metrics = _parse_fact_aggregate(fact_result_path) if fact_result_path else {}
+
+    if not race_metrics and not fact_metrics:
+        logger.warning(
+            "No aggregate metrics parsed from result files. "
+            "Dataset metadata will not be updated."
+        )
+        return
+
+    metadata: dict[str, Any] = {
+        "model_name": model_name,
+        "evaluated_at": evaluated_at or datetime.now(timezone.utc).isoformat(),
+    }
+    for k, v in race_metrics.items():
+        metadata[f"race_{k}"] = v
+    for k, v in fact_metrics.items():
+        metadata[f"fact_{k}"] = v
+
+    try:
+        client.update_dataset(dataset_name=dataset_name, metadata=metadata)
+        logger.info(
+            "Updated LangSmith dataset '%s' with aggregate scores: %s",
+            dataset_name,
+            {k: v for k, v in metadata.items() if k not in ("model_name", "evaluated_at")},
+        )
+    except Exception as exc:
+        logger.warning(
+            "Could not update LangSmith dataset '%s' metadata: %s",
+            dataset_name, exc,
+        )
+
+
 def upload_drb_scores_to_experiment(
     experiment_name: str,
     race_result_path: str | None,

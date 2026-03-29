@@ -206,20 +206,29 @@ def download_and_parse_pdf(pdf_url: str) -> Optional[str]:
     
     tmp_path = None
     try:
-        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp_file:
-            tmp_path = tmp_file.name
-            with httpx.Client(timeout=30.0, follow_redirects=True, headers=headers) as client:
-                response = client.get(pdf_url)
-                response.raise_for_status()
+        with httpx.Client(timeout=30.0, follow_redirects=True, headers=headers) as client:
+            response = client.get(pdf_url)
+            response.raise_for_status()
+
+            content_type = response.headers.get("content-type", "")
+            if "text/html" in content_type:
+                logger.warning(f"PDF URL returned HTML instead of PDF (paywall/bot detection): {pdf_url}")
+                return None
+
+            with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp_file:
+                tmp_path = tmp_file.name
                 tmp_file.write(response.content)
-        
+
         loader = PyMuPDFLoader(tmp_path)
         docs = loader.load()
-        
+
         if docs:
             return "\n\n".join([doc.page_content for doc in docs])
         return None
-        
+
+    except httpx.HTTPStatusError as e:
+        logger.warning(f"PDF access denied (HTTP {e.response.status_code}): {pdf_url}")
+        return None
     except Exception as e:
         logger.error(f"PDF download/parse failed: {e}")
         return None
