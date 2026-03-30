@@ -210,9 +210,7 @@ class TestSemanticScholarTools:
         assert "failed" in content
 
     def test_run_in_thread_timeout(self):
-        import time
         def slow_func():
-            time.sleep(0.5)
             return True
         with patch("concurrent.futures.Future.result", side_effect=__import__('concurrent').futures.TimeoutError):
             assert _run_in_thread(slow_func) is None

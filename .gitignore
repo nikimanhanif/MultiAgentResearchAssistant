@@ -196,6 +196,8 @@ celerybeat.pid
 .coverage.*
 coverage.xml
 *.cover
+frontend/coverage/
+coverage/
 .hypothesis/
 .pytest_cache/
 

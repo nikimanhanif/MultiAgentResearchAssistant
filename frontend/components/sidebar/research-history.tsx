@@ -14,23 +14,23 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
 import type { ConversationStatus } from '@/types/chat'
 
+export const formatDate = (dateStr: string): string => {
+  const date = new Date(dateStr)
+  const now = new Date()
+  const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24))
+
+  if (diffDays === 0) return 'Today'
+  if (diffDays === 1) return 'Yesterday'
+  if (diffDays < 7) return `${diffDays} days ago`
+  return date.toLocaleDateString()
+}
+
+export const truncateQuery = (query: string, maxLength: number = 28): string => {
+  return query.length > maxLength ? query.slice(0, maxLength) + '...' : query
+}
+
 export function ResearchHistory() {
   const { conversations, threadId, loadConversation, deleteConversation, startNewChat } = useChatContext()
-
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr)
-    const now = new Date()
-    const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24))
-    
-    if (diffDays === 0) return 'Today'
-    if (diffDays === 1) return 'Yesterday'
-    if (diffDays < 7) return `${diffDays} days ago`
-    return date.toLocaleDateString()
-  }
-
-  const truncateQuery = (query: string, maxLength: number = 28) => {
-    return query.length > maxLength ? query.slice(0, maxLength) + '...' : query
-  }
 
   const getStatusIcon = (status: ConversationStatus) => {
     switch (status) {

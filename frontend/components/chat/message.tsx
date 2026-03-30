@@ -8,32 +8,11 @@ import { MarkdownContent } from './markdown-content'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useChatContext } from '@/context/chat-context'
+import { isReportMessage } from '@/lib/report-utils'
 
 interface MessageProps {
   message: MessageType
   isStreaming?: boolean
-}
-
-// Helper to detect if a message contains a research report
-function isReportMessage(content: string): boolean {
-  // Check for common report indicators
-  const reportIndicators = [
-    '# ',           // H1 headers (reports typically start with these)
-    '## Executive Summary',
-    '## Key Findings',
-    '## Introduction',
-    '## Literature Review',
-    '## Methodology',
-    '## Conclusion',
-    '## References'
-  ]
-  
-  // Report messages are typically longer and contain multiple headers
-  const hasMultipleHeaders = (content.match(/^##?\s/gm) || []).length >= 2
-  const hasReportIndicator = reportIndicators.some(indicator => content.includes(indicator))
-  const isLongEnough = content.length > 500
-  
-  return hasMultipleHeaders && (hasReportIndicator || isLongEnough)
 }
 
 export function Message({ message, isStreaming }: MessageProps) {

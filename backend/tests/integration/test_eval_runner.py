@@ -43,7 +43,8 @@ class FakeChatModel(BaseChatModel):
 
     def _generate(self, messages: list[BaseMessage], stop=None, **kwargs) -> ChatResult:
         res = self.responses.pop(0) if self.responses else "default"
-        msg = res if isinstance(res, BaseMessage) else AIMessage(content=str(res))
+        from langsmith import uuid7
+        msg = res if isinstance(res, BaseMessage) else AIMessage(content=str(res), id=str(uuid7()))
         return ChatResult(generations=[ChatGeneration(message=msg)])
 
     async def _agenerate(self, messages: list[BaseMessage], stop=None, **kwargs) -> ChatResult:
