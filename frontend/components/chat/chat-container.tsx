@@ -4,7 +4,7 @@ import { useRef, useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ChatMessages } from './chat-messages'
 import { FloatingInput } from './floating-input'
-import { ExportButton } from './export-button'
+import { ExportMenu } from './export-menu'
 import { ResearchCanvas } from './research-canvas'
 import { useChatContext } from '@/context/chat-context'
 import {
@@ -68,7 +68,7 @@ export function ChatContainer() {
         <div className="flex flex-col h-full">
           {/* Header */}
           <div className="flex items-center justify-end px-4 py-3 border-b border-subtle">
-            <ExportButton />
+            <ExportMenu scope="session" />
           </div>
           
           {/* Messages */}
