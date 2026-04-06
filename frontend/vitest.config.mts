@@ -14,6 +14,12 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'lcov', 'html'],
       include: ['context/**', 'components/**', 'lib/**'],
+      thresholds: {
+        statements: 72,
+        branches: 70,
+        functions: 73,
+        lines: 73,
+      },
     },
   },
 })

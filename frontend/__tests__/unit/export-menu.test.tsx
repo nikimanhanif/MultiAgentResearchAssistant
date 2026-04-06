@@ -52,6 +52,7 @@ const fullContext = {
   activeReportContent: '# Active Report\n\nReport body here.',
   threadId: 'thread-123',
   userId: 'user-456',
+  researchProgress: { phase: 'idle', tasksCount: 0, findingsCount: 0, iterations: 0, phaseDurationMs: 0 },
 }
 
 const emptyContext = {
@@ -61,6 +62,7 @@ const emptyContext = {
   activeReportContent: null,
   threadId: null,
   userId: '',
+  researchProgress: { phase: 'idle', tasksCount: 0, findingsCount: 0, iterations: 0, phaseDurationMs: 0 },
 }
 
 // ── Setup ───────────────────────────────────────────────────────────────────
