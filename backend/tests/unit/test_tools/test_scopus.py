@@ -121,7 +121,9 @@ class TestFetchScopusContent:
     @patch("app.tools.academic.scopus.requests.get")
     @patch("app.tools.academic.scopus.download_and_parse_pdf")
     @patch("app.tools.academic.scopus.extract_paper_sections")
-    def test_fetch_scopus_content_success_pdf(self, mock_extract, mock_download, mock_get):
+    @patch("app.tools.academic.scopus._get_oa_pdf_url_for_doi")
+    def test_fetch_scopus_content_success_pdf(self, mock_oa, mock_extract, mock_download, mock_get):
+        mock_oa.return_value = None # Force fallback to DOI
         mock_resp = MagicMock()
         mock_resp.json.return_value = {
             "abstracts-retrieval-response": {
@@ -148,7 +150,9 @@ class TestFetchScopusContent:
         
     @patch("app.tools.academic.scopus.requests.get")
     @patch("app.tools.academic.scopus.download_and_parse_pdf")
-    def test_fetch_scopus_content_success_pdf_short(self, mock_download, mock_get):
+    @patch("app.tools.academic.scopus._get_oa_pdf_url_for_doi")
+    def test_fetch_scopus_content_success_pdf_short(self, mock_oa, mock_download, mock_get):
+        mock_oa.return_value = None
         mock_resp = MagicMock()
         mock_resp.json.return_value = {
             "abstracts-retrieval-response": {
@@ -170,7 +174,9 @@ class TestFetchScopusContent:
         
     @patch("app.tools.academic.scopus.requests.get")
     @patch("app.tools.academic.scopus.download_and_parse_pdf")
-    def test_fetch_scopus_content_abstract_fallback(self, mock_download, mock_get):
+    @patch("app.tools.academic.scopus._get_oa_pdf_url_for_doi")
+    def test_fetch_scopus_content_abstract_fallback(self, mock_oa, mock_download, mock_get):
+        mock_oa.return_value = None
         mock_resp = MagicMock()
         mock_resp.json.return_value = {
             "abstracts-retrieval-response": {
@@ -188,7 +194,9 @@ class TestFetchScopusContent:
 
     @patch("app.tools.academic.scopus.requests.get")
     @patch("app.tools.academic.scopus.download_and_parse_pdf")
-    def test_fetch_scopus_content_abstract_xml_fallback(self, mock_download, mock_get):
+    @patch("app.tools.academic.scopus._get_oa_pdf_url_for_doi")
+    def test_fetch_scopus_content_abstract_xml_fallback(self, mock_oa, mock_download, mock_get):
+        mock_oa.return_value = None
         mock_resp = MagicMock()
         mock_resp.json.return_value = {
             "abstracts-retrieval-response": {
@@ -210,7 +218,9 @@ class TestFetchScopusContent:
 
     @patch("app.tools.academic.scopus.requests.get")
     @patch("app.tools.academic.scopus.download_and_parse_pdf")
-    def test_fetch_scopus_content_abstract_xml_fallback_keyerror(self, mock_download, mock_get):
+    @patch("app.tools.academic.scopus._get_oa_pdf_url_for_doi")
+    def test_fetch_scopus_content_abstract_xml_fallback_keyerror(self, mock_oa, mock_download, mock_get):
+        mock_oa.return_value = None
         mock_resp = MagicMock()
         mock_resp.json.return_value = {
             "abstracts-retrieval-response": {
@@ -230,7 +240,9 @@ class TestFetchScopusContent:
 
     @patch("app.tools.academic.scopus.requests.get")
     @patch("app.tools.academic.scopus.download_and_parse_pdf")
-    def test_fetch_scopus_content_abstract_dict_fallback(self, mock_download, mock_get):
+    @patch("app.tools.academic.scopus._get_oa_pdf_url_for_doi")
+    def test_fetch_scopus_content_abstract_dict_fallback(self, mock_oa, mock_download, mock_get):
+        mock_oa.return_value = None
         mock_resp = MagicMock()
         mock_resp.json.return_value = {
             "abstracts-retrieval-response": {
@@ -252,7 +264,9 @@ class TestFetchScopusContent:
         
     @patch("app.tools.academic.scopus.requests.get")
     @patch("app.tools.academic.scopus.download_and_parse_pdf")
-    def test_fetch_scopus_content_no_abstract(self, mock_download, mock_get):
+    @patch("app.tools.academic.scopus._get_oa_pdf_url_for_doi")
+    def test_fetch_scopus_content_no_abstract(self, mock_oa, mock_download, mock_get):
+        mock_oa.return_value = None
         mock_resp = MagicMock()
         mock_resp.json.return_value = {
             "abstracts-retrieval-response": {

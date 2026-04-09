@@ -19,6 +19,7 @@ dependencies = [
     "langchain-tavily==0.2.13",
     "langgraph==1.0.3",
     "langgraph-checkpoint-sqlite==3.0.0",
+    "markdown>=3.7",
     "mypy==1.7.1",
     "openai==1.109.1",
     "pydantic==2.12.4",
@@ -32,6 +33,7 @@ dependencies = [
     "semanticscholar==0.11.0",
     "streamlit==1.51.0",
     "uvicorn[standard]==0.24.0",
+    "weasyprint>=62.0",
     "xmltodict==1.0.2",
 ]
 

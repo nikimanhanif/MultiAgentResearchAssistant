@@ -4,47 +4,19 @@ import { useChatContext } from '@/context/chat-context'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
 import { MarkdownContent } from './markdown-content'
-import { Download, X, Maximize2, Minimize2 } from 'lucide-react'
+import { ExportMenu } from './export-menu'
+import { X, Maximize2, Minimize2 } from 'lucide-react'
 import { motion } from 'framer-motion'
 
 export function ResearchCanvas() {
-  const { 
-    activeReportContent, 
-    focusMode, 
-    closeReport, 
+  const {
+    activeReportContent,
+    focusMode,
+    closeReport,
     toggleFocusMode,
-    researchBrief
   } = useChatContext()
 
   if (!activeReportContent) return null
-
-  const handleExport = () => {
-    const lines: string[] = []
-    const timestamp = new Date().toISOString().slice(0, 19).replace('T', ' ')
-    
-    // Header
-    lines.push('# Research Report')
-    lines.push(`\n**Exported:** ${timestamp}\n`)
-    
-    if (researchBrief) {
-      lines.push(`**Research Scope:** ${researchBrief.scope}\n`)
-    }
-    
-    lines.push('---\n')
-    lines.push(activeReportContent)
-    
-    // Create and download file
-    const content = lines.join('\n')
-    const blob = new Blob([content], { type: 'text/markdown' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `research_report_${Date.now()}.md`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-  }
 
   return (
     <motion.div
@@ -61,16 +33,8 @@ export function ResearchCanvas() {
         </div>
         
         <div className="flex items-center gap-1">
-          {/* Export Button */}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleExport}
-            className="h-8 w-8 text-muted-foreground hover:text-foreground"
-            title="Export Report"
-          >
-            <Download className="h-4 w-4" />
-          </Button>
+          {/* Export Menu */}
+          <ExportMenu scope="report" />
           
           {/* Focus Mode Toggle */}
           <Button

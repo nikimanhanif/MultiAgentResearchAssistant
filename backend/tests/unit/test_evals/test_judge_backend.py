@@ -125,12 +125,12 @@ class TestPatchedApiDeepSeek:
 
             # Verify provider resolution
             assert module.JUDGE_PROVIDER == "deepseek"
-            assert module.Model == "deepseek-chat"
-            assert module.FACT_Model == "deepseek-chat"
+            assert module.Model == "deepseek-reasoner"
+            assert module.FACT_Model == "deepseek-reasoner"
 
             # Create AIClient — should delegate to _DeepSeekClient
             client = module.AIClient()
-            assert client.model == "deepseek-chat"
+            assert client.model == "deepseek-reasoner"
         finally:
             del sys.modules["openai"]
 

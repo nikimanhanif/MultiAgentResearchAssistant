@@ -39,7 +39,7 @@ const initialThinking: ThinkingState = {
 }
 
 // Helper to get human-readable phase labels
-function getPhaseLabel(phase: string): string {
+export function getPhaseLabel(phase: string): string {
   switch (phase) {
     case 'investigating': return 'Initial Investigation'
     case 'findings': return 'Research Findings'
@@ -49,7 +49,7 @@ function getPhaseLabel(phase: string): string {
   }
 }
 
-const initialState: ChatState = {
+export const initialState: ChatState = {
   messages: [],
   threadId: null,
   userId: '',
@@ -69,7 +69,7 @@ const initialState: ChatState = {
 }
 
 // Action types
-type ChatAction =
+export type ChatAction =
   | { type: 'SET_USER_ID'; payload: string }
   | { type: 'SET_THREAD_ID'; payload: string }
   | { type: 'ADD_MESSAGE'; payload: Message }
@@ -95,7 +95,7 @@ type ChatAction =
   | { type: 'RESTORE_THINKING'; payload: ThinkingState }
 
 // Reducer
-function chatReducer(state: ChatState, action: ChatAction): ChatState {
+export function chatReducer(state: ChatState, action: ChatAction): ChatState {
   switch (action.type) {
     case 'SET_USER_ID':
       return { ...state, userId: action.payload }
@@ -291,6 +291,145 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
   }
 }
 
+// Pure SSE event → action mapping (testable without React)
+export interface StreamEventResult {
+  actions: ChatAction[]
+  nextIsReportStreaming: boolean
+}
+
+export function getActionsForEvent(
+  event: StreamEvent,
+  isReportStreaming: boolean
+): StreamEventResult {
+  switch (event.type) {
+    case 'token':
+      return {
+        actions: [{ type: 'APPEND_STREAMING_CONTENT', payload: event.content }],
+        nextIsReportStreaming: isReportStreaming
+      }
+
+    case 'report_token': {
+      if (!isReportStreaming) {
+        return {
+          actions: [
+            { type: 'STOP_THINKING' },
+            { type: 'FINALIZE_AND_SWITCH_TO_REPORT' },
+            { type: 'SET_PROGRESS', payload: { phase: 'generating_report' } },
+            { type: 'APPEND_STREAMING_CONTENT', payload: event.content }
+          ],
+          nextIsReportStreaming: true
+        }
+      }
+      return {
+        actions: [{ type: 'APPEND_STREAMING_CONTENT', payload: event.content }],
+        nextIsReportStreaming: true
+      }
+    }
+
+    case 'progress':
+      return {
+        actions: [{
+          type: 'SET_PROGRESS',
+          payload: {
+            phase: event.phase,
+            tasksCount: event.tasks_count,
+            findingsCount: event.findings_count,
+            iterations: event.iterations,
+            phaseDurationMs: event.phase_duration_ms || 0
+          }
+        }],
+        nextIsReportStreaming: isReportStreaming
+      }
+
+    case 'brief_created': {
+      const briefMessage: Message = {
+        id: `msg_brief_${Date.now()}`,
+        role: 'assistant',
+        content: `### Research Brief Created\n\n**Scope:** ${event.scope}\n\n**Sub-topics:**\n${event.sub_topics ? event.sub_topics.map((t: string) => `- ${t}`).join('\n') : ''}`,
+        timestamp: new Date()
+      }
+      return {
+        actions: [
+          { type: 'FINALIZE_STREAMING_MESSAGE' },
+          { type: 'SET_BRIEF', payload: { scope: event.scope, subTopics: event.sub_topics } },
+          { type: 'ADD_MESSAGE', payload: briefMessage }
+        ],
+        nextIsReportStreaming: isReportStreaming
+      }
+    }
+
+    case 'clarification_request': {
+      const clarificationMessage: Message = {
+        id: `msg_${Date.now()}`,
+        role: 'assistant',
+        content: event.questions,
+        timestamp: new Date(),
+        node: 'scope'
+      }
+      return {
+        actions: [
+          { type: 'ADD_MESSAGE', payload: clarificationMessage },
+          { type: 'SET_STREAMING', payload: false },
+          { type: 'SET_STREAMING_CONTENT', payload: '' }
+        ],
+        nextIsReportStreaming: isReportStreaming
+      }
+    }
+
+    case 'review_request':
+      return {
+        actions: [
+          { type: 'FINALIZE_STREAMING_MESSAGE' },
+          { type: 'SET_STREAMING', payload: false },
+          { type: 'SET_REPORT_STREAMING', payload: false },
+          { type: 'SET_REVIEW_REQUEST', payload: { report: event.report, pending: true } }
+        ],
+        nextIsReportStreaming: false
+      }
+
+    case 'state_update':
+      return {
+        actions: [{ type: 'SET_ACTIVE_NODE', payload: event.node }],
+        nextIsReportStreaming: isReportStreaming
+      }
+
+    case 'thought':
+      return {
+        actions: [{
+          type: 'SET_THINKING',
+          payload: {
+            agent: event.agent,
+            thought: event.thought,
+            step: event.step,
+            phase: event.phase || ''
+          }
+        }],
+        nextIsReportStreaming: isReportStreaming
+      }
+
+    case 'complete':
+      return {
+        actions: [
+          { type: 'FINALIZE_STREAMING_MESSAGE' },
+          { type: 'SET_REPORT_STREAMING', payload: false },
+          { type: 'SET_PROGRESS', payload: { phase: 'complete' } },
+          { type: 'STOP_THINKING' }
+        ],
+        nextIsReportStreaming: false
+      }
+
+    case 'error':
+      return {
+        actions: [
+          { type: 'SET_ERROR', payload: event.error },
+          { type: 'SET_REPORT_STREAMING', payload: false },
+          { type: 'STOP_THINKING' }
+        ],
+        nextIsReportStreaming: false
+      }
+  }
+}
+
 // Context type
 interface ChatContextType extends ChatState {
   sendMessage: (content: string) => Promise<void>
@@ -338,110 +477,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  // Handle stream events
+  // Handle stream events — delegates to pure getActionsForEvent for testability
   const handleStreamEvent = useCallback((event: StreamEvent) => {
-    switch (event.type) {
-      case 'token':
-        dispatch({ type: 'APPEND_STREAMING_CONTENT', payload: event.content })
-        break
-      
-      case 'report_token':
-        if (!isReportStreamingRef.current) {
-          dispatch({ type: 'STOP_THINKING' })
-          isReportStreamingRef.current = true
-          dispatch({ type: 'FINALIZE_AND_SWITCH_TO_REPORT' })
-          dispatch({ type: 'SET_PROGRESS', payload: { phase: 'generating_report' } })
-        }
-        dispatch({ type: 'APPEND_STREAMING_CONTENT', payload: event.content })
-        break
-      
-      case 'progress':
-        dispatch({ 
-          type: 'SET_PROGRESS', 
-          payload: {
-            phase: event.phase,
-            tasksCount: event.tasks_count,
-            findingsCount: event.findings_count,
-            iterations: event.iterations,
-            phaseDurationMs: event.phase_duration_ms || 0
-          }
-        })
-        break
-      
-      case 'brief_created': {
-        dispatch({ type: 'FINALIZE_STREAMING_MESSAGE' })
-        dispatch({ 
-          type: 'SET_BRIEF', 
-          payload: { scope: event.scope, subTopics: event.sub_topics }
-        })
-        
-        const briefMessage: Message = {
-          id: `msg_brief_${Date.now()}`,
-          role: 'assistant',
-          content: `### Research Brief Created\n\n**Scope:** ${event.scope}\n\n**Sub-topics:**\n${event.sub_topics ? event.sub_topics.map((t: string) => `- ${t}`).join('\n') : ''}`,
-          timestamp: new Date()
-        }
-        dispatch({ type: 'ADD_MESSAGE', payload: briefMessage })
-        break
-      }
-      
-      case 'clarification_request': {
-        const clarificationMessage: Message = {
-          id: `msg_${Date.now()}`,
-          role: 'assistant',
-          content: event.questions,
-          timestamp: new Date(),
-          node: 'scope'
-        }
-        dispatch({ type: 'ADD_MESSAGE', payload: clarificationMessage })
-        dispatch({ type: 'SET_STREAMING', payload: false })
-        dispatch({ type: 'SET_STREAMING_CONTENT', payload: '' })
-        break
-      }
-      
-      case 'review_request':
-        isReportStreamingRef.current = false
-        dispatch({ type: 'FINALIZE_STREAMING_MESSAGE' })
-        dispatch({ type: 'SET_STREAMING', payload: false })
-        dispatch({ type: 'SET_REPORT_STREAMING', payload: false })
-        dispatch({ 
-          type: 'SET_REVIEW_REQUEST', 
-          payload: { report: event.report, pending: true }
-        })
-        break
-      
-      case 'state_update':
-        dispatch({ type: 'SET_ACTIVE_NODE', payload: event.node })
-        // Don't stop thinking here - let 'complete' event handle final state reset
-        break
-      
-      case 'thought':
-        dispatch({ 
-          type: 'SET_THINKING', 
-          payload: {
-            agent: event.agent,
-            thought: event.thought,
-            step: event.step,
-            phase: event.phase || ''
-          }
-        })
-        break
-      
-      case 'complete':
-        isReportStreamingRef.current = false  // Reset ref
-        dispatch({ type: 'FINALIZE_STREAMING_MESSAGE' })
-        dispatch({ type: 'SET_REPORT_STREAMING', payload: false }) // Reset for next conversation
-        dispatch({ type: 'SET_PROGRESS', payload: { phase: 'complete' } }) // Signal research is complete
-        dispatch({ type: 'STOP_THINKING' })
-        break
-      
-      case 'error':
-        isReportStreamingRef.current = false  // Reset ref
-        dispatch({ type: 'SET_ERROR', payload: event.error })
-        dispatch({ type: 'SET_REPORT_STREAMING', payload: false }) // Reset on error
-        dispatch({ type: 'STOP_THINKING' })
-        break
-    }
+    const { actions, nextIsReportStreaming } = getActionsForEvent(event, isReportStreamingRef.current)
+    isReportStreamingRef.current = nextIsReportStreaming
+    actions.forEach(a => dispatch(a))
   }, [])  // No dependency on state.isReportStreaming - using ref instead
 
   // Save thinking state to backend

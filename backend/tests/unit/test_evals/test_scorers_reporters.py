@@ -268,11 +268,11 @@ class TestDRBOutputReporter:
         parsed = [json.loads(l) for l in lines]
         
         # Should be sorted numerically by default: 1, 2, 4
-        assert parsed[0]["id"] == "1"
+        assert parsed[0]["id"] == 1
         assert parsed[0]["article"] == "Report 1 updated"
         
-        assert parsed[1]["id"] == "2"
+        assert parsed[1]["id"] == 2
         assert parsed[1]["article"] == "Report 2 updated"
         
-        assert parsed[2]["id"] == "4"
+        assert parsed[2]["id"] == 4
         assert parsed[2]["article"] == "Report 4"
